@@ -1,0 +1,31 @@
+{
+  "name": "t2w",
+  "version": "1.0.0",
+  "description": "This is a repo for T2W Website",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:57774/git/machismo500/T2W"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^25.3.0",
+    "@types/react": "^19.2.14",
+    "autoprefixer": "^10.4.24",
+    "framer-motion": "^12.34.3",
+    "lucide-react": "^0.575.0",
+    "next": "^16.1.6",
+    "postcss": "^8.5.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
+  }
+}
