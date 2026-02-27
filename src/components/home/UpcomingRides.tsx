@@ -167,6 +167,7 @@ export function UpcomingRides() {
   const upcoming = rides.filter((r) => r.status === "upcoming");
   const recent = rides
     .filter((r) => r.status === "completed")
+    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
     .slice(0, 5);
 
   if (loading) {
@@ -232,8 +233,8 @@ export function UpcomingRides() {
                   <span className="rounded-lg bg-green-400/10 px-2.5 py-1 text-xs font-medium text-green-400">
                     Completed
                   </span>
-                  <span className="font-mono text-xs text-t2w-muted">
-                    {ride.distanceKm} km
+                  <span className="font-mono text-xs text-t2w-accent">
+                    {ride.rideNumber}
                   </span>
                 </div>
                 <h3 className="font-display text-lg font-bold text-white group-hover:text-t2w-accent transition-colors">

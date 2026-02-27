@@ -45,6 +45,7 @@ export interface Ride {
   fee: number;
   leadRider: string;
   sweepRider: string;
+  riders?: string[];
 }
 
 export interface BlogPost {

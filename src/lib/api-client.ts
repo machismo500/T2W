@@ -266,7 +266,7 @@ export const api = {
       await delay(150);
       const ride = mockRides.find((r) => r.id === id);
       if (!ride) throw new Error("Ride not found");
-      return { ride: { ...ride, registrations: [] } };
+      return { ride: { ...ride, registrations: [], riders: ride.riders || [] } };
     },
     create: async (data: Record<string, unknown>) => {
       await delay(300);

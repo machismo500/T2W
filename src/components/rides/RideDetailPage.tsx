@@ -44,6 +44,7 @@ interface Ride {
   leadRider: string;
   sweepRider: string;
   registrations: unknown[];
+  riders?: string[];
 }
 
 export function RideDetailPage({ rideId }: { rideId: string }) {
@@ -295,6 +296,31 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 </div>
               </div>
             </div>
+
+            {/* Riders List - for completed rides with rider data */}
+            {ride.status === "completed" && ride.riders && ride.riders.length > 0 && (
+              <div className="card">
+                <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
+                  <Users className="h-5 w-5 text-t2w-accent" />
+                  Riders ({ride.riders.length})
+                </h3>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {ride.riders.map((rider, index) => (
+                    <div
+                      key={`${rider}-${index}`}
+                      className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
+                        {index + 1}
+                      </div>
+                      <span className="text-sm text-gray-300 truncate">
+                        {rider}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Share Experience - for completed rides */}
             {ride.status === "completed" && (

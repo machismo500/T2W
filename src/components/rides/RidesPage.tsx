@@ -62,19 +62,32 @@ export function RidesPage() {
       });
   }, []);
 
-  const filtered = rides.filter((ride) => {
-    if (activeTab === "upcoming" && ride.status !== "upcoming") return false;
-    if (activeTab === "completed" && ride.status !== "completed") return false;
-    if (typeFilter !== "all" && ride.type !== typeFilter) return false;
-    if (
-      searchQuery &&
-      !ride.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !ride.startLocation.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !ride.endLocation.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-      return false;
-    return true;
-  });
+  const filtered = rides
+    .filter((ride) => {
+      if (activeTab === "upcoming" && ride.status !== "upcoming") return false;
+      if (activeTab === "completed" && ride.status !== "completed") return false;
+      if (typeFilter !== "all" && ride.type !== typeFilter) return false;
+      if (
+        searchQuery &&
+        !ride.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !ride.startLocation.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !ride.endLocation.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !ride.rideNumber.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+        return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.status === "completed" && b.status === "completed") {
+        return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+      }
+      if (a.status === "upcoming" && b.status === "upcoming") {
+        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+      }
+      if (a.status === "upcoming") return -1;
+      if (b.status === "upcoming") return 1;
+      return 0;
+    });
 
   const totalKm = rides
     .filter((r) => r.status === "completed")
@@ -243,11 +256,9 @@ export function RidesPage() {
                 </div>
 
                 <h3 className="mt-4 font-display text-xl font-bold text-white group-hover:text-t2w-accent transition-colors">
+                  <span className="text-t2w-accent">{ride.rideNumber}</span>{" "}
                   {ride.title}
                 </h3>
-                <p className="mt-1 font-mono text-xs text-t2w-muted">
-                  {ride.rideNumber}
-                </p>
 
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center gap-2 text-sm text-gray-400">
