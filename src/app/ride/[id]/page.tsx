@@ -1,13 +1,14 @@
-"use client";
+import { RideDetailClient } from "./RideDetailClient";
 
-import { use } from "react";
-import { RideDetailPage } from "@/components/rides/RideDetailPage";
+export function generateStaticParams() {
+  return [];
+}
 
-export default function RideDetail({
+export default async function RideDetail({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = use(params);
-  return <RideDetailPage rideId={id} />;
+  const { id } = await params;
+  return <RideDetailClient rideId={id} />;
 }
