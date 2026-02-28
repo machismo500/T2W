@@ -39,6 +39,7 @@ function setStorage(key: string, value: unknown) {
 // ── Storage keys ──
 const AUTH_KEY = "t2w_auth";
 const USERS_KEY = "t2w_users";
+const PASSWORDS_KEY = "t2w_passwords"; // email -> password overrides
 const RIDE_REG_KEY = "t2w_ride_registrations";
 const NOTIF_KEY = "t2w_notif_read";
 const BLOGS_KEY = "t2w_blogs";
@@ -279,12 +280,56 @@ export const api = {
     login: async (email: string, password: string) => {
       await delay(300);
       const users = getRegisteredUsers();
-      const found = users.find(
-        (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-      );
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      const emailLower = email.toLowerCase().trim();
+      const found = users.find((u) => {
+        if (u.email.toLowerCase() !== emailLower) return false;
+        // Check password overrides first (set via forgot password)
+        const override = overrides[emailLower];
+        if (override) return password === override;
+        // Fallback to stored password
+        return u.password === password;
+      });
       if (!found) throw new Error("Invalid email or password");
       setStorage(AUTH_KEY, found.id);
       return buildUserData(found);
+    },
+
+    // Social / email-only login (Google, Facebook simulation)
+    loginByEmail: async (email: string) => {
+      await delay(300);
+      const users = getRegisteredUsers();
+      const emailLower = email.toLowerCase().trim();
+      const found = users.find((u) => u.email.toLowerCase() === emailLower);
+      if (!found) throw new Error("NO_ACCOUNT");
+      setStorage(AUTH_KEY, found.id);
+      return buildUserData(found);
+    },
+
+    // Forgot password - generates a temp password and returns it
+    resetPassword: async (email: string) => {
+      await delay(400);
+      const users = getRegisteredUsers();
+      const emailLower = email.toLowerCase().trim();
+      const found = users.find((u) => u.email.toLowerCase() === emailLower);
+      if (!found) throw new Error("No account found with this email");
+      // Generate a random temporary password
+      const tempPassword = "T2W" + Math.random().toString(36).substring(2, 8);
+      // Store as override
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      overrides[emailLower] = tempPassword;
+      setStorage(PASSWORDS_KEY, overrides);
+      return { success: true, tempPassword };
+    },
+
+    // Change password (after reset or voluntarily)
+    changePassword: async (email: string, newPassword: string) => {
+      await delay(200);
+      const emailLower = email.toLowerCase().trim();
+      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+      overrides[emailLower] = newPassword;
+      setStorage(PASSWORDS_KEY, overrides);
+      return { success: true };
     },
 
     register: async (data: Record<string, unknown>) => {

@@ -46,6 +46,8 @@ interface AuthContextType {
   user: UserData | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginByEmail: (email: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<string>;
   register: (data: Record<string, unknown>) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -87,6 +89,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const raw = await api.auth.login(email, password);
     const data = raw as unknown as { user: UserData };
     setUser(data.user);
+  };
+
+  const loginByEmail = async (email: string) => {
+    const raw = await api.auth.loginByEmail(email);
+    const data = raw as unknown as { user: UserData };
+    setUser(data.user);
+  };
+
+  const resetPassword = async (email: string): Promise<string> => {
+    const result = await api.auth.resetPassword(email);
+    const data = result as unknown as { tempPassword: string };
+    return data.tempPassword;
   };
 
   const register = async (formData: Record<string, unknown>) => {
@@ -133,6 +147,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
+        loginByEmail,
+        resetPassword,
         register,
         logout,
         refreshUser,
