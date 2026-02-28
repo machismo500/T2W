@@ -119,7 +119,7 @@ export const mockBlogs: BlogPost[] = [
     excerpt:
       "From The Beginning (#001) to Kavvayi Island (#027) - looking back at 27 rides and counting.",
     content:
-      "Two years, 27 rides, 152 riders, and thousands of kilometres. From our very first ride to Sakleshpur in March 2024 to the serene backwaters of Kavvayi Island in February 2026 - here's our definitive guide to the top 10 T2W rides that defined our brotherhood on two wheels.",
+      "Two years, 27 rides, 140 riders, and thousands of kilometres. From our very first ride to Sakleshpur in March 2024 to the serene backwaters of Kavvayi Island in February 2026 - here's our definitive guide to the top 10 T2W rides that defined our brotherhood on two wheels.",
     author: "Shreyas BM",
     authorId: "admin-4",
     publishDate: "2026-02-25",

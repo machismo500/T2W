@@ -58,6 +58,20 @@ const nameRenames = {
   'Sandeep sahoo': 'Sandeep Sahoo',
   'Sandee sahoo': 'Sandeep Sahoo',
   'Sandeep': 'Sandeep Sahoo',
+  // Merge duplicates per user request
+  'deva raju': 'Devaraju S',
+  'Dr Raghunath': 'Dr. Raghunath H',
+  'Raghunath H': 'Dr. Raghunath H',
+  'Abhijit': 'Abhijitt Murugan',
+  'Harish': 'Harish Mysuru',
+  'Harish Kumar M R': 'Harish Mysuru',
+  'Karthik V': 'Karthik V H',
+  'MJ': 'Manjushree',
+  'Pillion MJ': 'Manjushree',
+  'Rama Prasad': 'Ramaprasad',
+  'Sanjay Ganesh': 'Sanjay Ganesh Jambagi',
+  'Shanks VK': 'Shankar VK',
+  'Sudhakar.r': 'Sudhakar R',
 };
 
 function renameRider(name) {

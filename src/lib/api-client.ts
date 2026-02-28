@@ -459,7 +459,19 @@ export const api = {
     },
     delete: async (id: string) => {
       await delay(200);
+      // Remove from custom users in localStorage
+      const builtinIds = new Set(getBuiltinUsers().map((b) => b.id));
+      const custom = getRegisteredUsers().filter((u) => !builtinIds.has(u.id));
+      saveCustomUsers(custom.filter((u) => u.id !== id));
       return { success: true, id };
+    },
+    bulkDelete: async (ids: string[]) => {
+      await delay(300);
+      const builtinIds = new Set(getBuiltinUsers().map((b) => b.id));
+      const custom = getRegisteredUsers().filter((u) => !builtinIds.has(u.id));
+      const idsSet = new Set(ids);
+      saveCustomUsers(custom.filter((u) => !idsSet.has(u.id)));
+      return { success: true, deletedCount: ids.length };
     },
     approve: async (id: string) => {
       await delay(200);

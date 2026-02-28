@@ -47,7 +47,7 @@ export function AboutContact() {
                 icon: Heart,
                 title: "Our Story",
                 description:
-                  "Tales on 2 Wheels began in March 2024 in Bangalore when Roshan Manuel and a group of passionate riders decided to formalize their weekend rides. What started as 35 riders on Ride #001 to Sakleshpur has grown into a 152+ member community that has completed 27 rides across India, Nepal, and Thailand.",
+                  "Tales on 2 Wheels began in March 2024 in Bangalore when Roshan Manuel and a group of passionate riders decided to formalize their weekend rides. What started as 35 riders on Ride #001 to Sakleshpur has grown into a 140+ member community that has completed 27 rides across India, Nepal, and Thailand.",
               },
               {
                 icon: Target,

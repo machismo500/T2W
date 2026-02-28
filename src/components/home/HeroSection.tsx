@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 const stats = [
-  { label: "Active Riders", value: "152", icon: Users },
+  { label: "Active Riders", value: "140", icon: Users },
   { label: "Rides Completed", value: "27", icon: MapPin },
   { label: "KMs Covered", value: "20,575", icon: Bike },
   { label: "Countries Ridden", value: "3", icon: Trophy },

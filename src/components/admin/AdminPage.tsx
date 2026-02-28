@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   Shield,
@@ -24,6 +24,9 @@ import {
   Loader2,
   BookOpen,
   ChevronDown,
+  ArrowUpDown,
+  Search,
+  Mail,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
@@ -123,6 +126,12 @@ export function AdminPage() {
   const [pendingBlogs, setPendingBlogs] = useState<PendingBlog[]>([]);
   const [pendingPosts, setPendingPosts] = useState<PendingPost[]>([]);
   const [roleChangeUser, setRoleChangeUser] = useState<string | null>(null);
+  // User management state
+  const [userSearch, setUserSearch] = useState("");
+  const [userSort, setUserSort] = useState<"name" | "email" | "role" | "joined">("name");
+  const [userSortDir, setUserSortDir] = useState<"asc" | "desc">("asc");
+  const [deletingUsers, setDeletingUsers] = useState(false);
+
   const [rideForm, setRideForm] = useState({
     title: "", rideNumber: "", type: "day", startDate: "", endDate: "",
     startLocation: "", endLocation: "", distanceKm: "", maxRiders: "20",
@@ -194,6 +203,71 @@ export function AdminPage() {
       setRoleChangeUser(null);
     } catch (err) {
       console.error("Failed to change role:", err);
+    }
+  };
+
+  // Sorted and filtered users
+  const sortedUsers = useMemo(() => {
+    let filtered = allUsers;
+    if (userSearch.trim()) {
+      const q = userSearch.toLowerCase().trim();
+      filtered = filtered.filter(
+        (u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (ROLE_LABELS[u.role] || u.role).toLowerCase().includes(q)
+      );
+    }
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (userSort) {
+        case "name": cmp = a.name.localeCompare(b.name); break;
+        case "email": cmp = a.email.localeCompare(b.email); break;
+        case "role": cmp = (ROLE_LABELS[a.role] || a.role).localeCompare(ROLE_LABELS[b.role] || b.role); break;
+        case "joined": cmp = a.joinDate.localeCompare(b.joinDate); break;
+      }
+      return userSortDir === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [allUsers, userSearch, userSort, userSortDir]);
+
+  const nonGmailUsers = useMemo(() => {
+    return allUsers.filter(
+      (u) => !u.email.toLowerCase().endsWith("@gmail.com") && u.role !== "superadmin" && u.role !== "core_member"
+    );
+  }, [allUsers]);
+
+  const handleSort = (col: "name" | "email" | "role" | "joined") => {
+    if (userSort === col) {
+      setUserSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setUserSort(col);
+      setUserSortDir("asc");
+    }
+  };
+
+  const deleteUser = async (id: string, name: string) => {
+    if (!confirm(`Delete user "${name}"? This cannot be undone.`)) return;
+    try {
+      await api.users.delete(id);
+      setAllUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+    }
+  };
+
+  const deleteNonGmailUsers = async () => {
+    if (nonGmailUsers.length === 0) return;
+    if (!confirm(`Delete ${nonGmailUsers.length} users with non-Gmail email addresses? Super Admins and Core Members will NOT be deleted. This cannot be undone.`)) return;
+    setDeletingUsers(true);
+    try {
+      const ids = nonGmailUsers.map((u) => u.id);
+      await api.users.bulkDelete(ids);
+      setAllUsers((prev) => prev.filter((u) => !ids.includes(u.id)));
+    } catch (err) {
+      console.error("Failed to bulk delete users:", err);
+    } finally {
+      setDeletingUsers(false);
     }
   };
 
@@ -451,34 +525,78 @@ export function AdminPage() {
             )}
 
             <div className="card">
-              <div className="mb-6 flex items-center justify-between">
-                <h3 className="font-display text-xl font-bold text-white">All Users</h3>
+              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="font-display text-xl font-bold text-white">
+                  All Users ({allUsers.length})
+                </h3>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
+                    <input
+                      type="text"
+                      placeholder="Search users..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="input-field !py-2 !pl-9 !pr-3 text-xs w-48"
+                    />
+                  </div>
+                  {/* Bulk delete non-Gmail */}
+                  {nonGmailUsers.length > 0 && (
+                    <button
+                      onClick={deleteNonGmailUsers}
+                      disabled={deletingUsers}
+                      className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/20"
+                      title="Delete all users without @gmail.com email (excludes Super Admins and Core Members)"
+                    >
+                      {deletingUsers ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                      Delete Non-Gmail ({nonGmailUsers.length})
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="mb-2 text-xs text-t2w-muted">
+                Showing {sortedUsers.length} of {allUsers.length} users
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-t2w-border">
-                      <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wider text-t2w-muted">User</th>
-                      <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wider text-t2w-muted">Email</th>
-                      <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wider text-t2w-muted">Role</th>
+                      {([
+                        { key: "name" as const, label: "User" },
+                        { key: "email" as const, label: "Email" },
+                        { key: "role" as const, label: "Role" },
+                      ]).map((col) => (
+                        <th key={col.key} className="pb-3 text-left text-xs font-semibold uppercase tracking-wider text-t2w-muted">
+                          <button onClick={() => handleSort(col.key)} className="flex items-center gap-1 hover:text-white transition-colors">
+                            {col.label}
+                            <ArrowUpDown className={`h-3 w-3 ${userSort === col.key ? "text-t2w-accent" : ""}`} />
+                          </button>
+                        </th>
+                      ))}
                       <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wider text-t2w-muted">Status</th>
-                      <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wider text-t2w-muted">Joined</th>
+                      <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wider text-t2w-muted">
+                        <button onClick={() => handleSort("joined")} className="flex items-center gap-1 hover:text-white transition-colors">
+                          Joined
+                          <ArrowUpDown className={`h-3 w-3 ${userSort === "joined" ? "text-t2w-accent" : ""}`} />
+                        </button>
+                      </th>
                       <th className="pb-3 text-right text-xs font-semibold uppercase tracking-wider text-t2w-muted">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-t2w-border">
-                    {allUsers.map((u) => (
+                    {sortedUsers.map((u) => (
                       <tr key={u.id} className="transition-colors hover:bg-t2w-surface-light/50">
-                        <td className="py-4">
+                        <td className="py-3">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
-                              {u.name.split(" ").map((n) => n[0]).join("")}
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
+                              {u.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
                             </div>
-                            <span className="font-medium text-white">{u.name}</span>
+                            <span className="font-medium text-white text-sm truncate max-w-[150px]">{u.name}</span>
                           </div>
                         </td>
-                        <td className="py-4 text-sm text-t2w-muted">{u.email}</td>
-                        <td className="py-4">
+                        <td className="py-3 text-xs text-t2w-muted truncate max-w-[200px]">{u.email}</td>
+                        <td className="py-3">
                           {roleChangeUser === u.id ? (
                             <div className="flex items-center gap-1">
                               <select
@@ -510,18 +628,18 @@ export function AdminPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-4">
+                        <td className="py-3">
                           <span className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
                             u.isApproved ? "bg-green-400/10 text-green-400" : "bg-yellow-400/10 text-yellow-400"
                           }`}>
                             {u.isApproved ? "active" : "pending"}
                           </span>
                         </td>
-                        <td className="py-4 text-sm text-t2w-muted">
+                        <td className="py-3 text-xs text-t2w-muted">
                           {new Date(u.joinDate).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
                         </td>
-                        <td className="py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                        <td className="py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
                             {canManageRoles && u.role !== "superadmin" && (
                               <button
                                 onClick={() => setRoleChangeUser(u.id)}
@@ -529,6 +647,15 @@ export function AdminPage() {
                                 title="Change Role"
                               >
                                 <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {u.role !== "superadmin" && (
+                              <button
+                                onClick={() => deleteUser(u.id, u.name)}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg text-t2w-muted hover:bg-red-400/10 hover:text-red-400 transition-colors"
+                                title="Delete User"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             )}
                           </div>
