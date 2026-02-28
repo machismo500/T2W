@@ -10,7 +10,6 @@ import {
   Gauge,
   Route,
   Clock,
-  DollarSign,
   Star,
   Shield,
   CheckCircle,
@@ -20,10 +19,19 @@ import {
   IndianRupee,
   Loader2,
   ImagePlus,
+  Send,
+  Phone,
+  Mail,
+  Heart,
+  Droplets,
+  Car,
+  FileText,
+  XCircle,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import { riderNameToId } from "@/data/rider-profiles";
+import type { RidePost } from "@/types";
 
 interface Ride {
   id: string;
@@ -56,17 +64,47 @@ interface Ride {
 }
 
 export function RideDetailPage({ rideId }: { rideId: string }) {
-  const { user } = useAuth();
+  const { user, canEditRide, canApproveContent, isT2WRiderOrAbove, isLoggedIn } = useAuth();
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showRegistration, setShowRegistration] = useState(false);
-  const [agreed, setAgreed] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
+
+  // Registration form state
+  const [regForm, setRegForm] = useState({
+    riderName: "",
+    email: "",
+    phone: "",
+    emergencyContactName: "",
+    emergencyContactPhone: "",
+    bloodGroup: "",
+    vehicleModel: "",
+    vehicleRegNumber: "",
+    agreedIndemnity: false,
+  });
+
+  // Ride posts
+  const [ridePosts, setRidePosts] = useState<RidePost[]>([]);
+  const [taleText, setTaleText] = useState("");
+  const [postingTale, setPostingTale] = useState(false);
+  const [taleSubmitted, setTaleSubmitted] = useState(false);
+
+  // Pre-fill registration form from user data
+  useEffect(() => {
+    if (user) {
+      setRegForm((prev) => ({
+        ...prev,
+        riderName: prev.riderName || user.name,
+        email: prev.email || user.email,
+        phone: prev.phone || user.phone || "",
+      }));
+    }
+  }, [user]);
 
   const handlePosterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -93,13 +131,14 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     setLoading(true);
     setError(null);
 
-    api.rides
-      .get(rideId)
-      .then((data) => {
+    Promise.all([
+      api.rides.get(rideId),
+      api.ridePosts.listApproved(rideId),
+    ])
+      .then(([rideData, postsData]) => {
         if (cancelled) return;
-        const result = data as { ride: Ride };
+        const result = rideData as { ride: Ride };
         const r = result.ride;
-        // Ensure route and highlights are arrays (parse if they come as strings)
         if (typeof r.route === "string") {
           r.route = JSON.parse(r.route);
         }
@@ -107,6 +146,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           r.highlights = JSON.parse(r.highlights);
         }
         setRide(r);
+        setRidePosts((postsData as { posts: RidePost[] }).posts);
         // Load saved poster from localStorage
         const savedPoster = localStorage.getItem(`t2w_poster_${rideId}`);
         if (savedPoster) setPosterUrl(savedPoster);
@@ -125,11 +165,15 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   }, [rideId]);
 
   const handleRegister = async () => {
-    if (!agreed || registering) return;
+    if (!regForm.agreedIndemnity || registering) return;
+    if (!regForm.riderName || !regForm.email || !regForm.phone) {
+      alert("Please fill in all required fields");
+      return;
+    }
     setRegistering(true);
     try {
       const data = (await api.rides.register(rideId, {
-        agreedIndemnity: true,
+        ...regForm,
       })) as { registration: unknown; confirmationCode: string };
       setRegistered(true);
       setConfirmationCode(data.confirmationCode);
@@ -139,6 +183,34 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
       alert(message);
     } finally {
       setRegistering(false);
+    }
+  };
+
+  const handlePostTale = async () => {
+    if (!taleText.trim() || !user) return;
+    setPostingTale(true);
+    try {
+      // SuperAdmin/CoreMember: auto-approved. T2W Rider: pending
+      const autoApprove = canApproveContent;
+      await api.ridePosts.create({
+        rideId,
+        authorId: user.id,
+        authorName: user.name,
+        content: taleText,
+        approvalStatus: autoApprove ? "approved" : "pending",
+        approvedBy: autoApprove ? user.id : undefined,
+      });
+      setTaleText("");
+      setTaleSubmitted(true);
+      if (autoApprove) {
+        // Reload posts
+        const postsData = await api.ridePosts.listApproved(rideId);
+        setRidePosts((postsData as { posts: RidePost[] }).posts);
+      }
+    } catch {
+      alert("Failed to post. Please try again.");
+    } finally {
+      setPostingTale(false);
     }
   };
 
@@ -225,22 +297,26 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               alt={`${ride.title} poster`}
               className="w-full object-cover"
             />
-            <button
-              onClick={() => posterInputRef.current?.click()}
-              className="absolute bottom-3 right-3 flex items-center gap-2 rounded-xl bg-black/70 px-3 py-2 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-            >
-              <ImagePlus className="h-4 w-4" />
-              Change Poster
-            </button>
-            <input
-              ref={posterInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handlePosterUpload}
-              className="hidden"
-            />
+            {canEditRide && (
+              <>
+                <button
+                  onClick={() => posterInputRef.current?.click()}
+                  className="absolute bottom-3 right-3 flex items-center gap-2 rounded-xl bg-black/70 px-3 py-2 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                  Change Poster
+                </button>
+                <input
+                  ref={posterInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePosterUpload}
+                  className="hidden"
+                />
+              </>
+            )}
           </div>
-        ) : (
+        ) : canEditRide ? (
           <div className="mb-8">
             <button
               onClick={() => posterInputRef.current?.click()}
@@ -257,7 +333,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               className="hidden"
             />
           </div>
-        )}
+        ) : null}
 
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Main Content */}
@@ -324,23 +400,25 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
             </div>
 
             {/* Highlights */}
-            <div className="card">
-              <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
-                <Star className="h-5 w-5 text-t2w-gold" />
-                Ride Highlights
-              </h3>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {ride.highlights.map((highlight) => (
-                  <div
-                    key={highlight}
-                    className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3"
-                  >
-                    <CheckCircle className="h-4 w-4 shrink-0 text-t2w-accent" />
-                    <span className="text-sm text-gray-300">{highlight}</span>
-                  </div>
-                ))}
+            {ride.highlights.length > 0 && (
+              <div className="card">
+                <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
+                  <Star className="h-5 w-5 text-t2w-gold" />
+                  Ride Highlights
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {ride.highlights.map((highlight) => (
+                    <div
+                      key={highlight}
+                      className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3"
+                    >
+                      <CheckCircle className="h-4 w-4 shrink-0 text-t2w-accent" />
+                      <span className="text-sm text-gray-300">{highlight}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Ride Leaders */}
             <div className="card">
@@ -413,29 +491,114 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               </div>
             )}
 
-            {/* Share Experience - for completed rides */}
-            {ride.status === "completed" && (
+            {/* Approved Ride Posts / Tales */}
+            {ridePosts.length > 0 && (
+              <div className="card">
+                <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
+                  <FileText className="h-5 w-5 text-t2w-accent" />
+                  Rider Tales ({ridePosts.length})
+                </h3>
+                <div className="space-y-4">
+                  {ridePosts.map((post) => (
+                    <div
+                      key={post.id}
+                      className="rounded-xl bg-t2w-surface-light p-4"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
+                          {post.authorName
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .slice(0, 2)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            {post.authorName}
+                          </p>
+                          <p className="text-xs text-t2w-muted">
+                            {new Date(post.createdAt).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              }
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-300 whitespace-pre-line">
+                        {post.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Share Experience - for completed rides, T2W riders+ */}
+            {ride.status === "completed" && isLoggedIn && (
               <div className="card">
                 <h3 className="mb-4 font-display text-lg font-bold text-white">
                   Share Your Experience
                 </h3>
-                <p className="mb-4 text-sm text-t2w-muted">
-                  Were you part of this ride? Share your personal experience with
-                  the T2W community.
-                </p>
-                <textarea
-                  rows={4}
-                  className="input-field mb-4 resize-none"
-                  placeholder="Write about your ride experience..."
-                />
-                <button className="btn-primary">Post Your Tale</button>
+                {!isT2WRiderOrAbove ? (
+                  <p className="text-sm text-t2w-muted">
+                    Only T2W riders who have participated in rides can share
+                    tales.
+                  </p>
+                ) : taleSubmitted && !canApproveContent ? (
+                  <div className="rounded-xl bg-green-400/10 border border-green-400/20 p-4 text-center">
+                    <CheckCircle className="mx-auto h-8 w-8 text-green-400" />
+                    <p className="mt-2 text-sm font-medium text-green-400">
+                      Your tale has been submitted!
+                    </p>
+                    <p className="mt-1 text-xs text-t2w-muted">
+                      It will be visible once approved by a Core Member or Super
+                      Admin.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="mb-4 text-sm text-t2w-muted">
+                      Were you part of this ride? Share your personal experience
+                      with the T2W community.
+                      {!canApproveContent && (
+                        <span className="text-yellow-400">
+                          {" "}
+                          (Subject to approval)
+                        </span>
+                      )}
+                    </p>
+                    <textarea
+                      rows={4}
+                      className="input-field mb-4 resize-none"
+                      placeholder="Write about your ride experience..."
+                      value={taleText}
+                      onChange={(e) => setTaleText(e.target.value)}
+                    />
+                    <button
+                      onClick={handlePostTale}
+                      disabled={!taleText.trim() || postingTale}
+                      className="btn-primary flex items-center gap-2"
+                    >
+                      {postingTale ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                      {postingTale ? "Posting..." : "Post Your Tale"}
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Registration Card */}
+            {/* Registration Card - for upcoming rides */}
             {ride.status === "upcoming" && !registered && (
               <div className="card sticky top-28">
                 <h3 className="mb-4 font-display text-lg font-bold text-white">
@@ -475,16 +638,188 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         Register Now
                       </button>
                     ) : (
-                      <div className="space-y-4">
-                        {/* Indemnity Form */}
-                        <div className="rounded-xl border border-yellow-400/20 bg-yellow-400/5 p-4">
+                      <div className="space-y-3">
+                        {/* Registration Form */}
+                        <div>
+                          <label className="mb-1 block text-xs text-t2w-muted">
+                            Rider Name *
+                          </label>
+                          <div className="relative">
+                            <User className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
+                            <input
+                              type="text"
+                              required
+                              className="input-field !pl-9 !py-2 text-sm"
+                              value={regForm.riderName}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  riderName: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-xs text-t2w-muted">
+                            Email *
+                          </label>
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
+                            <input
+                              type="email"
+                              required
+                              className="input-field !pl-9 !py-2 text-sm"
+                              value={regForm.email}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  email: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-xs text-t2w-muted">
+                            Phone *
+                          </label>
+                          <div className="relative">
+                            <Phone className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
+                            <input
+                              type="tel"
+                              required
+                              className="input-field !pl-9 !py-2 text-sm"
+                              value={regForm.phone}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  phone: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="mb-1 block text-xs text-t2w-muted">
+                              Emergency Contact
+                            </label>
+                            <input
+                              type="text"
+                              className="input-field !py-2 text-sm"
+                              placeholder="Name"
+                              value={regForm.emergencyContactName}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  emergencyContactName: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-t2w-muted">
+                              Emergency Phone
+                            </label>
+                            <input
+                              type="tel"
+                              className="input-field !py-2 text-sm"
+                              placeholder="Phone"
+                              value={regForm.emergencyContactPhone}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  emergencyContactPhone: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-xs text-t2w-muted">
+                            Blood Group
+                          </label>
+                          <div className="relative">
+                            <Droplets className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
+                            <select
+                              className="input-field !pl-9 !py-2 text-sm cursor-pointer"
+                              value={regForm.bloodGroup}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  bloodGroup: e.target.value,
+                                })
+                              }
+                            >
+                              <option value="">Select</option>
+                              <option value="A+">A+</option>
+                              <option value="A-">A-</option>
+                              <option value="B+">B+</option>
+                              <option value="B-">B-</option>
+                              <option value="AB+">AB+</option>
+                              <option value="AB-">AB-</option>
+                              <option value="O+">O+</option>
+                              <option value="O-">O-</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-xs text-t2w-muted">
+                            Vehicle Model
+                          </label>
+                          <div className="relative">
+                            <Bike className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
+                            <input
+                              type="text"
+                              className="input-field !pl-9 !py-2 text-sm"
+                              placeholder="e.g. Royal Enfield Himalayan 450"
+                              value={regForm.vehicleModel}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  vehicleModel: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-xs text-t2w-muted">
+                            Vehicle Reg. Number
+                          </label>
+                          <div className="relative">
+                            <Car className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-t2w-muted" />
+                            <input
+                              type="text"
+                              className="input-field !pl-9 !py-2 text-sm"
+                              placeholder="e.g. KA 01 AB 1234"
+                              value={regForm.vehicleRegNumber}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  vehicleRegNumber: e.target.value,
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        {/* Indemnity Agreement */}
+                        <div className="rounded-xl border border-yellow-400/20 bg-yellow-400/5 p-3">
                           <div className="flex items-start gap-2">
                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-400" />
                             <div>
-                              <h4 className="text-sm font-semibold text-yellow-400">
+                              <h4 className="text-xs font-semibold text-yellow-400">
                                 Indemnity Agreement
                               </h4>
-                              <p className="mt-1 text-xs text-t2w-muted">
+                              <p className="mt-1 text-xs text-t2w-muted leading-relaxed">
                                 I understand that motorcycle riding involves
                                 inherent risks. I voluntarily participate and
                                 assume all risks. I release T2W from liability
@@ -493,11 +828,16 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                               </p>
                             </div>
                           </div>
-                          <label className="mt-3 flex items-center gap-2 cursor-pointer">
+                          <label className="mt-2 flex items-center gap-2 cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={agreed}
-                              onChange={(e) => setAgreed(e.target.checked)}
+                              checked={regForm.agreedIndemnity}
+                              onChange={(e) =>
+                                setRegForm({
+                                  ...regForm,
+                                  agreedIndemnity: e.target.checked,
+                                })
+                              }
                               className="h-4 w-4 rounded border-t2w-border accent-t2w-accent"
                             />
                             <span className="text-xs text-gray-300">
@@ -507,10 +847,10 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         </div>
 
                         <button
-                          disabled={!agreed || registering}
+                          disabled={!regForm.agreedIndemnity || registering}
                           onClick={handleRegister}
                           className={`w-full rounded-xl py-3 text-sm font-semibold transition-all ${
-                            agreed && !registering
+                            regForm.agreedIndemnity && !registering
                               ? "btn-primary"
                               : "cursor-not-allowed bg-t2w-surface-light text-t2w-muted"
                           }`}

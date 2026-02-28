@@ -98,7 +98,7 @@ export function Navbar() {
                 )}
               </Link>
             )}
-            {user && (user.role === "admin" || user.role === "superadmin") && (
+            {user && (user.role === "superadmin" || user.role === "core_member") && (
               <Link
                 href="/admin"
                 className="relative rounded-lg px-4 py-2 text-sm font-medium text-gray-300 transition-all duration-200 hover:bg-white/5 hover:text-white"
@@ -188,7 +188,7 @@ export function Navbar() {
                   My Space
                 </Link>
               )}
-              {user && (user.role === "admin" || user.role === "superadmin") && (
+              {user && (user.role === "superadmin" || user.role === "core_member") && (
                 <Link
                   href="/admin"
                   onClick={() => setIsOpen(false)}

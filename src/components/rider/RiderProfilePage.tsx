@@ -23,9 +23,11 @@ import {
   X,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { useAuth } from "@/context/AuthContext";
 import type { RiderProfile } from "@/data/rider-profiles";
 
 export function RiderProfilePage({ riderId }: { riderId: string }) {
+  const { user, canEditProfile, isSuperAdmin } = useAuth();
   const [rider, setRider] = useState<RiderProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,19 +44,22 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const canEdit = canEditProfile(riderId);
+
   useEffect(() => {
     api.riders
       .get(riderId)
-      .then((data: any) => {
-        setRider(data.rider);
+      .then((data: unknown) => {
+        const d = data as { rider: RiderProfile };
+        setRider(d.rider);
         setEditForm({
-          name: data.rider.name,
-          email: data.rider.email,
-          phone: data.rider.phone,
-          address: data.rider.address,
-          emergencyContact: data.rider.emergencyContact,
-          emergencyPhone: data.rider.emergencyPhone,
-          bloodGroup: data.rider.bloodGroup,
+          name: d.rider.name,
+          email: d.rider.email,
+          phone: d.rider.phone,
+          address: d.rider.address,
+          emergencyContact: d.rider.emergencyContact,
+          emergencyPhone: d.rider.emergencyPhone,
+          bloodGroup: d.rider.bloodGroup,
         });
         const saved = localStorage.getItem(`t2w_avatar_${riderId}`);
         if (saved) setAvatarUrl(saved);
@@ -63,11 +68,12 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
         if (savedEdits) {
           const parsed = JSON.parse(savedEdits);
           setEditForm((prev) => ({ ...prev, ...parsed }));
-          setRider((prev) => prev ? { ...prev, ...parsed } : prev);
+          setRider((prev) => (prev ? { ...prev, ...parsed } : prev));
         }
       })
-      .catch((err) => {
-        setError(err.message || "Failed to load rider");
+      .catch((err: unknown) => {
+        const e = err as Error;
+        setError(e.message || "Failed to load rider");
       })
       .finally(() => {
         setLoading(false);
@@ -153,17 +159,41 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     .toUpperCase()
     .slice(0, 2);
 
-  let badge = { name: "New Rider", color: "text-gray-400", bg: "bg-gray-400/10" };
+  let badge = {
+    name: "New Rider",
+    color: "text-gray-400",
+    bg: "bg-gray-400/10",
+  };
   if (rider.ridesCompleted >= 20) {
-    badge = { name: "Legend", color: "text-yellow-300", bg: "bg-yellow-300/10" };
+    badge = {
+      name: "Legend",
+      color: "text-yellow-300",
+      bg: "bg-yellow-300/10",
+    };
   } else if (rider.ridesCompleted >= 15) {
-    badge = { name: "Ace Rider", color: "text-purple-400", bg: "bg-purple-400/10" };
+    badge = {
+      name: "Ace Rider",
+      color: "text-purple-400",
+      bg: "bg-purple-400/10",
+    };
   } else if (rider.ridesCompleted >= 10) {
-    badge = { name: "Veteran", color: "text-t2w-gold", bg: "bg-t2w-gold/10" };
+    badge = {
+      name: "Veteran",
+      color: "text-t2w-gold",
+      bg: "bg-t2w-gold/10",
+    };
   } else if (rider.ridesCompleted >= 5) {
-    badge = { name: "Regular", color: "text-t2w-accent", bg: "bg-t2w-accent/10" };
+    badge = {
+      name: "Regular",
+      color: "text-t2w-accent",
+      bg: "bg-t2w-accent/10",
+    };
   } else if (rider.ridesCompleted >= 2) {
-    badge = { name: "Explorer", color: "text-green-400", bg: "bg-green-400/10" };
+    badge = {
+      name: "Explorer",
+      color: "text-green-400",
+      bg: "bg-green-400/10",
+    };
   }
 
   return (
@@ -198,19 +228,23 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                   </div>
                 )}
               </div>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
-              >
-                <Camera className="h-6 w-6 text-white" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                className="hidden"
-              />
+              {canEdit && (
+                <>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <Camera className="h-6 w-6 text-white" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </>
+              )}
             </div>
 
             {/* Info */}
@@ -260,24 +294,31 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 </span>
               </div>
 
-              {/* Edit button */}
-              <button
-                onClick={() => setEditing(true)}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-t2w-surface-light px-4 py-2 text-sm font-medium text-t2w-accent transition-colors hover:bg-t2w-accent/20"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Edit Profile
-              </button>
+              {/* Edit button - only visible if user can edit this profile */}
+              {canEdit && !editing && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-t2w-surface-light px-4 py-2 text-sm font-medium text-t2w-accent transition-colors hover:bg-t2w-accent/20"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit Profile
+                </button>
+              )}
             </div>
           </div>
         </div>
 
         {/* Edit Profile Form */}
-        {editing && (
+        {editing && canEdit && (
           <div className="card mb-8">
             <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
               <Pencil className="h-5 w-5 text-t2w-accent" />
               Edit Profile
+              {isSuperAdmin && user?.linkedRiderId !== riderId && (
+                <span className="ml-2 rounded-lg bg-t2w-accent/10 px-2 py-0.5 text-xs text-t2w-accent">
+                  Super Admin Edit
+                </span>
+              )}
             </h3>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>

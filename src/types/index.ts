@@ -1,16 +1,25 @@
+// ── User Roles ──
+// superadmin: Full access - create users, manage roles, CRUD rides, approve content, edit all profiles
+// core_member: Can create rides, approve blogs/posts
+// t2w_rider: Participated in at least 1 ride - can post blogs (subject to approval)
+// rider: Registered but never participated in a T2W ride
+// guest: Not registered (browsing only)
+export type UserRole = "superadmin" | "core_member" | "t2w_rider" | "rider" | "guest";
+
 export interface User {
   id: string;
   name: string;
   email: string;
   phone?: string;
   avatar?: string;
-  role: "rider" | "admin" | "superadmin";
+  role: UserRole;
   joinDate: string;
   isApproved: boolean;
   motorcycles: Motorcycle[];
   badges: Badge[];
   totalKm: number;
   ridesCompleted: number;
+  linkedRiderId?: string; // links to a RiderProfile by id (matched via email)
 }
 
 export interface Motorcycle {
@@ -53,12 +62,15 @@ export interface Ride {
   startingPoint?: string;
 }
 
+export type BlogApprovalStatus = "pending" | "approved" | "rejected";
+
 export interface BlogPost {
   id: string;
   title: string;
   excerpt: string;
   content: string;
   author: string;
+  authorId?: string;
   authorAvatar?: string;
   publishDate: string;
   coverImage?: string;
@@ -68,6 +80,21 @@ export interface BlogPost {
   videoUrl?: string;
   readTime: number;
   likes: number;
+  approvalStatus: BlogApprovalStatus;
+  approvedBy?: string;
+}
+
+// Ride post / tale shared in a ride's detail page
+export interface RidePost {
+  id: string;
+  rideId: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  images?: string[];
+  createdAt: string;
+  approvalStatus: BlogApprovalStatus;
+  approvedBy?: string;
 }
 
 export interface Notification {
@@ -103,4 +130,22 @@ export interface Guideline {
   content: string;
   category: "group" | "general" | "safety" | "maintenance";
   icon: string;
+}
+
+// Ride registration data (based on registration form)
+export interface RideRegistration {
+  id: string;
+  rideId: string;
+  userId: string;
+  riderName: string;
+  email: string;
+  phone: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  bloodGroup: string;
+  vehicleModel: string;
+  vehicleRegNumber: string;
+  agreedIndemnity: boolean;
+  registeredAt: string;
+  confirmationCode: string;
 }

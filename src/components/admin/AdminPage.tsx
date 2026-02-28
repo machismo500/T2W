@@ -13,7 +13,6 @@ import {
   Trash2,
   Edit3,
   Plus,
-  Search,
   CheckCircle,
   XCircle,
   AlertTriangle,
@@ -23,12 +22,14 @@ import {
   Lock,
   Copyright,
   Loader2,
-  LogIn,
+  BookOpen,
+  ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
+import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "content";
+type AdminTab = "dashboard" | "users" | "rides" | "content" | "approvals";
 
 type PendingUser = {
   id: string;
@@ -74,10 +75,43 @@ type AdminStats = {
   pendingUsers: number;
   activeRides: number;
   totalContent: number;
+  pendingBlogs?: number;
+  pendingPosts?: number;
+};
+
+type PendingBlog = {
+  id: string;
+  title: string;
+  author: string;
+  publishDate: string;
+  approvalStatus: string;
+};
+
+type PendingPost = {
+  id: string;
+  rideId: string;
+  authorName: string;
+  content: string;
+  createdAt: string;
+  approvalStatus: string;
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  superadmin: "Super Admin",
+  core_member: "Core Member",
+  t2w_rider: "T2W Rider",
+  rider: "Rider",
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  superadmin: "bg-red-400/10 text-red-400",
+  core_member: "bg-t2w-accent/10 text-t2w-accent",
+  t2w_rider: "bg-green-400/10 text-green-400",
+  rider: "bg-t2w-surface-light text-t2w-muted",
 };
 
 export function AdminPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isSuperAdmin, isCoreOrAbove, canManageRoles, canDeleteRide, canCreateRide, canApproveContent } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [allUsers, setAllUsers] = useState<AllUser[]>([]);
@@ -86,9 +120,12 @@ export function AdminPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [showAddRide, setShowAddRide] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [pendingBlogs, setPendingBlogs] = useState<PendingBlog[]>([]);
+  const [pendingPosts, setPendingPosts] = useState<PendingPost[]>([]);
+  const [roleChangeUser, setRoleChangeUser] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user || (user.role !== "admin" && user.role !== "superadmin")) return;
+    if (!user || !isCoreOrAbove) return;
 
     Promise.all([
       api.admin.stats().catch(() => null),
@@ -96,16 +133,20 @@ export function AdminPage() {
       api.users.list("status=active").catch(() => null),
       api.rides.list().catch(() => null),
       api.admin.content.list().catch(() => null),
+      api.blogs.listPending().catch(() => null),
+      api.ridePosts.listPending().catch(() => null),
     ])
-      .then(([statsData, pendingData, usersData, ridesData, contentData]) => {
+      .then(([statsData, pendingData, usersData, ridesData, contentData, blogsData, postsData]) => {
         if (statsData) setStats((statsData as { stats: AdminStats }).stats);
         if (pendingData) setPendingUsers((pendingData as { users: PendingUser[] }).users);
         if (usersData) setAllUsers((usersData as { users: AllUser[] }).users);
         if (ridesData) setRides((ridesData as { rides: AdminRide[] }).rides);
         if (contentData) setContent((contentData as { content: ContentItem[] }).content);
+        if (blogsData) setPendingBlogs((blogsData as { blogs: PendingBlog[] }).blogs);
+        if (postsData) setPendingPosts((postsData as { posts: PendingPost[] }).posts);
       })
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, isCoreOrAbove]);
 
   const approveUser = async (id: string) => {
     try {
@@ -128,12 +169,50 @@ export function AdminPage() {
   };
 
   const deleteRide = async (id: string) => {
+    if (!canDeleteRide) return;
     try {
       await api.rides.delete(id);
       setRides((prev) => prev.filter((r) => r.id !== id));
     } catch (err) {
       console.error("Failed to delete ride:", err);
     }
+  };
+
+  const changeUserRole = async (userId: string, newRole: UserRole) => {
+    if (!canManageRoles) return;
+    try {
+      await api.users.changeRole(userId, newRole);
+      setAllUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+      );
+      setRoleChangeUser(null);
+    } catch (err) {
+      console.error("Failed to change role:", err);
+    }
+  };
+
+  const approveBlog = async (id: string) => {
+    if (!user) return;
+    await api.blogs.approve(id, user.id);
+    setPendingBlogs((prev) => prev.filter((b) => b.id !== id));
+  };
+
+  const rejectBlog = async (id: string) => {
+    if (!user) return;
+    await api.blogs.reject(id, user.id);
+    setPendingBlogs((prev) => prev.filter((b) => b.id !== id));
+  };
+
+  const approvePost = async (id: string) => {
+    if (!user) return;
+    await api.ridePosts.approve(id, user.id);
+    setPendingPosts((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const rejectPost = async (id: string) => {
+    if (!user) return;
+    await api.ridePosts.reject(id, user.id);
+    setPendingPosts((prev) => prev.filter((p) => p.id !== id));
   };
 
   if (authLoading) {
@@ -144,13 +223,13 @@ export function AdminPage() {
     );
   }
 
-  if (!user || (user.role !== "admin" && user.role !== "superadmin")) {
+  if (!user || !isCoreOrAbove) {
     return (
       <div className="flex min-h-screen items-center justify-center pt-24">
         <div className="text-center">
           <Shield className="mx-auto h-16 w-16 text-t2w-border" />
           <h2 className="mt-4 font-display text-2xl font-bold text-white">Access Denied</h2>
-          <p className="mt-2 text-t2w-muted">You need admin privileges to access this page.</p>
+          <p className="mt-2 text-t2w-muted">You need Core Member or Super Admin privileges to access this page.</p>
           <Link href="/" className="btn-primary mt-6 inline-block">Go Home</Link>
         </div>
       </div>
@@ -159,8 +238,11 @@ export function AdminPage() {
 
   const tabs = [
     { key: "dashboard" as const, label: "Dashboard", icon: BarChart3 },
-    { key: "users" as const, label: "Users", icon: Users },
+    ...(isSuperAdmin
+      ? [{ key: "users" as const, label: "Users", icon: Users }]
+      : []),
     { key: "rides" as const, label: "Rides", icon: Bike },
+    { key: "approvals" as const, label: "Approvals", icon: BookOpen, badge: pendingBlogs.length + pendingPosts.length },
     { key: "content" as const, label: "Content", icon: Copyright },
   ];
 
@@ -186,7 +268,7 @@ export function AdminPage() {
           </div>
           <div className="ml-auto flex items-center gap-2 rounded-lg bg-t2w-accent/10 px-3 py-1.5 text-sm text-t2w-accent">
             <Lock className="h-3.5 w-3.5" />
-            Role: {user.role}
+            {ROLE_LABELS[user.role] || user.role}
           </div>
         </div>
 
@@ -206,6 +288,11 @@ export function AdminPage() {
               >
                 <Icon className="h-4 w-4" />
                 {tab.label}
+                {"badge" in tab && (tab.badge ?? 0) > 0 && (
+                  <span className="ml-1 rounded-full bg-yellow-400 px-1.5 py-0.5 text-xs font-bold text-black">
+                    {tab.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -219,7 +306,7 @@ export function AdminPage() {
                 { label: "Total Users", value: String(stats.totalUsers), change: "Registered users", icon: Users, color: "text-blue-400" },
                 { label: "Pending Approvals", value: String(stats.pendingUsers), change: "Awaiting review", icon: UserPlus, color: "text-yellow-400" },
                 { label: "Active Rides", value: String(stats.activeRides), change: "Upcoming scheduled", icon: Bike, color: "text-green-400" },
-                { label: "Total Content", value: String(stats.totalContent), change: "Managed items", icon: FileText, color: "text-purple-400" },
+                { label: "Pending Content", value: String((stats.pendingBlogs || 0) + (stats.pendingPosts || 0)), change: "Blogs & posts awaiting review", icon: BookOpen, color: "text-purple-400" },
               ].map(({ label, value, change, icon: Icon, color }) => (
                 <div key={label} className="card">
                   <div className="flex items-center justify-between">
@@ -240,9 +327,11 @@ export function AdminPage() {
                     <AlertTriangle className="h-5 w-5 text-yellow-400" />
                     Pending User Approvals ({pendingUsers.length})
                   </h3>
-                  <button onClick={() => setActiveTab("users")} className="text-sm text-t2w-accent hover:text-t2w-accent/80">
-                    View All →
-                  </button>
+                  {isSuperAdmin && (
+                    <button onClick={() => setActiveTab("users")} className="text-sm text-t2w-accent hover:text-t2w-accent/80">
+                      View All &rarr;
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-3">
                   {pendingUsers.slice(0, 3).map((u) => (
@@ -253,8 +342,7 @@ export function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{u.name}</p>
                         <p className="text-xs text-t2w-muted">
-                          {u.city || "N/A"} · {u.ridingExperience || "N/A"}
-                          {u.motorcycles.length > 0 && ` · ${u.motorcycles[0].make} ${u.motorcycles[0].model}`}
+                          {u.city || "N/A"} &middot; {u.ridingExperience || "N/A"}
                         </p>
                       </div>
                       <div className="flex gap-2">
@@ -273,8 +361,8 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* Users Tab */}
-        {activeTab === "users" && (
+        {/* Users Tab - SuperAdmin only */}
+        {activeTab === "users" && isSuperAdmin && (
           <div className="space-y-8">
             {pendingUsers.length > 0 && (
               <div className="card">
@@ -291,15 +379,10 @@ export function AdminPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-white">{u.name}</h4>
-                          <p className="text-sm text-t2w-muted">{u.email} · {u.phone || "No phone"}</p>
+                          <p className="text-sm text-t2w-muted">{u.email} &middot; {u.phone || "No phone"}</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             <span className="rounded-md bg-t2w-surface px-2 py-0.5 text-xs text-t2w-muted">{u.city || "N/A"}</span>
                             <span className="rounded-md bg-t2w-surface px-2 py-0.5 text-xs text-t2w-muted">{u.ridingExperience || "N/A"}</span>
-                            {u.motorcycles.length > 0 && (
-                              <span className="rounded-md bg-t2w-surface px-2 py-0.5 text-xs text-t2w-muted">
-                                {u.motorcycles[0].make} {u.motorcycles[0].model}
-                              </span>
-                            )}
                           </div>
                         </div>
                         <div className="flex gap-2 sm:flex-col">
@@ -348,11 +431,36 @@ export function AdminPage() {
                         </td>
                         <td className="py-4 text-sm text-t2w-muted">{u.email}</td>
                         <td className="py-4">
-                          <span className={`rounded-lg px-2.5 py-1 text-xs font-medium capitalize ${
-                            u.role === "admin" ? "bg-t2w-accent/10 text-t2w-accent" : "bg-t2w-surface-light text-t2w-muted"
-                          }`}>
-                            {u.role}
-                          </span>
+                          {roleChangeUser === u.id ? (
+                            <div className="flex items-center gap-1">
+                              <select
+                                defaultValue={u.role}
+                                onChange={(e) =>
+                                  changeUserRole(u.id, e.target.value as UserRole)
+                                }
+                                className="rounded-lg bg-t2w-surface-light px-2 py-1 text-xs text-white border border-t2w-border cursor-pointer"
+                              >
+                                <option value="superadmin">Super Admin</option>
+                                <option value="core_member">Core Member</option>
+                                <option value="t2w_rider">T2W Rider</option>
+                                <option value="rider">Rider</option>
+                              </select>
+                              <button
+                                onClick={() => setRoleChangeUser(null)}
+                                className="text-t2w-muted hover:text-white"
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span
+                              className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+                                ROLE_COLORS[u.role] || "bg-t2w-surface-light text-t2w-muted"
+                              }`}
+                            >
+                              {ROLE_LABELS[u.role] || u.role}
+                            </span>
+                          )}
                         </td>
                         <td className="py-4">
                           <span className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
@@ -366,12 +474,15 @@ export function AdminPage() {
                         </td>
                         <td className="py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button className="flex h-7 w-7 items-center justify-center rounded-lg text-t2w-muted hover:bg-t2w-surface-light hover:text-white transition-colors">
-                              <Edit3 className="h-3.5 w-3.5" />
-                            </button>
-                            <button className="flex h-7 w-7 items-center justify-center rounded-lg text-t2w-muted hover:bg-red-400/10 hover:text-red-400 transition-colors">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            {canManageRoles && u.role !== "superadmin" && (
+                              <button
+                                onClick={() => setRoleChangeUser(u.id)}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg text-t2w-muted hover:bg-t2w-surface-light hover:text-white transition-colors"
+                                title="Change Role"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -388,18 +499,20 @@ export function AdminPage() {
           <div>
             <div className="mb-6 flex items-center justify-between">
               <h3 className="font-display text-xl font-bold text-white">Manage Rides</h3>
-              <button onClick={() => setShowAddRide(!showAddRide)} className="btn-primary flex items-center gap-2 !px-4 !py-2.5 text-sm">
-                <Plus className="h-4 w-4" />
-                Add New Ride
-              </button>
+              {canCreateRide && (
+                <button onClick={() => setShowAddRide(!showAddRide)} className="btn-primary flex items-center gap-2 !px-4 !py-2.5 text-sm">
+                  <Plus className="h-4 w-4" />
+                  Add New Ride
+                </button>
+              )}
             </div>
 
-            {showAddRide && (
+            {showAddRide && canCreateRide && (
               <div className="card mb-8">
                 <h3 className="mb-6 font-display text-lg font-bold text-white">Create New Ride</h3>
                 <form className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Title</label><input type="text" className="input-field" placeholder="e.g., Coastal Sunrise Sprint" /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Number</label><input type="text" className="input-field" placeholder="T2W-2026-XXX" /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Number</label><input type="text" className="input-field" placeholder="#029" /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Type</label><select className="input-field cursor-pointer"><option value="day">Day Ride</option><option value="weekend">Weekend</option><option value="multi-day">Multi-Day</option><option value="expedition">Expedition</option></select></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Date</label><input type="date" className="input-field" /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Date</label><input type="date" className="input-field" /></div>
@@ -429,22 +542,99 @@ export function AdminPage() {
                       }`}>{ride.status}</span>
                     </div>
                     <p className="mt-1 text-sm text-t2w-muted">
-                      {ride.rideNumber} · {ride.startLocation} → {ride.endLocation} · {ride.distanceKm} km · {ride.registeredRiders} registered
+                      {ride.rideNumber} &middot; {ride.startLocation} &rarr; {ride.endLocation} &middot; {ride.distanceKm} km &middot; {ride.registeredRiders} registered
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <Link href={`/ride?id=${ride.id}`} className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
                       <Eye className="h-3.5 w-3.5" />View
                     </Link>
-                    <button className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
-                      <Edit3 className="h-3.5 w-3.5" />Edit
-                    </button>
-                    <button onClick={() => deleteRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20">
-                      <Trash2 className="h-3.5 w-3.5" />Delete
-                    </button>
+                    {canDeleteRide && (
+                      <button onClick={() => deleteRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20">
+                        <Trash2 className="h-3.5 w-3.5" />Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Approvals Tab */}
+        {activeTab === "approvals" && canApproveContent && (
+          <div className="space-y-8">
+            {/* Pending Blogs */}
+            <div className="card">
+              <h3 className="mb-6 flex items-center gap-2 font-display text-xl font-bold text-white">
+                <BookOpen className="h-5 w-5 text-yellow-400" />
+                Pending Blogs ({pendingBlogs.length})
+              </h3>
+              {pendingBlogs.length === 0 ? (
+                <p className="py-6 text-center text-t2w-muted">No pending blogs to review.</p>
+              ) : (
+                <div className="space-y-3">
+                  {pendingBlogs.map((blog) => (
+                    <div key={blog.id} className="flex flex-col gap-3 sm:flex-row sm:items-center rounded-xl bg-t2w-surface-light p-4">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-white truncate">{blog.title}</h4>
+                        <p className="text-xs text-t2w-muted mt-1">
+                          By {blog.author} &middot;{" "}
+                          {new Date(blog.publishDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => approveBlog(blog.id)} className="flex items-center gap-1.5 rounded-lg bg-green-400/10 px-3 py-2 text-xs font-medium text-green-400 hover:bg-green-400/20">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          Approve
+                        </button>
+                        <button onClick={() => rejectBlog(blog.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-400/20">
+                          <XCircle className="h-3.5 w-3.5" />
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Pending Ride Posts */}
+            <div className="card">
+              <h3 className="mb-6 flex items-center gap-2 font-display text-xl font-bold text-white">
+                <FileText className="h-5 w-5 text-yellow-400" />
+                Pending Ride Posts ({pendingPosts.length})
+              </h3>
+              {pendingPosts.length === 0 ? (
+                <p className="py-6 text-center text-t2w-muted">No pending ride posts to review.</p>
+              ) : (
+                <div className="space-y-3">
+                  {pendingPosts.map((post) => (
+                    <div key={post.id} className="rounded-xl bg-t2w-surface-light p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-t2w-muted mb-1">
+                            By {post.authorName} &middot; Ride: {post.rideId}
+                          </p>
+                          <p className="text-sm text-gray-300 line-clamp-3">
+                            {post.content}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => approvePost(post.id)} className="flex items-center gap-1.5 rounded-lg bg-green-400/10 px-3 py-2 text-xs font-medium text-green-400 hover:bg-green-400/20">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Approve
+                          </button>
+                          <button onClick={() => rejectPost(post.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-400/20">
+                            <XCircle className="h-3.5 w-3.5" />
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -467,7 +657,7 @@ export function AdminPage() {
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-white">{item.title}</h4>
                     <p className="mt-0.5 text-sm text-t2w-muted">
-                      {item.type} · Last updated {new Date(item.lastUpdated).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      {item.type} &middot; Last updated {new Date(item.lastUpdated).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                     </p>
                   </div>
                   <span className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
@@ -475,7 +665,9 @@ export function AdminPage() {
                   }`}>{item.status}</span>
                   <div className="flex gap-2">
                     <button className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white"><Edit3 className="h-3.5 w-3.5" />Edit</button>
-                    <button className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20"><Trash2 className="h-3.5 w-3.5" />Delete</button>
+                    {canDeleteRide && (
+                      <button className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20"><Trash2 className="h-3.5 w-3.5" />Delete</button>
+                    )}
                   </div>
                 </div>
               ))}

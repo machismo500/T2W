@@ -1,4 +1,4 @@
-import { Ride, BlogPost, Notification, User, Guideline } from "@/types";
+import { Ride, BlogPost, Notification, User, Guideline, RidePost } from "@/types";
 import { pastRides } from "./past-rides";
 
 // ── All rides (past + upcoming) ──
@@ -49,12 +49,15 @@ export const mockBlogs: BlogPost[] = [
     content:
       "It started at 2:30 AM at Bangalore International Airport. 19 days, 3,300 km, and some of the most breathtaking landscapes on Earth. From Rohtang to Khardung La, through Pangong Lake and Nubra Valley - this is the story of T2W Ride #004, Himalayan Tales. Organised by Roshan Manuel with Suren as pilot and Harish Mysuru on sweep, this expedition tested every rider to their limits and beyond.",
     author: "Roshan Manuel",
+    authorId: "admin-1",
     publishDate: "2024-07-15",
     tags: ["himalayan", "expedition", "ladakh", "adventure"],
     type: "official",
     isVlog: false,
     readTime: 15,
     likes: 356,
+    approvalStatus: "approved",
+    approvedBy: "admin-1",
   },
   {
     id: "blog-2",
@@ -64,12 +67,15 @@ export const mockBlogs: BlogPost[] = [
     content:
       "T2W Ride #016 took us across the border into Nepal for 18 incredible days. Starting May 1st 2025, we rode through Kathmandu valley, the Annapurna circuit roads, Pokhara's lakeside, and the winding mountain passes of the Himalayas. An international expedition that pushed boundaries and created memories for a lifetime.",
     author: "Roshan Manuel",
+    authorId: "admin-1",
     publishDate: "2025-06-01",
     tags: ["nepal", "expedition", "international", "adventure"],
     type: "personal",
     isVlog: false,
     readTime: 12,
     likes: 289,
+    approvalStatus: "approved",
+    approvedBy: "admin-1",
   },
   {
     id: "blog-3",
@@ -79,12 +85,15 @@ export const mockBlogs: BlogPost[] = [
     content:
       "After Nepal, T2W set its sights on Southeast Asia. Ride #023 - Tales of Thailand 2025, spanning October 31 to November 10, covered 1,200 km from Bangkok to Chiang Mai. Organised by Roshan Manuel, this expedition explored Thai temples, mountain roads, and street food culture on two wheels.",
     author: "Jay Trivedi",
+    authorId: "admin-3",
     publishDate: "2025-11-20",
     tags: ["thailand", "expedition", "international"],
     type: "personal",
     isVlog: false,
     readTime: 10,
     likes: 245,
+    approvalStatus: "approved",
+    approvedBy: "admin-1",
   },
   {
     id: "blog-4",
@@ -94,12 +103,15 @@ export const mockBlogs: BlogPost[] = [
     content:
       "T2W Ride #013 - Kambala 3.0 was a special one. Organised by Jay Trivedi, this 3-day ride from Bangalore to Mangalore covered 800 km and timed perfectly with the traditional Kambala buffalo race. Starting from Parle-G Toll at 5 AM with Jay as pilot and Harish Mysuru on sweep, we experienced the best of coastal Karnataka.",
     author: "Harish Mysuru",
+    authorId: "admin-5",
     publishDate: "2025-03-01",
     tags: ["coastal", "kambala", "mangalore", "culture"],
     type: "personal",
     isVlog: false,
     readTime: 8,
     likes: 198,
+    approvalStatus: "approved",
+    approvedBy: "admin-1",
   },
   {
     id: "blog-5",
@@ -109,14 +121,19 @@ export const mockBlogs: BlogPost[] = [
     content:
       "Two years, 27 rides, 152 riders, and thousands of kilometres. From our very first ride to Sakleshpur in March 2024 to the serene backwaters of Kavvayi Island in February 2026 - here's our definitive guide to the top 10 T2W rides that defined our brotherhood on two wheels.",
     author: "Shreyas BM",
+    authorId: "admin-4",
     publishDate: "2026-02-25",
     tags: ["bangalore", "routes", "guide", "best-of", "karnataka"],
     type: "official",
     isVlog: false,
     readTime: 10,
     likes: 412,
+    approvalStatus: "approved",
+    approvedBy: "admin-1",
   },
 ];
+
+export const mockRidePosts: RidePost[] = [];
 
 export const mockNotifications: Notification[] = [
   {
@@ -167,11 +184,11 @@ export const mockNotifications: Notification[] = [
 ];
 
 export const mockCurrentUser: User = {
-  id: "user-1",
+  id: "admin-1",
   name: "Roshan Manuel",
   email: "roshan.manuel@gmail.com",
   phone: "+91 9880141543",
-  role: "admin",
+  role: "superadmin",
   joinDate: "2024-03-16",
   isApproved: true,
   motorcycles: [],
@@ -275,7 +292,15 @@ export const mockAllUsers = [
     id: "admin-1",
     name: "Roshan Manuel",
     email: "roshan.manuel@gmail.com",
-    role: "admin",
+    role: "superadmin",
+    isApproved: true,
+    joinDate: "2024-03-16",
+  },
+  {
+    id: "admin-6",
+    name: "T2W Official",
+    email: "taleson2wheels.official@gmail.com",
+    role: "superadmin",
     isApproved: true,
     joinDate: "2024-03-16",
   },
@@ -283,7 +308,7 @@ export const mockAllUsers = [
     id: "admin-2",
     name: "Sanjeev Kumar",
     email: "san.nh007@gmail.com",
-    role: "admin",
+    role: "core_member",
     isApproved: true,
     joinDate: "2024-03-16",
   },
@@ -291,7 +316,7 @@ export const mockAllUsers = [
     id: "admin-3",
     name: "Jay Trivedi",
     email: "jaytrivedi.b@gmail.com",
-    role: "admin",
+    role: "core_member",
     isApproved: true,
     joinDate: "2024-03-16",
   },
@@ -299,7 +324,7 @@ export const mockAllUsers = [
     id: "admin-4",
     name: "Shreyas BM",
     email: "shreyasbm77@gmail.com",
-    role: "admin",
+    role: "core_member",
     isApproved: true,
     joinDate: "2024-03-16",
   },
@@ -307,7 +332,7 @@ export const mockAllUsers = [
     id: "admin-5",
     name: "Harish Mysuru",
     email: "harishkumarmr27@gmail.com",
-    role: "admin",
+    role: "core_member",
     isApproved: true,
     joinDate: "2024-03-16",
   },
