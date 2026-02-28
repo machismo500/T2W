@@ -8,6 +8,11 @@ import {
   mockAllUsers,
   mockContentItems,
 } from "@/data/mock";
+import {
+  riderProfiles,
+  riderNameToId,
+  type RiderProfile,
+} from "@/data/rider-profiles";
 import { Ride, BlogPost, User } from "@/types";
 
 // ── Helpers ──
@@ -297,6 +302,29 @@ export const api = {
     unregister: async (id: string) => {
       await delay(200);
       return { success: true, id };
+    },
+  },
+
+  riders: {
+    list: async () => {
+      await delay(150);
+      return { riders: riderProfiles };
+    },
+    get: async (id: string) => {
+      await delay(100);
+      const rider = riderProfiles.find((r) => r.id === id);
+      if (!rider) throw new Error("Rider not found");
+      return { rider };
+    },
+    getByName: async (name: string) => {
+      await delay(50);
+      const key = name.toLowerCase().trim();
+      const id = riderNameToId[key];
+      if (id) {
+        const rider = riderProfiles.find((r) => r.id === id);
+        return { rider: rider || null, riderId: id };
+      }
+      return { rider: null, riderId: null };
     },
   },
 

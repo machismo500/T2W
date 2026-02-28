@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -19,9 +19,11 @@ import {
   User,
   IndianRupee,
   Loader2,
+  ImagePlus,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
+import { riderNameToId } from "@/data/rider-profiles";
 
 interface Ride {
   id: string;
@@ -45,6 +47,7 @@ interface Ride {
   sweepRider: string;
   registrations: unknown[];
   riders?: string[];
+  posterUrl?: string;
 }
 
 export function RideDetailPage({ rideId }: { rideId: string }) {
@@ -57,6 +60,28 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const [registered, setRegistered] = useState(false);
   const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const posterInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePosterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image must be under 10MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setPosterUrl(dataUrl);
+      localStorage.setItem(`t2w_poster_${rideId}`, dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +102,9 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           r.highlights = JSON.parse(r.highlights);
         }
         setRide(r);
+        // Load saved poster from localStorage
+        const savedPoster = localStorage.getItem(`t2w_poster_${rideId}`);
+        if (savedPoster) setPosterUrl(savedPoster);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -183,6 +211,48 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           </h1>
           <p className="mt-4 text-lg text-t2w-muted">{ride.description}</p>
         </div>
+
+        {/* Ride Poster */}
+        {(ride.posterUrl || posterUrl) ? (
+          <div className="mb-8 overflow-hidden rounded-2xl border border-t2w-border relative group">
+            <img
+              src={posterUrl || ride.posterUrl}
+              alt={`${ride.title} poster`}
+              className="w-full object-cover"
+            />
+            <button
+              onClick={() => posterInputRef.current?.click()}
+              className="absolute bottom-3 right-3 flex items-center gap-2 rounded-xl bg-black/70 px-3 py-2 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
+            >
+              <ImagePlus className="h-4 w-4" />
+              Change Poster
+            </button>
+            <input
+              ref={posterInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePosterUpload}
+              className="hidden"
+            />
+          </div>
+        ) : (
+          <div className="mb-8">
+            <button
+              onClick={() => posterInputRef.current?.click()}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-t2w-border bg-t2w-surface/50 py-10 text-t2w-muted transition-colors hover:border-t2w-accent/50 hover:text-t2w-accent"
+            >
+              <ImagePlus className="h-6 w-6" />
+              <span className="text-sm font-medium">Upload Ride Poster</span>
+            </button>
+            <input
+              ref={posterInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePosterUpload}
+              className="hidden"
+            />
+          </div>
+        )}
 
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Main Content */}
@@ -305,19 +375,35 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   Riders ({ride.riders.length})
                 </h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {ride.riders.map((rider, index) => (
-                    <div
-                      key={`${rider}-${index}`}
-                      className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3"
-                    >
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
-                        {index + 1}
+                  {ride.riders.map((riderName, index) => {
+                    const riderId = riderNameToId[riderName.toLowerCase().trim()];
+                    return riderId ? (
+                      <Link
+                        key={`${riderName}-${index}`}
+                        href={`/rider?id=${riderId}`}
+                        className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3 transition-all hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
+                          {index + 1}
+                        </div>
+                        <span className="text-sm text-t2w-accent truncate hover:underline">
+                          {riderName}
+                        </span>
+                      </Link>
+                    ) : (
+                      <div
+                        key={`${riderName}-${index}`}
+                        className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
+                          {index + 1}
+                        </div>
+                        <span className="text-sm text-gray-300 truncate">
+                          {riderName}
+                        </span>
                       </div>
-                      <span className="text-sm text-gray-300 truncate">
-                        {rider}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
