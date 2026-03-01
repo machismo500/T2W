@@ -1,0 +1,7 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/$USER/public_html/
+    - /bin/cp -R out/* $DEPLOYPATH
+    - /bin/cp out/.htaccess $DEPLOYPATH
+    - /bin/cp out/.nojekyll $DEPLOYPATH 2>/dev/null; true
