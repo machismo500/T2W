@@ -143,6 +143,17 @@ export function AdminPage() {
   });
   const [publishingRide, setPublishingRide] = useState(false);
 
+  // Edit ride state
+  const [editingRideId, setEditingRideId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: "", rideNumber: "", type: "day", status: "upcoming",
+    startDate: "", endDate: "", startLocation: "", endLocation: "",
+    distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy",
+    description: "", leadRider: "", sweepRider: "", meetupTime: "",
+    rideStartTime: "", startingPoint: "", organisedBy: "", accountsBy: "",
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // Registration form settings (SuperAdmin)
   const [formSettingsLoaded, setFormSettingsLoaded] = useState(false);
   const [savingFormSettings, setSavingFormSettings] = useState(false);
@@ -212,6 +223,76 @@ export function AdminPage() {
       setRides((prev) => prev.filter((r) => r.id !== id));
     } catch (err) {
       console.error("Failed to delete ride:", err);
+    }
+  };
+
+  const startEditRide = async (id: string) => {
+    try {
+      const result = await api.rides.get(id);
+      const r = (result as { ride: Record<string, unknown> }).ride;
+      setEditForm({
+        title: String(r.title || ""),
+        rideNumber: String(r.rideNumber || ""),
+        type: String(r.type || "day"),
+        status: String(r.status || "upcoming"),
+        startDate: String(r.startDate || "").split("T")[0],
+        endDate: String(r.endDate || "").split("T")[0],
+        startLocation: String(r.startLocation || ""),
+        endLocation: String(r.endLocation || ""),
+        distanceKm: String(r.distanceKm || ""),
+        maxRiders: String(r.maxRiders || "20"),
+        fee: String(r.fee || "0"),
+        difficulty: String(r.difficulty || "easy"),
+        description: String(r.description || ""),
+        leadRider: String(r.leadRider || ""),
+        sweepRider: String(r.sweepRider || ""),
+        meetupTime: String(r.meetupTime || ""),
+        rideStartTime: String(r.rideStartTime || ""),
+        startingPoint: String(r.startingPoint || ""),
+        organisedBy: String(r.organisedBy || ""),
+        accountsBy: String(r.accountsBy || ""),
+      });
+      setEditingRideId(id);
+    } catch (err) {
+      console.error("Failed to load ride:", err);
+    }
+  };
+
+  const saveEditRide = async () => {
+    if (!editingRideId || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      await api.rides.update(editingRideId, {
+        title: editForm.title,
+        rideNumber: editForm.rideNumber,
+        type: editForm.type,
+        status: editForm.status,
+        startDate: editForm.startDate,
+        endDate: editForm.endDate || editForm.startDate,
+        startLocation: editForm.startLocation,
+        endLocation: editForm.endLocation,
+        distanceKm: Number(editForm.distanceKm) || 0,
+        maxRiders: Number(editForm.maxRiders) || 20,
+        fee: Number(editForm.fee) || 0,
+        difficulty: editForm.difficulty,
+        description: editForm.description,
+        leadRider: editForm.leadRider,
+        sweepRider: editForm.sweepRider,
+        meetupTime: editForm.meetupTime,
+        rideStartTime: editForm.rideStartTime,
+        startingPoint: editForm.startingPoint,
+        organisedBy: editForm.organisedBy,
+        accountsBy: editForm.accountsBy,
+        route: [editForm.startLocation, editForm.endLocation],
+      });
+      // Refresh rides list
+      const ridesData = await api.rides.list();
+      setRides((ridesData as { rides: AdminRide[] }).rides);
+      setEditingRideId(null);
+    } catch (err) {
+      console.error("Failed to update ride:", err);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -757,28 +838,74 @@ export function AdminPage() {
 
             <div className="space-y-3">
               {rides.map((ride) => (
-                <div key={ride.id} className="card flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-white truncate">{ride.title}</h4>
-                      <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium capitalize ${
-                        ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : "bg-gray-400/10 text-gray-400"
-                      }`}>{ride.status}</span>
+                <div key={ride.id}>
+                  <div className="card flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-white truncate">{ride.title}</h4>
+                        <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium capitalize ${
+                          ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : "bg-gray-400/10 text-gray-400"
+                        }`}>{ride.status}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-t2w-muted">
+                        {ride.rideNumber} &middot; {ride.startLocation} &rarr; {ride.endLocation} &middot; {ride.distanceKm} km &middot; {ride.registeredRiders} registered
+                      </p>
                     </div>
-                    <p className="mt-1 text-sm text-t2w-muted">
-                      {ride.rideNumber} &middot; {ride.startLocation} &rarr; {ride.endLocation} &middot; {ride.distanceKm} km &middot; {ride.registeredRiders} registered
-                    </p>
+                    <div className="flex gap-2">
+                      <Link href={`/ride?id=${ride.id}`} className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
+                        <Eye className="h-3.5 w-3.5" />View
+                      </Link>
+                      {isSuperAdmin && (
+                        <button onClick={() => editingRideId === ride.id ? setEditingRideId(null) : startEditRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-t2w-accent/10 px-3 py-2 text-xs text-t2w-accent transition-colors hover:bg-t2w-accent/20">
+                          <Edit3 className="h-3.5 w-3.5" />{editingRideId === ride.id ? "Cancel" : "Edit"}
+                        </button>
+                      )}
+                      {canDeleteRide && (
+                        <button onClick={() => deleteRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20">
+                          <Trash2 className="h-3.5 w-3.5" />Delete
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Link href={`/ride?id=${ride.id}`} className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
-                      <Eye className="h-3.5 w-3.5" />View
-                    </Link>
-                    {canDeleteRide && (
-                      <button onClick={() => deleteRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs text-red-400 transition-colors hover:bg-red-400/20">
-                        <Trash2 className="h-3.5 w-3.5" />Delete
-                      </button>
-                    )}
-                  </div>
+
+                  {/* Inline Edit Form */}
+                  {editingRideId === ride.id && (
+                    <div className="card mt-2 border-t2w-accent/30">
+                      <h3 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                        <Edit3 className="h-4 w-4 text-t2w-accent" />
+                        Edit Ride: {ride.title}
+                      </h3>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Title</label><input type="text" className="input-field" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Number</label><input type="text" className="input-field" value={editForm.rideNumber} onChange={(e) => setEditForm({ ...editForm, rideNumber: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Type</label><select className="input-field cursor-pointer" value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}><option value="day">Day Ride</option><option value="weekend">Weekend</option><option value="multi-day">Multi-Day</option><option value="expedition">Expedition</option></select></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Status</label><select className="input-field cursor-pointer" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}><option value="upcoming">Upcoming</option><option value="ongoing">Ongoing</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Date</label><input type="date" className="input-field" value={editForm.startDate} onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Date</label><input type="date" className="input-field" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulty</label><select className="input-field cursor-pointer" value={editForm.difficulty} onChange={(e) => setEditForm({ ...editForm, difficulty: e.target.value })}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="challenging">Challenging</option><option value="extreme">Extreme</option></select></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location</label><input type="text" className="input-field" value={editForm.startLocation} onChange={(e) => setEditForm({ ...editForm, startLocation: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location</label><input type="text" className="input-field" value={editForm.endLocation} onChange={(e) => setEditForm({ ...editForm, endLocation: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Starting Point</label><input type="text" className="input-field" placeholder="Meetup location" value={editForm.startingPoint} onChange={(e) => setEditForm({ ...editForm, startingPoint: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Distance (km)</label><input type="number" className="input-field" value={editForm.distanceKm} onChange={(e) => setEditForm({ ...editForm, distanceKm: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders</label><input type="number" className="input-field" value={editForm.maxRiders} onChange={(e) => setEditForm({ ...editForm, maxRiders: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee (₹)</label><input type="number" className="input-field" value={editForm.fee} onChange={(e) => setEditForm({ ...editForm, fee: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Lead Rider</label><input type="text" className="input-field" placeholder="Name" value={editForm.leadRider} onChange={(e) => setEditForm({ ...editForm, leadRider: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Sweep Rider</label><input type="text" className="input-field" placeholder="Name" value={editForm.sweepRider} onChange={(e) => setEditForm({ ...editForm, sweepRider: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Organised By</label><input type="text" className="input-field" placeholder="Name" value={editForm.organisedBy} onChange={(e) => setEditForm({ ...editForm, organisedBy: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Meetup Time</label><input type="text" className="input-field" placeholder="e.g. 5:30 AM" value={editForm.meetupTime} onChange={(e) => setEditForm({ ...editForm, meetupTime: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Start Time</label><input type="text" className="input-field" placeholder="e.g. 6:00 AM" value={editForm.rideStartTime} onChange={(e) => setEditForm({ ...editForm, rideStartTime: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Accounts By</label><input type="text" className="input-field" placeholder="Name" value={editForm.accountsBy} onChange={(e) => setEditForm({ ...editForm, accountsBy: e.target.value })} /></div>
+                        <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></div>
+                        <div className="sm:col-span-2 lg:col-span-3 flex gap-3">
+                          <button onClick={saveEditRide} disabled={savingEdit} className="btn-primary flex items-center gap-2">
+                            {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                            {savingEdit ? "Saving..." : "Save Changes"}
+                          </button>
+                          <button onClick={() => setEditingRideId(null)} className="rounded-xl px-5 py-2.5 text-sm font-medium text-gray-300 transition-all hover:bg-white/5 hover:text-white">Cancel</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -284,7 +284,10 @@ function getCustomRides(): Ride[] {
 }
 
 function getAllRides(): Ride[] {
-  return [...mockRides, ...getCustomRides()];
+  const custom = getCustomRides();
+  const customIds = new Set(custom.map((r) => r.id));
+  // Custom rides override mock rides with the same id
+  return [...mockRides.filter((r) => !customIds.has(r.id)), ...custom];
 }
 
 // ── API object ──
@@ -593,6 +596,22 @@ export const api = {
     },
     update: async (id: string, data: Record<string, unknown>) => {
       await delay(200);
+      const custom = getCustomRides();
+      const idx = custom.findIndex((r) => r.id === id);
+      if (idx !== -1) {
+        custom[idx] = { ...custom[idx], ...data } as Ride;
+        setStorage(RIDES_KEY, custom);
+        return { ride: custom[idx] };
+      }
+      // For mock rides, store as a custom override
+      const allRides = getAllRides();
+      const mockRide = allRides.find((r) => r.id === id);
+      if (mockRide) {
+        const updated = { ...mockRide, ...data } as Ride;
+        custom.push(updated);
+        setStorage(RIDES_KEY, custom);
+        return { ride: updated };
+      }
       return { ride: { id, ...data } };
     },
     delete: async (id: string) => {
