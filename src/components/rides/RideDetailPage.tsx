@@ -1008,18 +1008,20 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
 
                     {/* Submit */}
                     <button
-                      disabled={!regForm.agreedIndemnity || !regForm.agreedCancellationTerms || registering}
+                      disabled={!regForm.agreedIndemnity || !regForm.agreedCancellationTerms || !regForm.paymentScreenshot || registering}
                       onClick={handleRegister}
                       className={`w-full rounded-xl py-3.5 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                        regForm.agreedIndemnity && regForm.agreedCancellationTerms && !registering
+                        regForm.agreedIndemnity && regForm.agreedCancellationTerms && regForm.paymentScreenshot && !registering
                           ? "btn-primary"
                           : "cursor-not-allowed bg-t2w-surface-light text-t2w-muted"
                       }`}
                     >
                       {registering ? (
                         <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
+                      ) : !regForm.paymentScreenshot ? (
+                        <><ImagePlus className="h-4 w-4" /> Upload payment screenshot to submit</>
                       ) : (
-                        <><CheckCircle className="h-4 w-4" /> {`Submit Registration & Pay ₹${ride.fee.toLocaleString()}`}</>
+                        <><CheckCircle className="h-4 w-4" /> Submit Registration</>
                       )}
                     </button>
                   </div>
