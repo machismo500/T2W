@@ -44,7 +44,7 @@ export function Footer() {
           <div className="lg:col-span-2">
             <Link href="/" className="group inline-flex items-center gap-3">
               <div className="h-10 w-10 shrink-0">
-                <img src="/T2W/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
+                <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
               </div>
               <div>
                 <span className="font-display text-xl font-bold text-white">
