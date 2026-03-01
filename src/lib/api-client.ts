@@ -46,6 +46,7 @@ const BLOGS_KEY = "t2w_blogs";
 const RIDE_POSTS_KEY = "t2w_ride_posts";
 const RIDES_KEY = "t2w_custom_rides";
 const DELETED_USERS_KEY = "t2w_deleted_users";
+const REG_FORM_SETTINGS_KEY = "t2w_reg_form_settings";
 
 // ── Registered user type (stored in localStorage) ──
 interface StoredUser {
@@ -650,6 +651,18 @@ export const api = {
     unregister: async (id: string) => {
       await delay(200);
       return { success: true, id };
+    },
+  },
+
+  regFormSettings: {
+    get: async () => {
+      await delay(50);
+      return getStorage<Record<string, unknown>>(REG_FORM_SETTINGS_KEY, {});
+    },
+    save: async (settings: Record<string, unknown>) => {
+      await delay(100);
+      setStorage(REG_FORM_SETTINGS_KEY, settings);
+      return { success: true };
     },
   },
 

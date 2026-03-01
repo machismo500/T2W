@@ -27,12 +27,16 @@ import {
   ArrowUpDown,
   Search,
   Mail,
+  Settings,
+  Save,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "content" | "approvals";
+type AdminTab = "dashboard" | "users" | "rides" | "content" | "approvals" | "form-settings";
 
 type PendingUser = {
   id: string;
@@ -139,6 +143,16 @@ export function AdminPage() {
   });
   const [publishingRide, setPublishingRide] = useState(false);
 
+  // Registration form settings (SuperAdmin)
+  const [formSettingsLoaded, setFormSettingsLoaded] = useState(false);
+  const [savingFormSettings, setSavingFormSettings] = useState(false);
+  const [formSettings, setFormSettings] = useState({
+    cancellationText: "Post registration, if you cancel\n1. Partial Refund: If the stay owner waives the booking charge or if a replacement rider is found, a cancellation fee of \u20B9500 will be deducted and the remaining amount will be refunded to you.\n2. No Refund: If a replacement rider is not available and the stay owner charges for your reserved slot, we will be unable to offer a refund.",
+    upiId: "taleson2wheels@upi",
+    bankDetails: "Contact admin for details",
+    hiddenFields: [] as string[],
+  });
+
   useEffect(() => {
     if (!user || !isCoreOrAbove) return;
 
@@ -161,6 +175,14 @@ export function AdminPage() {
         if (postsData) setPendingPosts((postsData as { posts: PendingPost[] }).posts);
       })
       .finally(() => setLoading(false));
+
+    // Load form settings
+    api.regFormSettings.get().then((s) => {
+      if (s && Object.keys(s).length > 0) {
+        setFormSettings((prev) => ({ ...prev, ...s } as typeof prev));
+      }
+      setFormSettingsLoaded(true);
+    });
   }, [user, isCoreOrAbove]);
 
   const approveUser = async (id: string) => {
@@ -313,6 +335,27 @@ export function AdminPage() {
     }
   };
 
+  const saveFormSettings = async () => {
+    setSavingFormSettings(true);
+    try {
+      await api.regFormSettings.save(formSettings as unknown as Record<string, unknown>);
+      alert("Registration form settings saved successfully!");
+    } catch {
+      alert("Failed to save settings.");
+    } finally {
+      setSavingFormSettings(false);
+    }
+  };
+
+  const toggleHiddenField = (field: string) => {
+    setFormSettings((prev) => ({
+      ...prev,
+      hiddenFields: prev.hiddenFields.includes(field)
+        ? prev.hiddenFields.filter((f) => f !== field)
+        : [...prev.hiddenFields, field],
+    }));
+  };
+
   const approveBlog = async (id: string) => {
     if (!user) return;
     await api.blogs.approve(id, user.id);
@@ -366,6 +409,9 @@ export function AdminPage() {
     { key: "rides" as const, label: "Rides", icon: Bike },
     { key: "approvals" as const, label: "Approvals", icon: BookOpen, badge: pendingBlogs.length + pendingPosts.length },
     { key: "content" as const, label: "Content", icon: Copyright },
+    ...(isSuperAdmin
+      ? [{ key: "form-settings" as const, label: "Form Settings", icon: Settings }]
+      : []),
   ];
 
   if (loading) {
@@ -846,6 +892,127 @@ export function AdminPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ── Form Settings Tab (SuperAdmin) ── */}
+        {activeTab === "form-settings" && isSuperAdmin && (
+          <div>
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-xl font-bold text-white">Registration Form Settings</h3>
+                <p className="mt-1 text-sm text-t2w-muted">Customize the ride registration form fields, policies, and payment details</p>
+              </div>
+              <button
+                onClick={saveFormSettings}
+                disabled={savingFormSettings}
+                className="btn-primary flex items-center gap-2"
+              >
+                {savingFormSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {savingFormSettings ? "Saving..." : "Save Settings"}
+              </button>
+            </div>
+
+            {!formSettingsLoaded ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-t2w-accent" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Toggle Form Fields */}
+                <div className="card">
+                  <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                    <Edit3 className="h-5 w-5 text-t2w-accent" />
+                    Toggle Form Fields
+                  </h4>
+                  <p className="mb-4 text-sm text-t2w-muted">Show or hide optional fields on the registration form. Required fields (name, email, phone, blood group, food, riding type) cannot be hidden.</p>
+                  <div className="space-y-3">
+                    {[
+                      { key: "address", label: "Address", desc: "Full address field" },
+                      { key: "referredBy", label: "Referred By", desc: "Who referred the rider to T2W" },
+                      { key: "vehicle", label: "Vehicle Details", desc: "Vehicle model and registration number" },
+                    ].map((field) => (
+                      <div key={field.key} className="flex items-center justify-between rounded-xl border border-t2w-border bg-t2w-bg px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">{field.label}</p>
+                          <p className="text-xs text-t2w-muted">{field.desc}</p>
+                        </div>
+                        <button onClick={() => toggleHiddenField(field.key)} className="text-t2w-accent">
+                          {formSettings.hiddenFields.includes(field.key) ? (
+                            <ToggleLeft className="h-8 w-8 text-t2w-muted" />
+                          ) : (
+                            <ToggleRight className="h-8 w-8 text-t2w-accent" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cancellation & Refund Text */}
+                <div className="card">
+                  <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                    <FileText className="h-5 w-5 text-t2w-accent" />
+                    Cancellation & Refund Policy
+                  </h4>
+                  <p className="mb-3 text-sm text-t2w-muted">
+                    Edit the cancellation text shown to riders during registration. Use <code className="rounded bg-t2w-surface-light px-1.5 py-0.5 text-xs text-t2w-accent">__text__</code> for bold headings and numbered lines for policy points.
+                  </p>
+                  <textarea
+                    rows={6}
+                    className="input-field font-mono text-sm"
+                    value={formSettings.cancellationText}
+                    onChange={(e) => setFormSettings({ ...formSettings, cancellationText: e.target.value })}
+                    placeholder="Enter cancellation and refund policy text..."
+                  />
+                </div>
+
+                {/* Payment Details */}
+                <div className="card">
+                  <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                    <TrendingUp className="h-5 w-5 text-t2w-accent" />
+                    Payment Details
+                  </h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-300">UPI ID</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="e.g. taleson2wheels@upi"
+                        value={formSettings.upiId}
+                        onChange={(e) => setFormSettings({ ...formSettings, upiId: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-300">Bank Transfer Details</label>
+                      <textarea
+                        rows={3}
+                        className="input-field text-sm"
+                        placeholder="Account Name, Account No, IFSC, etc."
+                        value={formSettings.bankDetails}
+                        onChange={(e) => setFormSettings({ ...formSettings, bankDetails: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                <div className="card border-t2w-accent/20">
+                  <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
+                    <Eye className="h-5 w-5 text-t2w-accent" />
+                    Cancellation Text Preview
+                  </h4>
+                  <div className="rounded-xl border border-t2w-border bg-t2w-bg p-4 text-sm text-t2w-muted leading-relaxed whitespace-pre-line">
+                    {formSettings.cancellationText.split("\n").map((line, i) => {
+                      if (line.startsWith("__") && line.endsWith("__")) return <p key={i} className="mt-2 font-semibold text-t2w-accent">{line.replace(/__/g, "")}</p>;
+                      if (/^\d+\./.test(line)) return <p key={i} className="ml-3 mt-1 text-gray-300"><span className="text-t2w-accent font-medium">{line.split(":")[0]}:</span>{line.includes(":") ? line.slice(line.indexOf(":") + 1) : ""}</p>;
+                      return <p key={i} className={i > 0 ? "mt-1" : ""}>{line}</p>;
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
