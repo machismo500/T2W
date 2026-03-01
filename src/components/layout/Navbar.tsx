@@ -57,14 +57,9 @@ export function Navbar() {
             <div className="relative h-10 w-10 shrink-0 transition-transform duration-300 group-hover:scale-110">
               <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
-            <div>
-              <span className="font-display text-xl font-bold tracking-tight text-white">
-                T2W
-              </span>
-              <span className="ml-1 hidden text-xs text-t2w-muted sm:inline">
-                Tales on 2 Wheels
-              </span>
-            </div>
+            <span className="text-xl text-white" style={{ fontFamily: "'Courgette', cursive" }}>
+              Tales on 2 Wheels
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
