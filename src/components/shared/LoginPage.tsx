@@ -142,7 +142,7 @@ export function LoginPage() {
         <div className="mb-8 text-center">
           <Link href="/" className="inline-flex items-center gap-3">
             <div className="h-12 w-12 shrink-0">
-              <img src="/T2W/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
+              <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
             <span className="font-display text-2xl font-bold text-white">
               T2W

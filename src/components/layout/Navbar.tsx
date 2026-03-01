@@ -55,7 +55,7 @@ export function Navbar() {
           {/* Logo */}
           <Link href="/" className="group flex items-center gap-3">
             <div className="relative h-10 w-10 shrink-0 transition-transform duration-300 group-hover:scale-110">
-              <img src="/T2W/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
+              <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
             <div>
               <span className="font-display text-xl font-bold tracking-tight text-white">
