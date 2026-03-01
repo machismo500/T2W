@@ -4,4 +4,4 @@ Disallow: /admin
 Disallow: /api/
 Disallow: /dashboard
 
-Sitemap: https://talesontwowheels.com/sitemap.xml
+Sitemap: https://taleson2wheels.com/sitemap.xml

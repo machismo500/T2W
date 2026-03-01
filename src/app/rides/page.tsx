@@ -26,7 +26,7 @@ export const metadata: Metadata = {
       "Browse upcoming and past motorcycle rides from Bangalore & across India. Register for your next adventure with T2W.",
   },
   alternates: {
-    canonical: "https://talesontwowheels.com/rides",
+    canonical: "https://taleson2wheels.com/rides",
   },
 };
 

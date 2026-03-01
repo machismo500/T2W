@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     "Royal Enfield rides Bangalore",
   ],
   alternates: {
-    canonical: "https://talesontwowheels.com",
+    canonical: "https://taleson2wheels.com",
   },
 };
 
@@ -53,7 +53,7 @@ function EventSchemas() {
     organizer: {
       "@type": "Organization",
       name: "Tales on 2 Wheels",
-      url: "https://talesontwowheels.com",
+      url: "https://taleson2wheels.com",
     },
     offers: {
       "@type": "Offer",
@@ -63,12 +63,12 @@ function EventSchemas() {
         ride.registeredRiders < ride.maxRiders
           ? "https://schema.org/InStock"
           : "https://schema.org/SoldOut",
-      url: `https://talesontwowheels.com/ride?id=${ride.id}`,
+      url: `https://taleson2wheels.com/ride?id=${ride.id}`,
       validFrom: "2026-01-01",
     },
     maximumAttendeeCapacity: ride.maxRiders,
     remainingAttendeeCapacity: ride.maxRiders - ride.registeredRiders,
-    image: "https://talesontwowheels.com/og-image.jpg",
+    image: "https://taleson2wheels.com/og-image.jpg",
     performer: {
       "@type": "Person",
       name: ride.leadRider,

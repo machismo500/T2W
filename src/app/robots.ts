@@ -11,6 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/admin", "/api/", "/dashboard"],
       },
     ],
-    sitemap: "https://talesontwowheels.com/sitemap.xml",
+    sitemap: "https://taleson2wheels.com/sitemap.xml",
   };
 }

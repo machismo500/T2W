@@ -4,7 +4,7 @@ import { mockRides, mockBlogs } from "@/data/mock";
 export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://talesontwowheels.com";
+  const baseUrl = "https://taleson2wheels.com";
 
   const rideUrls = mockRides.map((ride) => ({
     url: `${baseUrl}/ride?id=${ride.id}`,

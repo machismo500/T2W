@@ -25,7 +25,7 @@ export const metadata: Metadata = {
       "Essential group riding guidelines, safety tips, and riding techniques from experienced T2W riders.",
   },
   alternates: {
-    canonical: "https://talesontwowheels.com/guidelines",
+    canonical: "https://taleson2wheels.com/guidelines",
   },
 };
 

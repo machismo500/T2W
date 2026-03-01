@@ -5,7 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://talesontwowheels.com"),
+  metadataBase: new URL("https://taleson2wheels.com"),
   title: {
     default:
       "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & India",
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_IN",
-    url: "https://talesontwowheels.com",
+    url: "https://taleson2wheels.com",
     siteName: "Tales on 2 Wheels",
     title:
       "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & Across India",
@@ -84,7 +84,7 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: "https://talesontwowheels.com",
+    canonical: "https://taleson2wheels.com",
   },
   category: "Sports & Recreation",
 };
@@ -92,11 +92,11 @@ export const metadata: Metadata = {
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  "@id": "https://talesontwowheels.com/#organization",
+  "@id": "https://taleson2wheels.com/#organization",
   name: "Tales on 2 Wheels",
   alternateName: ["T2W", "Tales on Two Wheels"],
-  url: "https://talesontwowheels.com",
-  logo: "https://talesontwowheels.com/logo.png",
+  url: "https://taleson2wheels.com",
+  logo: "https://taleson2wheels.com/logo.png",
   description:
     "India's premier motorcycle riding community based in Bangalore. Organizing group rides, motorcycle tours, and building a passionate riding community across India since 2023.",
   foundingDate: "2023",
@@ -133,15 +133,15 @@ const organizationSchema = {
   ],
   contactPoint: {
     "@type": "ContactPoint",
-    email: "ride@talesontwowheels.com",
+    email: "ride@taleson2wheels.com",
     telephone: "+919876543210",
     contactType: "customer service",
     availableLanguage: ["English", "Hindi", "Kannada"],
   },
   sameAs: [
-    "https://instagram.com/talesontwowheels",
-    "https://youtube.com/@talesontwowheels",
-    "https://facebook.com/talesontwowheels",
+    "https://instagram.com/taleson2wheels",
+    "https://youtube.com/@taleson2wheels",
+    "https://facebook.com/taleson2wheels",
   ],
   numberOfEmployees: {
     "@type": "QuantitativeValue",
@@ -152,25 +152,25 @@ const organizationSchema = {
 const websiteSchema = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  "@id": "https://talesontwowheels.com/#website",
-  url: "https://talesontwowheels.com",
+  "@id": "https://taleson2wheels.com/#website",
+  url: "https://taleson2wheels.com",
   name: "Tales on 2 Wheels",
   description:
     "Motorcycle riding community platform for group rides across India",
-  publisher: { "@id": "https://talesontwowheels.com/#organization" },
+  publisher: { "@id": "https://taleson2wheels.com/#organization" },
   inLanguage: "en-IN",
 };
 
 const localBusinessSchema = {
   "@context": "https://schema.org",
   "@type": "SportsActivityLocation",
-  "@id": "https://talesontwowheels.com/#localbusiness",
+  "@id": "https://taleson2wheels.com/#localbusiness",
   name: "Tales on 2 Wheels - Bangalore",
   description:
     "Motorcycle riding community organizing group rides from Bangalore to destinations across Karnataka and India. Weekly rides, weekend getaways, and multi-day expeditions.",
-  url: "https://talesontwowheels.com",
+  url: "https://taleson2wheels.com",
   telephone: "+919876543210",
-  email: "ride@talesontwowheels.com",
+  email: "ride@taleson2wheels.com",
   address: {
     "@type": "PostalAddress",
     streetAddress: "Brigade Road",
@@ -203,25 +203,25 @@ const breadcrumbSchema = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://talesontwowheels.com",
+      item: "https://taleson2wheels.com",
     },
     {
       "@type": "ListItem",
       position: 2,
       name: "Rides",
-      item: "https://talesontwowheels.com/rides",
+      item: "https://taleson2wheels.com/rides",
     },
     {
       "@type": "ListItem",
       position: 3,
       name: "Blogs",
-      item: "https://talesontwowheels.com/blogs",
+      item: "https://taleson2wheels.com/blogs",
     },
     {
       "@type": "ListItem",
       position: 4,
       name: "Guidelines",
-      item: "https://talesontwowheels.com/guidelines",
+      item: "https://taleson2wheels.com/guidelines",
     },
   ],
 };

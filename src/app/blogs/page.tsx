@@ -24,7 +24,7 @@ export const metadata: Metadata = {
       "Riding tips, gear reviews, travel stories, and vlogs from India's premier motorcycle community.",
   },
   alternates: {
-    canonical: "https://talesontwowheels.com/blogs",
+    canonical: "https://taleson2wheels.com/blogs",
   },
 };
 
