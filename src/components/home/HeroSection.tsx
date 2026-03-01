@@ -41,6 +41,15 @@ export function HeroSection() {
         }}
       />
 
+      {/* Background Logo Watermark */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <img
+          src="/logo.png"
+          alt=""
+          className="w-[600px] h-[600px] object-contain opacity-20 sm:w-[700px] sm:h-[700px] lg:w-[800px] lg:h-[800px]"
+        />
+      </div>
+
       <div className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
         <div className="max-w-4xl">
           {/* Badge */}
