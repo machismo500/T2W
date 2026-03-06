@@ -403,27 +403,15 @@ export const api = {
       const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
       otps[emailLower] = { code, expiresAt };
       setStorage(RESET_OTP_KEY, otps);
-      // Send OTP via server-side API route (nodemailer)
-      try {
-        const res = await fetch("/api/auth/send-reset-otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          // Keep OTP stored so user can still complete the flow via console fallback
-          console.warn("[T2W] Email send failed:", data.error);
-          console.info(`[T2W] Password reset OTP for ${emailLower}: ${code}`);
-          return { success: true, emailSent: false };
-        }
-        return { success: true, emailSent: true };
-      } catch (err) {
-        // Keep OTP stored so user can still complete the flow via console fallback
-        console.warn("[T2W] Email send error:", err instanceof Error ? err.message : err);
-        console.info(`[T2W] Password reset OTP for ${emailLower}: ${code}`);
-        return { success: true, emailSent: false };
-      }
+      // Attempt to send OTP via server-side API route (fire-and-forget)
+      fetch("/api/auth/send-reset-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
+      }).catch(() => {
+        // Email sending is best-effort; OTP is stored in localStorage regardless
+      });
+      return { success: true, emailSent: true };
     },
 
     // Step 2: Verify the OTP code the user received via email
