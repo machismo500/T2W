@@ -29,6 +29,8 @@ export function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const { login, resetPassword } = useAuth();
   const router = useRouter();
@@ -64,7 +66,9 @@ export function LoginPage() {
     setForgotError(null);
 
     try {
-      await resetPassword(forgotEmail);
+      const tp = await resetPassword(forgotEmail);
+      setTempPassword(tp);
+      setCopied(false);
       setModal("resetSuccess");
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -221,7 +225,7 @@ export function LoginPage() {
                 Reset Password
               </h3>
               <p className="mt-1 text-sm text-t2w-muted">
-                Enter your email to receive a password reset link
+                Enter your registered email to generate a temporary password
               </p>
             </div>
 
@@ -254,7 +258,7 @@ export function LoginPage() {
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 ) : (
                   <>
-                    Send Reset Email
+                    Reset Password
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}
@@ -280,25 +284,44 @@ export function LoginPage() {
                 <CheckCircle className="h-6 w-6 text-green-400" />
               </div>
               <h3 className="font-display text-lg font-bold text-white">
-                Reset Email Sent!
+                Password Reset
               </h3>
               <p className="mt-1 text-sm text-t2w-muted">
-                A temporary password has been sent to{" "}
-                <span className="font-medium text-white">{forgotEmail}</span>.
-                Please check your inbox (and spam folder) and use the new
-                password to log in.
+                Your temporary password for{" "}
+                <span className="font-medium text-white">{forgotEmail}</span>:
+              </p>
+              {tempPassword && (
+                <div className="mt-3 flex items-center justify-center gap-2">
+                  <code className="rounded-lg bg-t2w-surface-light px-4 py-2 font-mono text-lg font-bold text-t2w-accent">
+                    {tempPassword}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(tempPassword);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="rounded-lg bg-t2w-surface-light px-3 py-2 text-xs font-medium text-t2w-muted transition-colors hover:text-white"
+                  >
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              )}
+              <p className="mt-3 text-xs text-t2w-muted">
+                Use this password to log in. Your old password will also continue to work.
               </p>
             </div>
 
             <button
               onClick={() => {
                 setEmail(forgotEmail);
-                setPassword("");
+                setPassword(tempPassword || "");
                 setModal("none");
               }}
               className="btn-primary flex w-full items-center justify-center gap-2"
             >
-              Back to Login
+              Login with New Password
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

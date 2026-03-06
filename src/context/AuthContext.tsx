@@ -46,7 +46,7 @@ interface AuthContextType {
   user: UserData | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  resetPassword: (email: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<string>;
   sendOtp: (email: string) => Promise<string>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   register: (data: Record<string, unknown>) => Promise<void>;
@@ -92,9 +92,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   };
 
-  const resetPassword = async (email: string): Promise<void> => {
-    await api.auth.resetPassword(email);
-    // Password reset email is sent (simulated). No temp password returned to the UI.
+  const resetPassword = async (email: string): Promise<string> => {
+    const result = await api.auth.resetPassword(email);
+    const data = result as unknown as { tempPassword: string };
+    return data.tempPassword;
   };
 
   const sendOtp = async (email: string): Promise<string> => {

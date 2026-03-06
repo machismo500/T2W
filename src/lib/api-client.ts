@@ -216,6 +216,22 @@ function getBuiltinUsers(): StoredUser[] {
   ];
 }
 
+// Clear password overrides for built-in users so they always work with their default passwords
+function clearBuiltinPasswordOverrides() {
+  if (typeof window === "undefined") return;
+  const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
+  const builtinEmails = getBuiltinUsers().map((u) => u.email.toLowerCase());
+  let changed = false;
+  for (const email of builtinEmails) {
+    if (overrides[email]) {
+      delete overrides[email];
+      changed = true;
+    }
+  }
+  if (changed) setStorage(PASSWORDS_KEY, overrides);
+}
+clearBuiltinPasswordOverrides();
+
 function getRegisteredUsers(): StoredUser[] {
   const stored = getStorage<StoredUser[]>(USERS_KEY, []);
   // Merge: built-in users take precedence for their emails
@@ -351,10 +367,9 @@ export const api = {
       const emailLower = email.toLowerCase().trim();
       const found = users.find((u) => {
         if (u.email.toLowerCase() !== emailLower) return false;
-        // Check password overrides first (set via forgot password)
+        // Accept either the override password (from forgot password) or the original
         const override = overrides[emailLower];
-        if (override) return password === override;
-        // Fallback to stored password
+        if (override && password === override) return true;
         return u.password === password;
       });
       if (!found) throw new Error("Invalid email or password");
@@ -375,9 +390,7 @@ export const api = {
       const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
       overrides[emailLower] = tempPassword;
       setStorage(PASSWORDS_KEY, overrides);
-      // In production, this would send an email. For now, log to console for debugging.
-      console.info(`[T2W] Password reset email sent to ${email}. (Dev: ${tempPassword})`);
-      return { success: true, email: emailLower };
+      return { success: true, email: emailLower, tempPassword };
     },
 
     // Change password (after reset or voluntarily)
