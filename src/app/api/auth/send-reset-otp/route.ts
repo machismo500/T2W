@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 
-const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
-const SMTP_PORT = Number(process.env.SMTP_PORT || "587");
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASS = process.env.SMTP_PASS || "";
-const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
+const SMTP_HOST = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
+const SMTP_PORT = Number((process.env.SMTP_PORT || "587").trim());
+const SMTP_USER = (process.env.SMTP_USER || "").trim();
+const SMTP_PASS = (process.env.SMTP_PASS || "").trim();
+const SMTP_FROM = (process.env.SMTP_FROM || "").trim() || SMTP_USER;
 
 export async function POST(req: NextRequest) {
   try {
