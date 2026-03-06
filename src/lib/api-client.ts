@@ -404,7 +404,6 @@ export const api = {
       otps[emailLower] = { code, expiresAt };
       setStorage(RESET_OTP_KEY, otps);
       // Send OTP via server-side API route (nodemailer)
-      let emailSent = false;
       try {
         const res = await fetch("/api/auth/send-reset-otp", {
           method: "POST",
@@ -412,14 +411,22 @@ export const api = {
           body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
         });
         const data = await res.json();
-        emailSent = data.emailSent === true;
-      } catch {
-        // API route unavailable (e.g. static export) – fall through
+        if (!res.ok) {
+          // Clear the stored OTP since email wasn't sent
+          delete otps[emailLower];
+          setStorage(RESET_OTP_KEY, otps);
+          throw new Error(data.error || "Failed to send verification email");
+        }
+        return { success: true, emailSent: true };
+      } catch (err) {
+        // Clear the stored OTP since email wasn't sent
+        delete otps[emailLower];
+        setStorage(RESET_OTP_KEY, otps);
+        if (err instanceof Error && err.message !== "Failed to fetch") {
+          throw err;
+        }
+        throw new Error("Unable to send verification email. Please ensure the email service is configured.");
       }
-      if (!emailSent) {
-        console.info(`[T2W-DEV] Password reset OTP for ${emailLower}: ${code}`);
-      }
-      return { success: true, emailSent };
     },
 
     // Step 2: Verify the OTP code the user received via email
