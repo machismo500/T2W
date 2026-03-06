@@ -471,11 +471,11 @@ export const riderProfiles: RiderProfile[] = [
   },
   {
     id: "rider-022",
-    name: "Asha L",
+    name: "Kiran Kumar B",
     email: "kiranb82@gmail.com",
     phone: "9663721282",
     address: "No.4289/a, 21st main, Subramanyanagar, Bangalore-560021",
-    emergencyContact: "Kiran-spouse",
+    emergencyContact: "Asha L",
     emergencyPhone: "9880848338",
     bloodGroup: "",
     joinDate: "2025-03-22",
@@ -1277,7 +1277,7 @@ export const riderProfiles: RiderProfile[] = [
     ridesParticipated: [
       { rideId: "ride-t2w-002", rideNumber: "#002", rideTitle: "The Summer Break", rideDate: "2024-04-20", distanceKm: 540 },
       { rideId: "ride-t2w-008", rideNumber: "#008", rideTitle: "Tales on Tadiyandamol Trails", rideDate: "2024-09-21", distanceKm: 600 },
-      { rideId: "ride-t2w-010", rideNumber: "#010", rideTitle: "Ride to East Coast - 2.0", rideDate: "2024-11-15", distanceKm: 1050 }
+      { rideId: "ride-t2w-010", rideNumber: "#010", rideTitle: "Ride to East Coast - 2.0", rideDate: "2024-11-15", distanceKm: 1050 },
       { rideId: "ride-t2w-014", rideNumber: "#014", rideTitle: "Anniversary Ride", rideDate: "2025-03-22", distanceKm: 450 },
       { rideId: "ride-t2w-019", rideNumber: "#019", rideTitle: "Ride to Harangi", rideDate: "2025-07-19", distanceKm: 500 },
       { rideId: "ride-t2w-027", rideNumber: "#027", rideTitle: "Ride to Kavvayi Island", rideDate: "2026-02-20", distanceKm: 800 }
@@ -3166,6 +3166,7 @@ export const riderNameToId: Record<string, string> = {
   "arjun s": "rider-020",
   "arvind v": "rider-021",
   "asha l": "rider-022",
+  "kiran kumar b": "rider-022",
   "ashwin kumar": "rider-023",
   "avinash shetty": "rider-024",
   "balaji": "rider-025",
