@@ -54,8 +54,8 @@ export function Footer() {
             </Link>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-t2w-muted">
               India&apos;s premier motorcycle riding community based in Bangalore,
-              Karnataka. Group rides to Nandi Hills, Coorg, Chikmagalur,
-              Hampi, Goa, Rajasthan &amp; across India. Every ride tells a story.
+              Karnataka. Group rides to Ladakh, Nepal, Thailand,
+              Munnnar, Goa, Rajasthan &amp; across India. Every ride tells a story.
             </p>
 
             {/* Social Links */}
