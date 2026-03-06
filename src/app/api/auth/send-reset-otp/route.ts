@@ -5,7 +5,7 @@ const SMTP_HOST = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
 const SMTP_PORT = Number((process.env.SMTP_PORT || "587").trim());
 const SMTP_USER = (process.env.SMTP_USER || "").trim();
 const SMTP_PASS = (process.env.SMTP_PASS || "").trim();
-const SMTP_FROM = (process.env.SMTP_FROM || "").trim() || SMTP_USER;
+const SMTP_FROM_NAME = (process.env.SMTP_FROM || "Tales on 2 Wheels").trim();
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     });
 
     await transporter.sendMail({
-      from: `"Tales on 2 Wheels" <${SMTP_FROM}>`,
+      from: `"${SMTP_FROM_NAME}" <${SMTP_USER}>`,
       to: email,
       subject: "T2W Password Reset Code",
       html: `
