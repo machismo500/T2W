@@ -34,13 +34,15 @@ import {
   Clock,
   RotateCcw,
   Activity,
+  Grid3X3,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
+import { ParticipationMatrix } from "./ParticipationMatrix";
 import type { ActivityLogEntry } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "content" | "approvals" | "form-settings" | "activity";
+type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "content" | "approvals" | "form-settings" | "activity";
 
 type PendingUser = {
   id: string;
@@ -662,6 +664,9 @@ export function AdminPage() {
       ? [{ key: "users" as const, label: "Users", icon: Users }]
       : []),
     { key: "rides" as const, label: "Rides", icon: Bike },
+    ...(isSuperAdmin
+      ? [{ key: "matrix" as const, label: "Matrix", icon: Grid3X3 }]
+      : []),
     { key: "approvals" as const, label: "Approvals", icon: BookOpen, badge: pendingBlogs.length + pendingPosts.length },
     { key: "content" as const, label: "Content", icon: Copyright },
     ...(isSuperAdmin
@@ -1146,6 +1151,11 @@ export function AdminPage() {
               ))}
             </div>
           </div>
+        )}
+
+        {/* Matrix Tab */}
+        {activeTab === "matrix" && isSuperAdmin && (
+          <ParticipationMatrix isSuperAdmin={isSuperAdmin} />
         )}
 
         {/* Approvals Tab */}

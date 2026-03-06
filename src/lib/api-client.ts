@@ -56,6 +56,7 @@ const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (shared across 
 const EMAIL_OTP_KEY = "t2w_email_otp"; // email -> { code, expiresAt }
 const RESET_OTP_KEY = "t2w_reset_otp"; // email -> { code, expiresAt }
 const RESET_VERIFIED_KEY = "t2w_reset_verified"; // email -> expiresAt (verified session)
+const PARTICIPATION_OVERRIDES_KEY = "t2w_participation_overrides"; // riderId -> { added: rideId[], removed: rideId[] }
 
 // ── Activity Log ──
 export type ActivityAction =
@@ -358,6 +359,41 @@ export const api = {
       return { success: true, emailSent: true };
     },
 
+    // Step 1b: Send a 6-digit OTP via mobile (lookup by phone number)
+    sendResetOtpByPhone: async (phone: string) => {
+      await delay(400);
+      const phoneClean = phone.replace(/[\s\-\+]/g, "").replace(/^91/, "");
+      const users = getRegisteredUsers();
+      // Find user by phone number (strip +91 prefix, spaces, dashes)
+      const found = users.find((u) => {
+        const uPhone = (u.phone || "").replace(/[\s\-\+]/g, "").replace(/^91/, "");
+        return uPhone === phoneClean && uPhone.length >= 10;
+      });
+      if (!found) {
+        // Also check rider profiles for phone match
+        const rider = riderProfiles.find((r) => {
+          const rPhone = (r.phone || "").replace(/[\s\-\+]/g, "").replace(/^91/, "");
+          return rPhone === phoneClean && rPhone.length >= 10;
+        });
+        if (!rider) throw new Error("No account found with this phone number");
+        // For rider profiles without a registered account, use their email as key
+        const emailKey = rider.email.toLowerCase().trim();
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const expiresAt = Date.now() + 10 * 60 * 1000;
+        const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
+        otps[emailKey] = { code, expiresAt };
+        setStorage(RESET_OTP_KEY, otps);
+        return { success: true, smsSent: false, otpCode: code, email: emailKey, name: rider.name };
+      }
+      const emailKey = found.email.toLowerCase().trim();
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
+      otps[emailKey] = { code, expiresAt };
+      setStorage(RESET_OTP_KEY, otps);
+      return { success: true, smsSent: false, otpCode: code, email: emailKey, name: found.name };
+    },
+
     // Step 2: Verify the OTP code the user received via email
     verifyResetOtp: async (email: string, code: string) => {
       await delay(200);
@@ -654,6 +690,11 @@ export const api = {
       const user = users.find((u) => u.id === id);
       if (user) {
         user.role = newRole;
+        // Ensure linkedRiderId is set for crew display
+        if (!user.linkedRiderId) {
+          const linkedRider = findRiderByEmail(user.email);
+          if (linkedRider) user.linkedRiderId = linkedRider.id;
+        }
         saveCustomUsers(users);
       } else {
         // User may exist only in static data (riderProfiles/mockAllUsers).
@@ -662,6 +703,8 @@ export const api = {
         const riderProfile = riderProfiles.find((r) => r.id === id);
         const source = staticUser || riderProfile;
         if (source) {
+          // Try to link to a rider profile for avatar/stats
+          const linkedRider = findRiderByEmail(source.email);
           const newUser: StoredUser = {
             id: source.id,
             name: source.name,
@@ -674,6 +717,7 @@ export const api = {
             role: newRole,
             joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
             isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
+            linkedRiderId: linkedRider?.id || ("id" in source ? source.id : undefined),
           };
           saveCustomUsers([...users, newUser]);
         }
@@ -687,12 +731,16 @@ export const api = {
       const crewRoles = new Set(["superadmin", "core_member"]);
       const crew = users
         .filter((u) => crewRoles.has(u.role))
-        .map((u) => ({
-          id: u.id,
-          name: u.name,
-          role: u.role,
-          linkedRiderId: u.linkedRiderId,
-        }));
+        .map((u) => {
+          // Try to resolve linkedRiderId by email if not set
+          const riderId = u.linkedRiderId || findRiderByEmail(u.email)?.id;
+          return {
+            id: u.id,
+            name: u.name,
+            role: u.role,
+            linkedRiderId: riderId,
+          };
+        });
       return { crew };
     },
   },
@@ -1262,6 +1310,51 @@ export const api = {
       const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
       avatars[riderId] = dataUrl;
       setStorage(AVATARS_KEY, avatars);
+    },
+  },
+
+  // Rider-ride participation overrides (SuperAdmin editable)
+  participation: {
+    getOverrides: (): Record<string, { added: string[]; removed: string[] }> => {
+      return getStorage<Record<string, { added: string[]; removed: string[] }>>(PARTICIPATION_OVERRIDES_KEY, {});
+    },
+    toggle: (riderId: string, rideId: string, participate: boolean) => {
+      const overrides = getStorage<Record<string, { added: string[]; removed: string[] }>>(PARTICIPATION_OVERRIDES_KEY, {});
+      if (!overrides[riderId]) overrides[riderId] = { added: [], removed: [] };
+      const rider = riderProfiles.find((r) => r.id === riderId);
+      const hasInBase = rider?.ridesParticipated.some((r) => r.rideId === rideId) || false;
+
+      if (participate) {
+        // Adding participation
+        overrides[riderId].removed = overrides[riderId].removed.filter((id) => id !== rideId);
+        if (!hasInBase) {
+          if (!overrides[riderId].added.includes(rideId)) overrides[riderId].added.push(rideId);
+        }
+      } else {
+        // Removing participation
+        overrides[riderId].added = overrides[riderId].added.filter((id) => id !== rideId);
+        if (hasInBase) {
+          if (!overrides[riderId].removed.includes(rideId)) overrides[riderId].removed.push(rideId);
+        }
+      }
+      // Clean up empty entries
+      if (overrides[riderId].added.length === 0 && overrides[riderId].removed.length === 0) {
+        delete overrides[riderId];
+      }
+      setStorage(PARTICIPATION_OVERRIDES_KEY, overrides);
+      return { success: true };
+    },
+    getEffectiveParticipation: (riderId: string): string[] => {
+      const rider = riderProfiles.find((r) => r.id === riderId);
+      const baseRides = rider?.ridesParticipated.map((r) => r.rideId) || [];
+      const overrides = getStorage<Record<string, { added: string[]; removed: string[] }>>(PARTICIPATION_OVERRIDES_KEY, {});
+      const riderOverrides = overrides[riderId];
+      if (!riderOverrides) return baseRides;
+      const result = baseRides.filter((id) => !riderOverrides.removed.includes(id));
+      for (const id of riderOverrides.added) {
+        if (!result.includes(id)) result.push(id);
+      }
+      return result;
     },
   },
 

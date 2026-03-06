@@ -47,6 +47,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   sendResetOtp: (email: string) => Promise<{ emailSent: boolean }>;
+  sendResetOtpByPhone: (phone: string) => Promise<{ smsSent: boolean; otpCode: string; email: string; name: string }>;
   verifyResetOtp: (email: string, code: string) => Promise<void>;
   resetPassword: (email: string, newPassword: string) => Promise<void>;
   sendOtp: (email: string) => Promise<string>;
@@ -98,6 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await api.auth.sendResetOtp(email);
     const data = result as unknown as { emailSent: boolean };
     return { emailSent: data.emailSent };
+  };
+
+  const sendResetOtpByPhone = async (phone: string): Promise<{ smsSent: boolean; otpCode: string; email: string; name: string }> => {
+    const result = await api.auth.sendResetOtpByPhone(phone);
+    const data = result as unknown as { smsSent: boolean; otpCode: string; email: string; name: string };
+    return data;
   };
 
   const verifyResetOtp = async (email: string, code: string): Promise<void> => {
@@ -163,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         sendResetOtp,
+        sendResetOtpByPhone,
         verifyResetOtp,
         resetPassword,
         sendOtp,

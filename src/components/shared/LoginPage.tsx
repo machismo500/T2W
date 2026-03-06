@@ -15,6 +15,7 @@ import {
   AlertCircle,
   KeyRound,
   ShieldCheck,
+  Phone,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -43,8 +44,12 @@ export function LoginPage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   // Resend cooldown
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Phone OTP
+  const [resetMethod, setResetMethod] = useState<"email" | "phone">("email");
+  const [forgotPhone, setForgotPhone] = useState("");
+  const [phoneOtpCode, setPhoneOtpCode] = useState<string | null>(null);
 
-  const { login, sendResetOtp, verifyResetOtp, resetPassword } = useAuth();
+  const { login, sendResetOtp, sendResetOtpByPhone, verifyResetOtp, resetPassword } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,6 +73,9 @@ export function LoginPage() {
 
   const openForgotModal = () => {
     setForgotEmail(email || "");
+    setForgotPhone("");
+    setPhoneOtpCode(null);
+    setResetMethod("email");
     setForgotError(null);
     setOtpDigits(["", "", "", "", "", ""]);
     setNewPassword("");
@@ -82,15 +90,23 @@ export function LoginPage() {
     setForgotLoading(false);
   };
 
-  // Step 1: Send OTP to email
+  // Step 1: Send OTP via email or phone
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotLoading(true);
     setForgotError(null);
+    setPhoneOtpCode(null);
 
     try {
-      const result = await sendResetOtp(forgotEmail);
-      setEmailSent(result.emailSent);
+      if (resetMethod === "phone") {
+        const result = await sendResetOtpByPhone(forgotPhone);
+        setForgotEmail(result.email); // Store email for later verification/reset
+        setPhoneOtpCode(result.otpCode); // Show OTP since SMS isn't actually sent
+        setEmailSent(false);
+      } else {
+        const result = await sendResetOtp(forgotEmail);
+        setEmailSent(result.emailSent);
+      }
       setModal("forgotOtp");
       // Start resend cooldown (60s)
       setResendCooldown(60);
@@ -308,8 +324,7 @@ export function LoginPage() {
               <button
                 type="button"
                 onClick={openForgotModal}
-                disabled={!email || !email.includes("@")}
-                className="text-sm text-t2w-accent hover:text-t2w-accent/80 transition-colors disabled:text-t2w-muted disabled:cursor-not-allowed"
+                className="text-sm text-t2w-accent hover:text-t2w-accent/80 transition-colors"
               >
                 Forgot password?
               </button>
@@ -343,7 +358,7 @@ export function LoginPage() {
         </p>
       </div>
 
-      {/* ─── Step 1: Enter Email ─── */}
+      {/* ─── Step 1: Enter Email or Phone ─── */}
       {modal === "forgotEmail" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="relative w-full max-w-sm rounded-2xl border border-t2w-border bg-t2w-surface p-6">
@@ -357,8 +372,32 @@ export function LoginPage() {
               </div>
               <h3 className="font-display text-lg font-bold text-white">Reset Password</h3>
               <p className="mt-1 text-sm text-t2w-muted">
-                Enter your registered email. We&apos;ll send a verification code to reset your password.
+                Use your registered email or phone number to receive a verification code.
               </p>
+            </div>
+
+            {/* Email / Phone toggle */}
+            <div className="mb-4 flex rounded-xl border border-t2w-border bg-t2w-surface-light p-1">
+              <button
+                type="button"
+                onClick={() => setResetMethod("email")}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                  resetMethod === "email" ? "bg-t2w-accent text-white" : "text-t2w-muted hover:text-white"
+                }`}
+              >
+                <Mail className="h-3.5 w-3.5" />
+                Email
+              </button>
+              <button
+                type="button"
+                onClick={() => setResetMethod("phone")}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                  resetMethod === "phone" ? "bg-t2w-accent text-white" : "text-t2w-muted hover:text-white"
+                }`}
+              >
+                <Phone className="h-3.5 w-3.5" />
+                Phone
+              </button>
             </div>
 
             {forgotError && (
@@ -369,18 +408,33 @@ export function LoginPage() {
             )}
 
             <form onSubmit={handleSendOtp} className="space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  className="input-field !pl-10"
-                  placeholder="Your registered email"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                />
-              </div>
+              {resetMethod === "email" ? (
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                  <input
+                    type="email"
+                    required
+                    autoFocus
+                    className="input-field !pl-10"
+                    placeholder="Your registered email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                  <input
+                    type="tel"
+                    required
+                    autoFocus
+                    className="input-field !pl-10"
+                    placeholder="Your registered phone number"
+                    value={forgotPhone}
+                    onChange={(e) => setForgotPhone(e.target.value)}
+                  />
+                </div>
+              )}
               <button type="submit" disabled={forgotLoading} className="btn-primary flex w-full items-center justify-center gap-2">
                 {forgotLoading ? <Spinner /> : (<>Send Verification Code <ArrowRight className="h-4 w-4" /></>)}
               </button>
@@ -403,7 +457,9 @@ export function LoginPage() {
               </div>
               <h3 className="font-display text-lg font-bold text-white">Enter Verification Code</h3>
               <p className="mt-1 text-sm text-t2w-muted">
-                {emailSent ? (
+                {phoneOtpCode ? (
+                  <>Your OTP code is: <span className="font-mono font-bold text-t2w-accent text-lg">{phoneOtpCode}</span><br/><span className="text-xs">(SMS delivery coming soon - using on-screen code for now)</span></>
+                ) : emailSent ? (
                   <>A 6-digit code has been sent to <span className="font-medium text-white">{forgotEmail}</span>. Check your inbox.</>
                 ) : (
                   <>Check the browser console for your verification code (email service not configured).</>
