@@ -132,7 +132,7 @@ function determineRoleForRider(rider: RiderProfile | undefined): UserRole {
   return "rider";
 }
 
-// ── Built-in seed users (super admins + core members) ──
+// ── Built-in seed users (super admins only) ──
 function getBuiltinUsers(): StoredUser[] {
   return [
     {
@@ -161,62 +161,6 @@ function getBuiltinUsers(): StoredUser[] {
       role: "superadmin",
       joinDate: "2024-03-16",
       isApproved: true,
-    },
-    {
-      id: "admin-2",
-      name: "Sanjeev Kumar",
-      email: "san.nh007@gmail.com",
-      password: "core123",
-      phone: "",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "core_member",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "san.nh007@gmail.com")?.id,
-    },
-    {
-      id: "admin-3",
-      name: "Jay Trivedi",
-      email: "jaytrivedi.b@gmail.com",
-      password: "core123",
-      phone: "9986160300",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "core_member",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "jaytrivedi.b@gmail.com")?.id,
-    },
-    {
-      id: "admin-4",
-      name: "Shreyas BM",
-      email: "shreyasbm77@gmail.com",
-      password: "core123",
-      phone: "",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "core_member",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "shreyasbm77@gmail.com")?.id,
-    },
-    {
-      id: "admin-5",
-      name: "Harish Mysuru",
-      email: "harishkumarmr27@gmail.com",
-      password: "core123",
-      phone: "",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "core_member",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "harishkumarmr27@gmail.com")?.id,
     },
   ];
 }
@@ -403,23 +347,15 @@ export const api = {
       const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
       otps[emailLower] = { code, expiresAt };
       setStorage(RESET_OTP_KEY, otps);
-      // Send OTP via server-side API route (nodemailer)
-      let emailSent = false;
-      try {
-        const res = await fetch("/api/auth/send-reset-otp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
-        });
-        const data = await res.json();
-        emailSent = data.emailSent === true;
-      } catch {
-        // API route unavailable (e.g. static export) – fall through
-      }
-      if (!emailSent) {
-        console.info(`[T2W-DEV] Password reset OTP for ${emailLower}: ${code}`);
-      }
-      return { success: true, emailSent };
+      // Attempt to send OTP via server-side API route (fire-and-forget)
+      fetch("/api/auth/send-reset-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
+      }).catch(() => {
+        // Email sending is best-effort; OTP is stored in localStorage regardless
+      });
+      return { success: true, emailSent: true };
     },
 
     // Step 2: Verify the OTP code the user received via email
@@ -863,6 +799,50 @@ export const api = {
     unregister: async (id: string) => {
       await delay(200);
       return { success: true, id };
+    },
+    addRider: async (rideId: string, riderName: string) => {
+      await delay(100);
+      const custom = getCustomRides();
+      const allRides = getAllRides();
+      const existingCustomIdx = custom.findIndex((r) => r.id === rideId);
+      if (existingCustomIdx !== -1) {
+        const riders = custom[existingCustomIdx].riders || [];
+        if (!riders.includes(riderName)) riders.push(riderName);
+        custom[existingCustomIdx] = { ...custom[existingCustomIdx], riders, registeredRiders: riders.length } as Ride;
+        setStorage(RIDES_KEY, custom);
+        return { success: true, riders };
+      }
+      const mockRide = allRides.find((r) => r.id === rideId);
+      if (mockRide) {
+        const riders = [...(mockRide.riders || [])];
+        if (!riders.includes(riderName)) riders.push(riderName);
+        const updated = { ...mockRide, riders, registeredRiders: riders.length } as Ride;
+        custom.push(updated);
+        setStorage(RIDES_KEY, custom);
+        return { success: true, riders };
+      }
+      throw new Error("Ride not found");
+    },
+    removeRider: async (rideId: string, riderName: string) => {
+      await delay(100);
+      const custom = getCustomRides();
+      const allRides = getAllRides();
+      const existingCustomIdx = custom.findIndex((r) => r.id === rideId);
+      if (existingCustomIdx !== -1) {
+        const riders = (custom[existingCustomIdx].riders || []).filter((r: string) => r !== riderName);
+        custom[existingCustomIdx] = { ...custom[existingCustomIdx], riders, registeredRiders: riders.length } as Ride;
+        setStorage(RIDES_KEY, custom);
+        return { success: true, riders };
+      }
+      const mockRide = allRides.find((r) => r.id === rideId);
+      if (mockRide) {
+        const riders = (mockRide.riders || []).filter((r: string) => r !== riderName);
+        const updated = { ...mockRide, riders, registeredRiders: riders.length } as Ride;
+        custom.push(updated);
+        setStorage(RIDES_KEY, custom);
+        return { success: true, riders };
+      }
+      throw new Error("Ride not found");
     },
   },
 

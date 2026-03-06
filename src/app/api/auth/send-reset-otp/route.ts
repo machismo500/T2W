@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 
-const SMTP_HOST = process.env.SMTP_HOST || "smtp.gmail.com";
-const SMTP_PORT = Number(process.env.SMTP_PORT || "587");
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASS = process.env.SMTP_PASS || "";
-const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
+const SMTP_HOST = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
+const SMTP_PORT = Number((process.env.SMTP_PORT || "587").trim());
+const SMTP_USER = (process.env.SMTP_USER || "").trim();
+const SMTP_PASS = (process.env.SMTP_PASS || "").trim();
+const SMTP_FROM_NAME = (process.env.SMTP_FROM || "Tales on 2 Wheels").trim();
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,12 +19,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!SMTP_USER || !SMTP_PASS) {
-      console.warn("[T2W] SMTP not configured. OTP for", email, ":", otpCode);
-      return NextResponse.json({
-        success: true,
-        emailSent: false,
-        message: "SMTP not configured. Check server logs for OTP.",
-      });
+      console.warn("[T2W] SMTP not configured. Set SMTP_USER and SMTP_PASS in .env");
+      return NextResponse.json(
+        { error: "Email service not configured. Please contact the administrator to set up SMTP credentials in .env" },
+        { status: 503 }
+      );
     }
 
     const transporter = nodemailer.createTransport({
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
     });
 
     await transporter.sendMail({
-      from: `"Tales on 2 Wheels" <${SMTP_FROM}>`,
+      from: `"${SMTP_FROM_NAME}" <${SMTP_USER}>`,
       to: email,
       subject: "T2W Password Reset Code",
       html: `
@@ -63,10 +62,20 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, emailSent: true });
-  } catch (error) {
-    console.error("[T2W] Email send error:", error);
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("[T2W] Email send error:", errMsg);
+    // Provide actionable error messages
+    let userMessage = "Failed to send verification email.";
+    if (errMsg.includes("EAUTH") || errMsg.includes("Invalid login")) {
+      userMessage = "SMTP authentication failed. Please check SMTP_USER and SMTP_PASS in .env. For Gmail, use an App Password (not your regular password).";
+    } else if (errMsg.includes("ECONNREFUSED") || errMsg.includes("ESOCKET")) {
+      userMessage = "Cannot connect to email server. Please check SMTP_HOST and SMTP_PORT in .env.";
+    } else if (errMsg.includes("self signed") || errMsg.includes("certificate")) {
+      userMessage = "SSL/TLS certificate error. Try changing SMTP_PORT to 587.";
+    }
     return NextResponse.json(
-      { error: "Failed to send email" },
+      { error: userMessage },
       { status: 500 }
     );
   }

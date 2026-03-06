@@ -159,6 +159,11 @@ export function AdminPage() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Ride rider management state
+  const [editRideRiders, setEditRideRiders] = useState<string[]>([]);
+  const [newRiderName, setNewRiderName] = useState("");
+  const [ridersLoaded, setRidersLoaded] = useState(false);
+
   // Delete confirmation modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{
     type: "ride" | "user" | "bulk-users";
@@ -315,9 +320,33 @@ export function AdminPage() {
         accountsBy: String(r.accountsBy || ""),
         highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).join("\n") : "",
       });
+      setEditRideRiders(Array.isArray(r.riders) ? (r.riders as string[]) : []);
+      setRidersLoaded(true);
+      setNewRiderName("");
       setEditingRideId(id);
     } catch (err) {
       console.error("Failed to load ride:", err);
+    }
+  };
+
+  const handleAddRider = async () => {
+    if (!editingRideId || !newRiderName.trim()) return;
+    try {
+      await api.rides.addRider(editingRideId, newRiderName.trim());
+      setEditRideRiders((prev) => prev.includes(newRiderName.trim()) ? prev : [...prev, newRiderName.trim()]);
+      setNewRiderName("");
+    } catch (err) {
+      console.error("Failed to add rider:", err);
+    }
+  };
+
+  const handleRemoveRider = async (riderName: string) => {
+    if (!editingRideId) return;
+    try {
+      await api.rides.removeRider(editingRideId, riderName);
+      setEditRideRiders((prev) => prev.filter((r) => r !== riderName));
+    } catch (err) {
+      console.error("Failed to remove rider:", err);
     }
   };
 
@@ -1055,6 +1084,54 @@ export function AdminPage() {
                             </div>
                           )}
                         </div>
+                        {/* Rider Management (Super Admin only) */}
+                        {isSuperAdmin && ridersLoaded && (
+                          <div className="sm:col-span-2 lg:col-span-3">
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                              <Users className="mr-1 inline h-4 w-4" />
+                              Manage Riders ({editRideRiders.length})
+                            </label>
+                            <div className="flex gap-2 mb-3">
+                              <input
+                                type="text"
+                                className="input-field flex-1"
+                                placeholder="Enter rider name to add..."
+                                value={newRiderName}
+                                onChange={(e) => setNewRiderName(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRider(); } }}
+                              />
+                              <button
+                                type="button"
+                                onClick={handleAddRider}
+                                disabled={!newRiderName.trim()}
+                                className="flex items-center gap-1.5 rounded-xl bg-green-500/10 px-4 py-2.5 text-sm font-medium text-green-400 transition-colors hover:bg-green-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                <UserPlus className="h-4 w-4" />
+                                Add
+                              </button>
+                            </div>
+                            {editRideRiders.length > 0 ? (
+                              <div className="max-h-60 overflow-y-auto rounded-xl border border-t2w-border bg-t2w-dark p-2 space-y-1">
+                                {editRideRiders.map((rider, i) => (
+                                  <div key={`${rider}-${i}`} className="flex items-center justify-between rounded-lg px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5 group">
+                                    <span>{i + 1}. {rider}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveRider(rider)}
+                                      className="opacity-0 group-hover:opacity-100 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-red-400 transition-all hover:bg-red-400/10"
+                                    >
+                                      <UserX className="h-3.5 w-3.5" />
+                                      Remove
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-t2w-muted py-3 text-center">No riders added yet.</p>
+                            )}
+                          </div>
+                        )}
+
                         <div className="sm:col-span-2 lg:col-span-3 flex gap-3">
                           <button onClick={saveEditRide} disabled={savingEdit} className="btn-primary flex items-center gap-2">
                             {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

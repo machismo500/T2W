@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Bell,
   Info,
@@ -210,7 +211,7 @@ export function NotificationBoard() {
                   readTime: `${blog.readTime} min read`,
                 }))
                 .map((blog, i) => (
-                <a
+                <Link
                   key={i}
                   href="/blogs"
                   className="card-interactive group flex gap-4"
@@ -237,17 +238,17 @@ export function NotificationBoard() {
                     </div>
                   </div>
                   <ChevronRight className="h-5 w-5 shrink-0 self-center text-t2w-muted transition-transform group-hover:translate-x-1 group-hover:text-t2w-accent" />
-                </a>
+                </Link>
               ))}
             </div>
 
-            <a
+            <Link
               href="/blogs"
               className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-t2w-border py-3 text-sm font-medium text-t2w-muted transition-all hover:border-t2w-accent/50 hover:text-white"
             >
               View All Posts
               <ChevronRight className="h-4 w-4" />
-            </a>
+            </Link>
           </div>
         </div>
       </div>
