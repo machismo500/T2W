@@ -1,7 +1,9 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/$USER/public_html/
-    - /bin/cp -R out/* $DEPLOYPATH
-    - /bin/cp out/.htaccess $DEPLOYPATH
-    - /bin/cp out/.nojekyll $DEPLOYPATH 2>/dev/null; true
+    - cd /home/$USER/repositories/T2W
+    - /bin/npm install --production
+    - /bin/npm run build
+    - mkdir -p /home/$USER/public_html
+    - /bin/cp -f .htaccess /home/$USER/public_html/.htaccess 2>/dev/null; true
+    - touch /home/$USER/repositories/T2W/tmp/restart.txt 2>/dev/null; mkdir -p /home/$USER/repositories/T2W/tmp && touch /home/$USER/repositories/T2W/tmp/restart.txt
