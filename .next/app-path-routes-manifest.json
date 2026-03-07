@@ -1,0 +1,20 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/_global-error/page": "/_global-error",
+  "/api/auth/send-reset-otp/route": "/api/auth/send-reset-otp",
+  "/robots.txt/route": "/robots.txt",
+  "/sitemap.xml/route": "/sitemap.xml",
+  "/ride/page": "/ride",
+  "/rider/page": "/rider",
+  "/admin/page": "/admin",
+  "/dashboard/page": "/dashboard",
+  "/blogs/page": "/blogs",
+  "/page": "/",
+  "/guidelines/page": "/guidelines",
+  "/register/page": "/register",
+  "/login/page": "/login",
+  "/blog/[id]/page": "/blog/[id]",
+  "/ride/[id]/page": "/ride/[id]",
+  "/rides/page": "/rides",
+  "/rider/[id]/page": "/rider/[id]"
+}
