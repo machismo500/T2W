@@ -2,8 +2,7 @@
 deployment:
   tasks:
     - cd /home/$USER/repositories/T2W
-    - /bin/npm install --production
-    - /bin/npm run build
+    - /bin/npm install --omit=dev
     - mkdir -p /home/$USER/public_html
     - /bin/cp -f .htaccess /home/$USER/public_html/.htaccess 2>/dev/null; true
-    - touch /home/$USER/repositories/T2W/tmp/restart.txt 2>/dev/null; mkdir -p /home/$USER/repositories/T2W/tmp && touch /home/$USER/repositories/T2W/tmp/restart.txt
+    - mkdir -p /home/$USER/repositories/T2W/tmp && touch /home/$USER/repositories/T2W/tmp/restart.txt
