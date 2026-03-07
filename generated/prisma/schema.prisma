@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(cuid())
+  name             String
+  email            String   @unique
+  phone            String?
+  password         String
+  avatar           String?
+  role             String   @default("rider") // rider | admin | superadmin
+  joinDate         DateTime @default(now())
+  isApproved       Boolean  @default(false)
+  city             String?
+  ridingExperience String?
+  totalKm          Float    @default(0)
+  ridesCompleted   Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  motorcycles       Motorcycle[]
+  earnedBadges      UserBadge[]
+  rideRegistrations RideRegistration[]
+  blogPosts         BlogPost[]
+  notifications     Notification[]
+}
+
+model Motorcycle {
+  id       String  @id @default(cuid())
+  make     String
+  model    String
+  year     Int
+  cc       Int
+  color    String
+  nickname String?
+  imageUrl String?
+  userId   String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Badge {
+  id          String @id @default(cuid())
+  tier        String @unique // SILVER | GOLD | PLATINUM | DIAMOND | ACE | CONQUEROR
+  name        String
+  description String
+  minKm       Float
+  icon        String
+  color       String
+
+  earnedBy UserBadge[]
+}
+
+model UserBadge {
+  id         String   @id @default(cuid())
+  userId     String
+  badgeId    String
+  earnedDate DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+}
+
+model Ride {
+  id            String   @id @default(cuid())
+  title         String
+  rideNumber    String   @unique
+  type          String // day | weekend | multi-day | expedition
+  status        String   @default("upcoming") // upcoming | ongoing | completed | cancelled
+  startDate     DateTime
+  endDate       DateTime
+  startLocation String
+  endLocation   String
+  route         String // JSON array stored as string
+  distanceKm    Float
+  maxRiders     Int
+  difficulty    String // easy | moderate | challenging | extreme
+  description   String
+  highlights    String // JSON array stored as string
+  posterUrl     String?
+  fee           Float
+  leadRider     String
+  sweepRider    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  registrations RideRegistration[]
+}
+
+model RideRegistration {
+  id               String   @id @default(cuid())
+  userId           String
+  rideId           String
+  agreedIndemnity  Boolean  @default(false)
+  registeredAt     DateTime @default(now())
+  confirmationCode String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, rideId])
+}
+
+model BlogPost {
+  id           String   @id @default(cuid())
+  title        String
+  excerpt      String
+  content      String
+  authorId     String?
+  authorName   String
+  authorAvatar String?
+  publishDate  DateTime @default(now())
+  coverImage   String?
+  tags         String // JSON array stored as string
+  type         String // official | personal
+  isVlog       Boolean  @default(false)
+  videoUrl     String?
+  readTime     Int
+  likes        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+}
+
+model Notification {
+  id      String   @id @default(cuid())
+  title   String
+  message String
+  type    String // info | warning | success | ride
+  date    DateTime @default(now())
+  isRead  Boolean  @default(false)
+  userId  String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Guideline {
+  id       String @id @default(cuid())
+  title    String
+  content  String
+  category String // group | general | safety | maintenance
+  icon     String
+}
+
+model Content {
+  id          String   @id @default(cuid())
+  title       String
+  type        String // Brand | Media | Document
+  status      String   @default("draft") // published | draft
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
