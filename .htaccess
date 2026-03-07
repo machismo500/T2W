@@ -10,3 +10,5 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 PassengerEnabled On
 PassengerAppType node
 PassengerStartupFile server.js
+PassengerNodejs /home/CPANEL_USER/.nvm/versions/node/v20.20.1/bin/node
+PassengerAppRoot /home/CPANEL_USER/T2W
