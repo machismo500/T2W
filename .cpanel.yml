@@ -1,9 +1,8 @@
 ---
 deployment:
   tasks:
-    - export PATH=/home/bpph7k2lydye/.nvm/versions/node/v20.20.1/bin:$PATH
-    - cd /home/bpph7k2lydye/T2W
-    - npm install --production --ignore-scripts
-    - mkdir -p /home/bpph7k2lydye/public_html
-    - /bin/cp -f .htaccess /home/bpph7k2lydye/public_html/.htaccess 2>/dev/null; true
-    - mkdir -p /home/bpph7k2lydye/T2W/tmp && touch /home/bpph7k2lydye/T2W/tmp/restart.txt
+    - cd /home/$USER/repositories/T2W
+    - /bin/npm install --omit=dev
+    - mkdir -p /home/$USER/public_html
+    - /bin/cp -f .htaccess /home/$USER/public_html/.htaccess 2>/dev/null; true
+    - mkdir -p /home/$USER/repositories/T2W/tmp && touch /home/$USER/repositories/T2W/tmp/restart.txt

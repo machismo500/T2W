@@ -4,7 +4,7 @@
   "description": "This is a repo for T2W Website",
   "scripts": {
     "dev": "next dev",
-    "build": "npx prisma generate && NEXT_PRIVATE_WORKER_THREADS=false next build --webpack",
+    "build": "npx prisma generate && NEXT_PRIVATE_WORKER_THREADS=false next build",
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "npx prisma migrate dev",
