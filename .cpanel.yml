@@ -1,8 +1,8 @@
 ---
 deployment:
   tasks:
-    - cd /home/$USER/repositories/T2W
-    - /bin/npm install --omit=dev
+    - export NVM_DIR="/home/$USER/.nvm" && source "$NVM_DIR/nvm.sh" && cd /home/$USER/repositories/T2W && npm install --omit=dev --ignore-scripts
     - mkdir -p /home/$USER/public_html
-    - /bin/cp -f .htaccess /home/$USER/public_html/.htaccess 2>/dev/null; true
+    - /bin/cp -f /home/$USER/repositories/T2W/.htaccess /home/$USER/public_html/.htaccess 2>/dev/null; true
+    - test -f /home/$USER/repositories/T2W/.env || printf 'DATABASE_URL="file:./dev.db"\nJWT_SECRET="t2w-production-jwt-secret-change-me"\n' > /home/$USER/repositories/T2W/.env
     - mkdir -p /home/$USER/repositories/T2W/tmp && touch /home/$USER/repositories/T2W/tmp/restart.txt
