@@ -1,90 +1,112 @@
-// In-memory OTP store for email verification and password reset
-// In production, use Redis or a database table for persistence across restarts
+// Database-backed OTP store for email verification and password reset
+// Works correctly on serverless platforms (Vercel) where in-memory state is not shared
 
-interface OtpEntry {
-  code: string;
-  expiresAt: number;
-}
-
-const emailOtps = new Map<string, OtpEntry>();
-const resetOtps = new Map<string, OtpEntry>();
-const resetVerified = new Map<string, number>(); // email -> expiresAt
+import { prisma } from "@/lib/db";
 
 function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-function cleanup(store: Map<string, OtpEntry | number>) {
-  const now = Date.now();
-  for (const [key, val] of store) {
-    const expiry = typeof val === "number" ? val : val.expiresAt;
-    if (now > expiry) store.delete(key);
-  }
-}
-
 // ── Email verification OTPs (registration) ──
 
-export function createEmailOtp(email: string): string {
-  cleanup(emailOtps);
+export async function createEmailOtp(email: string): Promise<string> {
+  const key = email.toLowerCase().trim();
   const code = generateOtp();
-  emailOtps.set(email.toLowerCase().trim(), {
-    code,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+
+  // Delete any existing OTPs for this email/type
+  await prisma.otp.deleteMany({ where: { email: key, type: "email_verify" } });
+
+  await prisma.otp.create({
+    data: {
+      email: key,
+      code,
+      type: "email_verify",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+    },
   });
+
   return code;
 }
 
-export function verifyEmailOtp(email: string, code: string): boolean {
+export async function verifyEmailOtp(email: string, code: string): Promise<boolean> {
   const key = email.toLowerCase().trim();
-  const entry = emailOtps.get(key);
+
+  const entry = await prisma.otp.findFirst({
+    where: { email: key, type: "email_verify", code: code.trim() },
+  });
+
   if (!entry) return false;
-  if (Date.now() > entry.expiresAt) {
-    emailOtps.delete(key);
-    return false;
-  }
-  if (entry.code !== code.trim()) return false;
-  emailOtps.delete(key);
+
+  // Delete the OTP regardless (single-use)
+  await prisma.otp.delete({ where: { id: entry.id } });
+
+  if (new Date() > entry.expiresAt) return false;
+
   return true;
 }
 
 // ── Password reset OTPs ──
 
-export function createResetOtp(email: string): string {
-  cleanup(resetOtps);
+export async function createResetOtp(email: string): Promise<string> {
+  const key = email.toLowerCase().trim();
   const code = generateOtp();
-  resetOtps.set(email.toLowerCase().trim(), {
-    code,
-    expiresAt: Date.now() + 10 * 60 * 1000,
+
+  // Delete any existing reset OTPs for this email
+  await prisma.otp.deleteMany({ where: { email: key, type: "password_reset" } });
+
+  await prisma.otp.create({
+    data: {
+      email: key,
+      code,
+      type: "password_reset",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+    },
   });
+
   return code;
 }
 
-export function verifyResetOtp(email: string, code: string): boolean {
+export async function verifyResetOtp(email: string, code: string): Promise<boolean> {
   const key = email.toLowerCase().trim();
-  const entry = resetOtps.get(key);
+
+  const entry = await prisma.otp.findFirst({
+    where: { email: key, type: "password_reset", code: code.trim() },
+  });
+
   if (!entry) return false;
-  if (Date.now() > entry.expiresAt) {
-    resetOtps.delete(key);
+
+  if (new Date() > entry.expiresAt) {
+    await prisma.otp.delete({ where: { id: entry.id } });
     return false;
   }
-  if (entry.code !== code.trim()) return false;
-  resetOtps.delete(key);
-  // Mark as verified for 5 minutes
-  resetVerified.set(key, Date.now() + 5 * 60 * 1000);
+
+  // Mark as verified (don't delete yet — needed for reset-password step)
+  await prisma.otp.update({
+    where: { id: entry.id },
+    data: { verified: true, expiresAt: new Date(Date.now() + 5 * 60 * 1000) },
+  });
+
   return true;
 }
 
-export function isResetVerified(email: string): boolean {
+export async function isResetVerified(email: string): Promise<boolean> {
   const key = email.toLowerCase().trim();
-  const expiry = resetVerified.get(key);
-  if (!expiry) return false;
-  if (Date.now() > expiry) {
-    resetVerified.delete(key);
+
+  const entry = await prisma.otp.findFirst({
+    where: { email: key, type: "password_reset", verified: true },
+  });
+
+  if (!entry) return false;
+
+  if (new Date() > entry.expiresAt) {
+    await prisma.otp.delete({ where: { id: entry.id } });
     return false;
   }
+
   return true;
 }
 
-export function clearResetVerified(email: string): void {
-  resetVerified.delete(email.toLowerCase().trim());
+export async function clearResetVerified(email: string): Promise<void> {
+  const key = email.toLowerCase().trim();
+  await prisma.otp.deleteMany({ where: { email: key, type: "password_reset" } });
 }

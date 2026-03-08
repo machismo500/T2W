@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const valid = verifyResetOtp(email, code);
+    const valid = await verifyResetOtp(email, code);
     if (!valid) {
       return NextResponse.json(
         { error: "Invalid or expired reset code" },

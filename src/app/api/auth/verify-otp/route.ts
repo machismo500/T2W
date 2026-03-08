@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const valid = verifyEmailOtp(email, code);
+    const valid = await verifyEmailOtp(email, code);
     if (!valid) {
       return NextResponse.json(
         { error: "Invalid or expired verification code" },

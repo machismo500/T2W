@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const otpCode = createResetOtp(emailLower);
+    const otpCode = await createResetOtp(emailLower);
 
     // Try to send email
     if (SMTP_USER && SMTP_PASS) {

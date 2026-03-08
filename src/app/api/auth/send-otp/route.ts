@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const code = createEmailOtp(emailLower);
+    const code = await createEmailOtp(emailLower);
 
     // Try to send email, but don't fail if SMTP isn't configured
     if (SMTP_USER && SMTP_PASS) {

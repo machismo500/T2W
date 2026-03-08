@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check that the OTP was verified
-    if (!isResetVerified(emailLower)) {
+    if (!(await isResetVerified(emailLower))) {
       return NextResponse.json(
         { error: "Reset session expired. Please start over." },
         { status: 403 }
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       data: { password: hashedPassword },
     });
 
-    clearResetVerified(emailLower);
+    await clearResetVerified(emailLower);
 
     return NextResponse.json({ success: true });
   } catch (error) {

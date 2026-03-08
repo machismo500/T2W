@@ -145,6 +145,18 @@ model Notification {
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model Otp {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  type      String   // email_verify | password_reset
+  verified  Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, type])
+}
+
 model Guideline {
   id       String @id @default(cuid())
   title    String
