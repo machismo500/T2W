@@ -1,0 +1,21 @@
+{
+  "name": "Tales on 2 Wheels",
+  "short_name": "T2W",
+  "description": "India's premier motorcycle riding community based in Bangalore",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#e94560",
+  "background_color": "#0f0f0f",
+  "display": "standalone",
+  "start_url": "/"
+}

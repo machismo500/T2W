@@ -83,10 +83,25 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  manifest: "/site.webmanifest",
   alternates: {
     canonical: "https://taleson2wheels.com",
   },
   category: "Sports & Recreation",
+  other: {
+    "msapplication-TileColor": "#0f0f0f",
+    "theme-color": "#e94560",
+  },
 };
 
 const organizationSchema = {
@@ -234,6 +249,7 @@ export default function RootLayout({
   return (
     <html lang="en-IN">
       <head>
+        <meta name="theme-color" content="#e94560" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
