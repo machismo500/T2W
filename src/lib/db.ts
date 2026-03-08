@@ -1,4 +1,4 @@
-import { Pool, neonConfig } from "@neondatabase/serverless";
+import { neonConfig } from "@neondatabase/serverless";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../../generated/prisma";
 
@@ -17,17 +17,18 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Strip channel_binding param — the Neon serverless driver uses HTTP/WebSocket,
-// not the PostgreSQL wire protocol, so channel binding is unsupported and causes errors.
-function stripChannelBinding(url: string): string {
+// Strip parameters unsupported by the Neon serverless driver (which uses
+// HTTP/WebSocket, not the PostgreSQL wire protocol).
+function cleanConnectionString(url: string): string {
   try {
     const u = new URL(url);
     u.searchParams.delete("channel_binding");
+    u.searchParams.delete("sslmode"); // Neon serverless always uses TLS natively
     return u.toString();
   } catch {
-    // If URL parsing fails, do a simple regex removal as fallback
     return url
       .replace(/[?&]channel_binding=[^&]*/g, "")
+      .replace(/[?&]sslmode=[^&]*/g, "")
       .replace(/\?&/, "?")
       .replace(/\?$/, "");
   }
@@ -44,15 +45,15 @@ function getDatabaseUrl(): string {
       "Database connection not configured. Please set DATABASE_URL in your Vercel project environment variables."
     );
   }
-  return stripChannelBinding(url);
+  return cleanConnectionString(url);
 }
 
 function createPrismaClient() {
   const connectionString = getDatabaseUrl();
-  const pool = new Pool({ connectionString });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const adapter = new PrismaNeon(pool as any);
-  // Pass datasourceUrl so PrismaClient doesn't fall back to env("DATABASE_URL") from the schema
+  // PrismaNeon expects a PoolConfig object — it creates its own Pool internally.
+  // Do NOT pass a pre-built Pool instance (the previous code cast with `as any`
+  // to hide this type mismatch, which caused silent connection failures).
+  const adapter = new PrismaNeon({ connectionString });
   return new PrismaClient({ adapter, datasourceUrl: connectionString });
 }
 
