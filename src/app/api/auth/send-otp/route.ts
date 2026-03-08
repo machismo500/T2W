@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { createResetOtp } from "@/lib/otp-store";
+import { createEmailOtp } from "@/lib/otp-store";
 import nodemailer from "nodemailer";
 
 const SMTP_HOST = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
@@ -14,25 +14,25 @@ export async function POST(req: NextRequest) {
     const { email } = await req.json();
     const emailLower = (email || "").toLowerCase().trim();
 
-    if (!emailLower) {
+    if (!emailLower || !emailLower.includes("@")) {
       return NextResponse.json(
-        { error: "Email is required" },
+        { error: "Please enter a valid email address" },
         { status: 400 }
       );
     }
 
-    // Check that user exists
-    const user = await prisma.user.findUnique({ where: { email: emailLower } });
-    if (!user) {
+    // Check if email already registered
+    const existing = await prisma.user.findUnique({ where: { email: emailLower } });
+    if (existing) {
       return NextResponse.json(
-        { error: "No account found with this email" },
-        { status: 404 }
+        { error: "An account with this email already exists" },
+        { status: 409 }
       );
     }
 
-    const otpCode = createResetOtp(emailLower);
+    const code = createEmailOtp(emailLower);
 
-    // Try to send email
+    // Try to send email, but don't fail if SMTP isn't configured
     if (SMTP_USER && SMTP_PASS) {
       try {
         const transporter = nodemailer.createTransport({
@@ -45,42 +45,41 @@ export async function POST(req: NextRequest) {
         await transporter.sendMail({
           from: `"${SMTP_FROM_NAME}" <${SMTP_USER}>`,
           to: emailLower,
-          subject: "T2W Password Reset Code",
+          subject: "T2W Email Verification Code",
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #1a1a2e; color: #ffffff; border-radius: 16px;">
               <div style="text-align: center; margin-bottom: 24px;">
                 <h1 style="color: #ff4757; margin: 0; font-size: 24px;">Tales on 2 Wheels</h1>
-                <p style="color: #a0a0b0; margin-top: 8px;">Password Reset Request</p>
+                <p style="color: #a0a0b0; margin-top: 8px;">Email Verification</p>
               </div>
-              <p style="color: #e0e0e0;">Hi ${user.name || "Rider"},</p>
-              <p style="color: #a0a0b0;">You requested a password reset. Use the code below to verify your identity:</p>
+              <p style="color: #e0e0e0;">Welcome, Rider!</p>
+              <p style="color: #a0a0b0;">Use the code below to verify your email:</p>
               <div style="text-align: center; margin: 32px 0;">
                 <div style="display: inline-block; background: #2a2a4a; padding: 16px 32px; border-radius: 12px; border: 1px solid #3a3a5a;">
-                  <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #ff4757;">${otpCode}</span>
+                  <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #ff4757;">${code}</span>
                 </div>
               </div>
               <p style="color: #a0a0b0; font-size: 14px;">This code expires in <strong style="color: #ffffff;">10 minutes</strong>.</p>
-              <p style="color: #a0a0b0; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
               <hr style="border: none; border-top: 1px solid #3a3a5a; margin: 24px 0;" />
               <p style="color: #707080; font-size: 12px; text-align: center;">Tales on 2 Wheels &bull; Bangalore, India</p>
             </div>
           `,
         });
-
-        return NextResponse.json({ success: true, emailSent: true });
       } catch (emailErr) {
-        const errMsg = emailErr instanceof Error ? emailErr.message : String(emailErr);
-        console.error("[T2W] Email send error:", errMsg);
-        // Still return success since OTP is stored server-side
-        console.info(`[T2W] OTP for ${emailLower}: ${otpCode}`);
-        return NextResponse.json({ success: true, emailSent: false });
+        console.warn("[T2W] Failed to send verification email:", emailErr);
+        // Log OTP to console as fallback
+        console.info(`[T2W] OTP for ${emailLower}: ${code}`);
       }
     } else {
-      console.info(`[T2W] SMTP not configured. OTP for ${emailLower}: ${otpCode}`);
-      return NextResponse.json({ success: true, emailSent: false });
+      console.info(`[T2W] SMTP not configured. OTP for ${emailLower}: ${code}`);
     }
+
+    return NextResponse.json({
+      success: true,
+      message: `Verification code sent to ${email}`,
+    });
   } catch (error) {
-    console.error("[T2W] Send reset OTP error:", error);
+    console.error("[T2W] Send OTP error:", error);
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }

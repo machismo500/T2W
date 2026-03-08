@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
-import { api } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
 interface UserData {
@@ -57,8 +56,8 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   // Role helpers
   isSuperAdmin: boolean;
-  isCoreOrAbove: boolean; // superadmin or core_member
-  isT2WRiderOrAbove: boolean; // superadmin, core_member, or t2w_rider
+  isCoreOrAbove: boolean;
+  isT2WRiderOrAbove: boolean;
   isLoggedIn: boolean;
   canEditProfile: (profileRiderId: string) => boolean;
   canEditRide: boolean;
@@ -71,14 +70,25 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || "Something went wrong");
+  }
+  return data as T;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
     try {
-      const raw = await api.auth.me();
-      const data = raw as unknown as { user: UserData };
+      const data = await apiFetch<{ user: UserData }>("/api/auth/me");
       setUser(data.user);
     } catch {
       setUser(null);
@@ -90,49 +100,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = async (email: string, password: string) => {
-    const raw = await api.auth.login(email, password);
-    const data = raw as unknown as { user: UserData };
+    const data = await apiFetch<{ user: UserData }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
     setUser(data.user);
   };
 
   const sendResetOtp = async (email: string): Promise<{ emailSent: boolean }> => {
-    const result = await api.auth.sendResetOtp(email);
-    const data = result as unknown as { emailSent: boolean };
-    return { emailSent: data.emailSent };
+    const data = await apiFetch<{ emailSent: boolean }>("/api/auth/send-reset-otp", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return { emailSent: data.emailSent ?? true };
   };
 
   const sendResetOtpByPhone = async (phone: string): Promise<{ smsSent: boolean; otpCode: string; email: string; name: string }> => {
-    const result = await api.auth.sendResetOtpByPhone(phone);
-    const data = result as unknown as { smsSent: boolean; otpCode: string; email: string; name: string };
-    return data;
+    // Phone-based OTP is not yet implemented server-side; placeholder
+    throw new Error("Phone-based password reset is not yet available. Please use email.");
   };
 
   const verifyResetOtp = async (email: string, code: string): Promise<void> => {
-    await api.auth.verifyResetOtp(email, code);
+    await apiFetch("/api/auth/verify-reset-otp", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    });
   };
 
   const resetPassword = async (email: string, newPassword: string): Promise<void> => {
-    await api.auth.resetPassword(email, newPassword);
+    await apiFetch("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ email, newPassword }),
+    });
   };
 
   const sendOtp = async (email: string): Promise<string> => {
-    const result = await api.auth.sendOtp(email);
-    const data = result as unknown as { message: string };
+    const data = await apiFetch<{ message: string }>("/api/auth/send-otp", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
     return data.message;
   };
 
   const verifyOtp = async (email: string, code: string): Promise<void> => {
-    await api.auth.verifyOtp(email, code);
+    await apiFetch("/api/auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    });
   };
 
   const register = async (formData: Record<string, unknown>) => {
-    const raw = await api.auth.register(formData);
-    const data = raw as unknown as { user: UserData };
+    const data = await apiFetch<{ user: UserData }>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(formData),
+    });
     setUser(data.user);
   };
 
   const logout = async () => {
-    await api.auth.logout();
+    await apiFetch("/api/auth/logout", { method: "POST" });
     setUser(null);
   };
 
@@ -143,24 +169,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isT2WRiderOrAbove = role === "superadmin" || role === "core_member" || role === "t2w_rider";
   const isLoggedIn = !!user;
 
-  // SuperAdmin can edit any profile; others can only edit their own
   const canEditProfile = (profileRiderId: string) => {
     if (isSuperAdmin) return true;
     if (!user) return false;
-    return user.linkedRiderId === profileRiderId;
+    return user.id === profileRiderId;
   };
 
-  // Core Member + SuperAdmin can edit/save ride posts and posters
   const canEditRide = isCoreOrAbove;
-  // Core Member + SuperAdmin can create rides
   const canCreateRide = isCoreOrAbove;
-  // Only SuperAdmin can delete rides
   const canDeleteRide = isSuperAdmin;
-  // Core Member + SuperAdmin can approve blogs and posts
   const canApproveContent = isCoreOrAbove;
-  // T2W Rider and above can post blogs (subject to approval)
   const canPostBlog = isT2WRiderOrAbove;
-  // Only SuperAdmin can manage user roles
   const canManageRoles = isSuperAdmin;
 
   return (
