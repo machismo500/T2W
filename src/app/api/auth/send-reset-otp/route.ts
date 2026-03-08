@@ -87,9 +87,20 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[T2W] Send reset OTP error:", message, error);
 
-    // Never expose raw database/infrastructure errors to the client
+    // Return a hint so the user knows what category of error occurred
+    const isDbError =
+      message.includes("connect") ||
+      message.includes("database") ||
+      message.includes("prisma") ||
+      message.includes("timeout") ||
+      message.includes("P1") ||
+      message.includes("P2");
     return NextResponse.json(
-      { error: "Something went wrong. Please try again later." },
+      {
+        error: isDbError
+          ? "Unable to reach the database. Please try again in a moment."
+          : "Something went wrong. Please try again later.",
+      },
       { status: 500 }
     );
   }

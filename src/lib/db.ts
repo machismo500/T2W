@@ -17,6 +17,22 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+// Strip channel_binding param — the Neon serverless driver uses HTTP/WebSocket,
+// not the PostgreSQL wire protocol, so channel binding is unsupported and causes errors.
+function stripChannelBinding(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("channel_binding");
+    return u.toString();
+  } catch {
+    // If URL parsing fails, do a simple regex removal as fallback
+    return url
+      .replace(/[?&]channel_binding=[^&]*/g, "")
+      .replace(/\?&/, "?")
+      .replace(/\?$/, "");
+  }
+}
+
 // Support both custom DATABASE_URL and Vercel-Neon integration env vars
 function getDatabaseUrl(): string {
   const url =
@@ -28,7 +44,7 @@ function getDatabaseUrl(): string {
       "Database connection not configured. Please set DATABASE_URL in your Vercel project environment variables."
     );
   }
-  return url;
+  return stripChannelBinding(url);
 }
 
 function createPrismaClient() {
