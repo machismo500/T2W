@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[T2W] Verify reset OTP error:", message, error);
     return NextResponse.json(
-      { error: message || "Something went wrong" },
+      { error: "Something went wrong. Please try again later." },
       { status: 500 }
     );
   }

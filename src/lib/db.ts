@@ -25,7 +25,7 @@ function getDatabaseUrl(): string {
     process.env.POSTGRES_URL;
   if (!url) {
     throw new Error(
-      "DATABASE_URL is not set. Set DATABASE_URL (or POSTGRES_PRISMA_URL / POSTGRES_URL for Vercel-Neon integration) in your environment variables."
+      "Database connection not configured. Please set DATABASE_URL in your Vercel project environment variables."
     );
   }
   return url;
@@ -36,11 +36,22 @@ function createPrismaClient() {
   const pool = new Pool({ connectionString });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adapter = new PrismaNeon(pool as any);
-  return new PrismaClient({ adapter });
+  // Pass datasourceUrl so PrismaClient doesn't fall back to env("DATABASE_URL") from the schema
+  return new PrismaClient({ adapter, datasourceUrl: connectionString });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+// Lazy getter — defers initialization until first use so that missing env vars
+// produce a catchable error inside API route handlers instead of crashing the
+// module at import time.
+function getPrisma(): PrismaClient {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createPrismaClient();
+  }
+  return globalForPrisma.prisma;
 }
+
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    return (getPrisma() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});

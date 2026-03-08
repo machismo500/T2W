@@ -87,20 +87,9 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[T2W] Send reset OTP error:", message, error);
 
-    // Surface actionable hints for common Prisma / DB errors
-    if (
-      message.includes("does not exist") ||
-      message.includes("relation") ||
-      message.includes("P2021")
-    ) {
-      return NextResponse.json(
-        { error: "Database is not fully set up. Please run `npx prisma db push` and redeploy." },
-        { status: 500 }
-      );
-    }
-
+    // Never expose raw database/infrastructure errors to the client
     return NextResponse.json(
-      { error: message || "Something went wrong" },
+      { error: "Something went wrong. Please try again later." },
       { status: 500 }
     );
   }
