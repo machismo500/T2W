@@ -46,7 +46,6 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   sendResetOtp: (email: string) => Promise<{ emailSent: boolean }>;
-  sendResetOtpByPhone: (phone: string) => Promise<{ smsSent: boolean; otpCode: string; email: string; name: string }>;
   verifyResetOtp: (email: string, code: string) => Promise<void>;
   resetPassword: (email: string, newPassword: string) => Promise<void>;
   sendOtp: (email: string) => Promise<string>;
@@ -113,11 +112,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ email }),
     });
     return { emailSent: data.emailSent ?? true };
-  };
-
-  const sendResetOtpByPhone = async (phone: string): Promise<{ smsSent: boolean; otpCode: string; email: string; name: string }> => {
-    // Phone-based OTP is not yet implemented server-side; placeholder
-    throw new Error("Phone-based password reset is not yet available. Please use email.");
   };
 
   const verifyResetOtp = async (email: string, code: string): Promise<void> => {
@@ -189,7 +183,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         sendResetOtp,
-        sendResetOtpByPhone,
         verifyResetOtp,
         resetPassword,
         sendOtp,

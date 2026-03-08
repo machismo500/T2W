@@ -359,41 +359,6 @@ export const api = {
       return { success: true, emailSent: true };
     },
 
-    // Step 1b: Send a 6-digit OTP via mobile (lookup by phone number)
-    sendResetOtpByPhone: async (phone: string) => {
-      await delay(400);
-      const phoneClean = phone.replace(/[\s\-\+]/g, "").replace(/^91/, "");
-      const users = getRegisteredUsers();
-      // Find user by phone number (strip +91 prefix, spaces, dashes)
-      const found = users.find((u) => {
-        const uPhone = (u.phone || "").replace(/[\s\-\+]/g, "").replace(/^91/, "");
-        return uPhone === phoneClean && uPhone.length >= 10;
-      });
-      if (!found) {
-        // Also check rider profiles for phone match
-        const rider = riderProfiles.find((r) => {
-          const rPhone = (r.phone || "").replace(/[\s\-\+]/g, "").replace(/^91/, "");
-          return rPhone === phoneClean && rPhone.length >= 10;
-        });
-        if (!rider) throw new Error("No account found with this phone number");
-        // For rider profiles without a registered account, use their email as key
-        const emailKey = rider.email.toLowerCase().trim();
-        const code = String(Math.floor(100000 + Math.random() * 900000));
-        const expiresAt = Date.now() + 10 * 60 * 1000;
-        const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
-        otps[emailKey] = { code, expiresAt };
-        setStorage(RESET_OTP_KEY, otps);
-        return { success: true, smsSent: false, otpCode: code, email: emailKey, name: rider.name };
-      }
-      const emailKey = found.email.toLowerCase().trim();
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = Date.now() + 10 * 60 * 1000;
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
-      otps[emailKey] = { code, expiresAt };
-      setStorage(RESET_OTP_KEY, otps);
-      return { success: true, smsSent: false, otpCode: code, email: emailKey, name: found.name };
-    },
-
     // Step 2: Verify the OTP code the user received via email
     verifyResetOtp: async (email: string, code: string) => {
       await delay(200);
