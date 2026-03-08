@@ -10,14 +10,23 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function createPrismaClient() {
-  if (!process.env.DATABASE_URL) {
+// Support both custom DATABASE_URL and Vercel-Neon integration env vars
+function getDatabaseUrl(): string {
+  const url =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL;
+  if (!url) {
     throw new Error(
-      "DATABASE_URL is not set. Check your .env file. See .env.example for the required format."
+      "DATABASE_URL is not set. Set DATABASE_URL (or POSTGRES_PRISMA_URL / POSTGRES_URL for Vercel-Neon integration) in your environment variables."
     );
   }
+  return url;
+}
+
+function createPrismaClient() {
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: getDatabaseUrl(),
     ssl: { rejectUnauthorized: false },
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
