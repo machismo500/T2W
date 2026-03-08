@@ -1,7 +1,0 @@
-User-Agent: *
-Allow: /
-Disallow: /admin
-Disallow: /api/
-Disallow: /dashboard
-
-Sitemap: https://taleson2wheels.com/sitemap.xml

@@ -1,7 +1,0 @@
----
-deployment:
-  tasks:
-    - /home/bpph7k2lydye/.nvm/versions/node/v20.20.1/bin/npm install --omit=dev --ignore-scripts --prefix /home/bpph7k2lydye/repositories/T2W
-    - /bin/cp -f /home/bpph7k2lydye/repositories/T2W/.htaccess /home/bpph7k2lydye/public_html/.htaccess
-    - /bin/mkdir -p /home/bpph7k2lydye/repositories/T2W/tmp
-    - /bin/touch /home/bpph7k2lydye/repositories/T2W/tmp/restart.txt

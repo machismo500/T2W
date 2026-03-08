@@ -8,7 +8,10 @@
 /coverage
 
 # next.js
-# /.next/  # Included in git for GoDaddy deployment (can't build on server)
+/.next/
+
+# static export
+/out/
 
 # production
 /build
@@ -36,3 +39,6 @@ next-env.d.ts
 # prisma
 *.db
 *.db-journal
+
+# generated prisma client (regenerated on build)
+/generated/

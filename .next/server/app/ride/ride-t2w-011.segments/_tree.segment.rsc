@@ -1,4 +1,0 @@
-:HL["/_next/static/css/95f6acb76c56216f.css","style"]
-:HL["https://fonts.googleapis.com/css2?family=Courgette&family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap","style"]
-:HL["/logo.png","image"]
-0:{"buildId":"5RLXb5TwnaRLfE1YqusAj","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"ride","paramType":null,"paramKey":"ride","hasRuntimePrefetch":false,"slots":{"children":{"name":"id","paramType":"d","paramKey":"ride-t2w-011","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
