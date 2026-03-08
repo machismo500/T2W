@@ -4,7 +4,7 @@
  * Usage:
  *   npx tsx scripts/seed-admins.ts
  *
- * Requires DATABASE_URL and DIRECT_DATABASE_URL in .env
+ * Requires DATABASE_URL and DATABASE_URL_UNPOOLED in .env
  */
 
 import "dotenv/config";
