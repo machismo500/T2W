@@ -48,9 +48,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[T2W] Reset password error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[T2W] Reset password error:", message, error);
     return NextResponse.json(
-      { error: "Something went wrong" },
+      { error: message || "Something went wrong" },
       { status: 500 }
     );
   }

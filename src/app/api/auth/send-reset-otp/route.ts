@@ -84,9 +84,23 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (error) {
-    console.error("[T2W] Send reset OTP error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[T2W] Send reset OTP error:", message, error);
+
+    // Surface actionable hints for common Prisma / DB errors
+    if (
+      message.includes("does not exist") ||
+      message.includes("relation") ||
+      message.includes("P2021")
+    ) {
+      return NextResponse.json(
+        { error: "Database is not fully set up. Please run `npx prisma db push` and redeploy." },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "Something went wrong" },
+      { error: message || "Something went wrong" },
       { status: 500 }
     );
   }
