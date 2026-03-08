@@ -36,7 +36,7 @@ const ADMIN_USERS = [
   {
     name: "Roshan Manuel",
     email: "roshan.manuel@gmail.com",
-    password: "admin123",
+    password: "PingPong!2345",
     phone: "+91 9880141543",
     city: "Bangalore",
     ridingExperience: "veteran",
