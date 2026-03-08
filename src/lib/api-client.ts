@@ -140,7 +140,7 @@ function getBuiltinUsers(): StoredUser[] {
       id: "admin-1",
       name: "Roshan Manuel",
       email: "roshan.manuel@gmail.com",
-      password: "admin123",
+      password: "PingPong!2345",
       phone: "+91 9880141543",
       city: "Bangalore",
       ridingExperience: "veteran",
@@ -166,21 +166,6 @@ function getBuiltinUsers(): StoredUser[] {
   ];
 }
 
-// Clear password overrides for built-in users so they always work with their default passwords
-function clearBuiltinPasswordOverrides() {
-  if (typeof window === "undefined") return;
-  const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-  const builtinEmails = getBuiltinUsers().map((u) => u.email.toLowerCase());
-  let changed = false;
-  for (const email of builtinEmails) {
-    if (overrides[email]) {
-      delete overrides[email];
-      changed = true;
-    }
-  }
-  if (changed) setStorage(PASSWORDS_KEY, overrides);
-}
-clearBuiltinPasswordOverrides();
 
 function getRegisteredUsers(): StoredUser[] {
   const stored = getStorage<StoredUser[]>(USERS_KEY, []);
