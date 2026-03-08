@@ -14,6 +14,15 @@ import { PrismaClient } from "../generated/prisma";
 import bcrypt from "bcryptjs";
 import ws from "ws";
 
+if (!process.env.DATABASE_URL) {
+  console.error(
+    "ERROR: DATABASE_URL is not set.\n" +
+    "Make sure you have a .env file in the project root with your Neon database URL.\n" +
+    "See .env.example for the required format."
+  );
+  process.exit(1);
+}
+
 neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({
