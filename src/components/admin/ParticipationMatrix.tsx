@@ -1,10 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Search, Check, X, Save, Loader2 } from "lucide-react";
-import { riderProfiles } from "@/data/rider-profiles";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { Search, Check, X, Save, Loader2, UserPlus, Trash2 } from "lucide-react";
 import { pastRides } from "@/data/past-rides";
-import { api } from "@/lib/api-client";
+import { mockUpcomingRides } from "@/data/mock";
+import {
+  getGridRiders,
+  setGridParticipation,
+  updateGridRider,
+  addGridRider,
+  deleteGridRider,
+  type GridRider,
+} from "@/lib/grid-store";
 
 interface Props {
   isSuperAdmin: boolean;
@@ -14,18 +21,36 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [overrides, setOverrides] = useState<
-    Record<string, { added: string[]; removed: string[] }>
-  >(() => api.participation.getOverrides());
-  // Track local changes during edit mode
+  const [riders, setRiders] = useState<GridRider[]>([]);
+  const [showAddRider, setShowAddRider] = useState(false);
+  const [newRiderName, setNewRiderName] = useState("");
+  const [newRiderEmail, setNewRiderEmail] = useState("");
+  const [newRiderPhone, setNewRiderPhone] = useState("");
+  const [editingRider, setEditingRider] = useState<string | null>(null);
+  const [editRiderForm, setEditRiderForm] = useState({ name: "", email: "", phone: "", address: "", emergencyContact: "", emergencyPhone: "" });
+
+  // Track local changes during edit mode: riderId -> rideId -> points (0 = remove)
   const [localChanges, setLocalChanges] = useState<
-    Record<string, Record<string, boolean>>
+    Record<string, Record<string, number>>
   >({});
 
-  // Sort rides by number
-  const sortedRides = useMemo(
+  // Load riders from grid store
+  const loadRiders = useCallback(() => {
+    setRiders(getGridRiders());
+  }, []);
+
+  useEffect(() => {
+    loadRiders();
+    // Listen for storage updates from other components
+    const handler = () => loadRiders();
+    window.addEventListener("t2w-storage-update", handler);
+    return () => window.removeEventListener("t2w-storage-update", handler);
+  }, [loadRiders]);
+
+  // All rides sorted by number
+  const allRides = useMemo(
     () =>
-      [...pastRides].sort((a, b) => {
+      [...pastRides, ...mockUpcomingRides].sort((a, b) => {
         const numA = parseInt(a.rideNumber.replace("#", ""));
         const numB = parseInt(b.rideNumber.replace("#", ""));
         return numA - numB;
@@ -36,54 +61,58 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
   // Filter riders by search
   const filteredRiders = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return riderProfiles;
-    return riderProfiles.filter(
+    if (!q) return riders;
+    return riders.filter(
       (r) =>
         r.name.toLowerCase().includes(q) ||
         r.email.toLowerCase().includes(q) ||
         r.id.toLowerCase().includes(q)
     );
-  }, [search]);
+  }, [search, riders]);
 
-  // Get effective participation for a rider considering overrides
-  const isParticipating = (riderId: string, rideId: string): boolean => {
+  // Get effective points for a rider in a ride
+  const getPoints = (riderId: string, rideId: string): number => {
     // Check local changes first (edit mode)
     if (editing && localChanges[riderId]?.[rideId] !== undefined) {
       return localChanges[riderId][rideId];
     }
-    // Check overrides
-    const riderOverrides = overrides[riderId];
-    const rider = riderProfiles.find((r) => r.id === riderId);
-    const hasInBase =
-      rider?.ridesParticipated.some((r) => r.rideId === rideId) || false;
-    if (!riderOverrides) return hasInBase;
-    if (riderOverrides.removed.includes(rideId)) return false;
-    if (riderOverrides.added.includes(rideId)) return true;
-    return hasInBase;
+    const rider = riders.find((r) => r.id === riderId);
+    return rider?.participationMap[rideId] || 0;
   };
 
+  const isParticipating = (riderId: string, rideId: string): boolean => {
+    return getPoints(riderId, rideId) > 0;
+  };
+
+  // Cycle through points: 0 -> 5 -> 7.5 -> 10 -> 0
   const handleToggle = (riderId: string, rideId: string) => {
     if (!editing) return;
-    const current = isParticipating(riderId, rideId);
+    const current = getPoints(riderId, rideId);
+    let next: number;
+    if (current === 0) next = 5;
+    else if (current === 5) next = 7.5;
+    else if (current === 7.5) next = 10;
+    else next = 0;
+
     setLocalChanges((prev) => ({
       ...prev,
       [riderId]: {
         ...(prev[riderId] || {}),
-        [rideId]: !current,
+        [rideId]: next,
       },
     }));
   };
 
   const handleSave = () => {
     setSaving(true);
-    // Apply all local changes via the API
+    // Apply all local participation changes to grid store
     for (const [riderId, rides] of Object.entries(localChanges)) {
-      for (const [rideId, participate] of Object.entries(rides)) {
-        api.participation.toggle(riderId, rideId, participate);
+      for (const [rideId, points] of Object.entries(rides)) {
+        setGridParticipation(riderId, rideId, points);
       }
     }
-    // Reload overrides
-    setOverrides(api.participation.getOverrides());
+    // Reload from grid store
+    loadRiders();
     setLocalChanges({});
     setEditing(false);
     setSaving(false);
@@ -94,11 +123,61 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
     setEditing(false);
   };
 
+  const handleAddRider = () => {
+    if (!newRiderName.trim()) return;
+    const id = `rider-${Date.now()}`;
+    addGridRider({
+      id,
+      name: newRiderName.trim(),
+      email: newRiderEmail.trim().toLowerCase(),
+      phone: newRiderPhone.trim(),
+      address: "",
+      emergencyContact: "",
+      emergencyPhone: "",
+      bloodGroup: "",
+      joinDate: new Date().toISOString().split("T")[0],
+      avatarUrl: undefined,
+    });
+    setNewRiderName("");
+    setNewRiderEmail("");
+    setNewRiderPhone("");
+    setShowAddRider(false);
+    loadRiders();
+  };
+
+  const handleDeleteRider = (riderId: string) => {
+    if (!confirm("Are you sure you want to remove this rider from the grid?")) return;
+    deleteGridRider(riderId);
+    loadRiders();
+  };
+
+  const handleEditRider = (rider: GridRider) => {
+    setEditingRider(rider.id);
+    setEditRiderForm({
+      name: rider.name,
+      email: rider.email,
+      phone: rider.phone,
+      address: rider.address,
+      emergencyContact: rider.emergencyContact,
+      emergencyPhone: rider.emergencyPhone,
+    });
+  };
+
+  const handleSaveRiderEdit = () => {
+    if (!editingRider) return;
+    updateGridRider(editingRider, editRiderForm);
+    setEditingRider(null);
+    loadRiders();
+  };
+
   // Count rides per rider
   const getRideCount = (riderId: string): number => {
-    return sortedRides.filter((ride) =>
-      isParticipating(riderId, ride.id)
-    ).length;
+    return allRides.filter((ride) => isParticipating(riderId, ride.id)).length;
+  };
+
+  // Get total points per rider
+  const getTotalPoints = (riderId: string): number => {
+    return allRides.reduce((sum, ride) => sum + getPoints(riderId, ride.id), 0);
   };
 
   return (
@@ -106,10 +185,13 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-xl font-bold text-white">
-            Rider-Ride Participation Matrix
+            Rider-Ride Participation Grid
           </h2>
           <p className="text-sm text-t2w-muted">
-            {riderProfiles.length} riders &middot; {pastRides.length} rides
+            {riders.length} riders &middot; {allRides.length} rides &middot; Primary Database
+          </p>
+          <p className="text-xs text-t2w-muted/70 mt-1">
+            Click cells to cycle: -- &rarr; 5 &rarr; 7.5 &rarr; 10 &rarr; --
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -125,12 +207,21 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
             />
           </div>
           {isSuperAdmin && !editing && (
-            <button
-              onClick={() => setEditing(true)}
-              className="btn-primary flex items-center gap-2 text-sm"
-            >
-              Edit Matrix
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditing(true)}
+                className="btn-primary flex items-center gap-2 text-sm"
+              >
+                Edit Matrix
+              </button>
+              <button
+                onClick={() => setShowAddRider(true)}
+                className="flex items-center gap-2 rounded-xl border border-t2w-border bg-t2w-surface-light px-4 py-2 text-sm font-medium text-t2w-accent transition-colors hover:bg-t2w-accent/20"
+              >
+                <UserPlus className="h-4 w-4" />
+                Add Rider
+              </button>
+            </div>
           )}
           {editing && (
             <>
@@ -158,18 +249,56 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
         </div>
       </div>
 
+      {/* Add Rider Modal */}
+      {showAddRider && (
+        <div className="mb-6 rounded-xl border border-t2w-accent/30 bg-t2w-surface-light p-4">
+          <h3 className="mb-3 text-sm font-semibold text-white">Add New Rider</h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <input type="text" placeholder="Full Name *" value={newRiderName} onChange={(e) => setNewRiderName(e.target.value)} className="input-field" />
+            <input type="email" placeholder="Email" value={newRiderEmail} onChange={(e) => setNewRiderEmail(e.target.value)} className="input-field" />
+            <input type="text" placeholder="Phone" value={newRiderPhone} onChange={(e) => setNewRiderPhone(e.target.value)} className="input-field" />
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button onClick={handleAddRider} className="btn-primary text-sm">Add Rider</button>
+            <button onClick={() => setShowAddRider(false)} className="text-sm text-t2w-muted hover:text-white">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Rider Modal */}
+      {editingRider && (
+        <div className="mb-6 rounded-xl border border-t2w-accent/30 bg-t2w-surface-light p-4">
+          <h3 className="mb-3 text-sm font-semibold text-white">Edit Rider Details</h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <input type="text" placeholder="Full Name" value={editRiderForm.name} onChange={(e) => setEditRiderForm({ ...editRiderForm, name: e.target.value })} className="input-field" />
+            <input type="email" placeholder="Email" value={editRiderForm.email} onChange={(e) => setEditRiderForm({ ...editRiderForm, email: e.target.value })} className="input-field" />
+            <input type="text" placeholder="Phone" value={editRiderForm.phone} onChange={(e) => setEditRiderForm({ ...editRiderForm, phone: e.target.value })} className="input-field" />
+            <input type="text" placeholder="Address" value={editRiderForm.address} onChange={(e) => setEditRiderForm({ ...editRiderForm, address: e.target.value })} className="input-field" />
+            <input type="text" placeholder="Emergency Contact" value={editRiderForm.emergencyContact} onChange={(e) => setEditRiderForm({ ...editRiderForm, emergencyContact: e.target.value })} className="input-field" />
+            <input type="text" placeholder="Emergency Phone" value={editRiderForm.emergencyPhone} onChange={(e) => setEditRiderForm({ ...editRiderForm, emergencyPhone: e.target.value })} className="input-field" />
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button onClick={handleSaveRiderEdit} className="btn-primary text-sm">Save</button>
+            <button onClick={() => setEditingRider(null)} className="text-sm text-t2w-muted hover:text-white">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* Matrix table */}
-      <div className="overflow-auto rounded-xl border border-t2w-border bg-t2w-surface">
+      <div className="overflow-auto rounded-xl border border-t2w-border bg-t2w-surface" style={{ maxHeight: "70vh" }}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-t2w-border">
               <th className="sticky left-0 z-20 bg-t2w-surface-light px-4 py-3 text-left font-semibold text-white min-w-[200px]">
                 Rider
               </th>
-              <th className="sticky left-0 z-10 bg-t2w-surface-light px-2 py-3 text-center font-semibold text-t2w-accent min-w-[50px]">
+              <th className="sticky z-10 bg-t2w-surface-light px-2 py-3 text-center font-semibold text-t2w-accent min-w-[40px]" title="Total Rides">
                 #
               </th>
-              {sortedRides.map((ride) => (
+              <th className="sticky z-10 bg-t2w-surface-light px-2 py-3 text-center font-semibold text-t2w-gold min-w-[50px]" title="Total Points">
+                Pts
+              </th>
+              {allRides.map((ride) => (
                 <th
                   key={ride.id}
                   className="bg-t2w-surface-light px-1 py-3 text-center font-medium text-t2w-muted min-w-[44px]"
@@ -182,11 +311,17 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
                   </div>
                 </th>
               ))}
+              {isSuperAdmin && (
+                <th className="bg-t2w-surface-light px-2 py-3 text-center font-medium text-t2w-muted min-w-[60px]">
+                  Actions
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {filteredRiders.map((rider, idx) => {
               const count = getRideCount(rider.id);
+              const points = getTotalPoints(rider.id);
               return (
                 <tr
                   key={rider.id}
@@ -195,31 +330,56 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
                   }`}
                 >
                   <td className="sticky left-0 z-10 bg-inherit px-4 py-2 font-medium text-white whitespace-nowrap">
-                    <span title={rider.email}>{rider.name}</span>
+                    <span title={`${rider.email}\n${rider.phone}`}>{rider.name}</span>
                   </td>
                   <td className="sticky z-10 bg-inherit px-2 py-2 text-center font-bold text-t2w-accent">
                     {count}
                   </td>
-                  {sortedRides.map((ride) => {
-                    const participating = isParticipating(rider.id, ride.id);
+                  <td className="sticky z-10 bg-inherit px-2 py-2 text-center font-bold text-t2w-gold text-xs">
+                    {points}
+                  </td>
+                  {allRides.map((ride) => {
+                    const pts = getPoints(rider.id, ride.id);
+                    const participating = pts > 0;
                     const hasLocalChange =
                       localChanges[rider.id]?.[ride.id] !== undefined;
                     return (
                       <td
                         key={ride.id}
                         className={`px-1 py-2 text-center ${
-                          editing ? "cursor-pointer" : ""
+                          editing ? "cursor-pointer hover:bg-t2w-accent/10" : ""
                         } ${hasLocalChange ? "bg-yellow-400/10" : ""}`}
                         onClick={() => handleToggle(rider.id, ride.id)}
+                        title={participating ? `${pts} points` : "Not participated"}
                       >
                         {participating ? (
-                          <Check className="mx-auto h-4 w-4 text-green-400" />
+                          <span className="text-xs font-bold text-green-400">{pts}</span>
                         ) : (
                           <span className="text-t2w-border">&mdash;</span>
                         )}
                       </td>
                     );
                   })}
+                  {isSuperAdmin && (
+                    <td className="px-2 py-2 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => handleEditRider(rider)}
+                          className="rounded p-1 text-t2w-muted hover:text-t2w-accent"
+                          title="Edit rider details"
+                        >
+                          <Save className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRider(rider.id)}
+                          className="rounded p-1 text-t2w-muted hover:text-red-400"
+                          title="Remove rider"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               );
             })}

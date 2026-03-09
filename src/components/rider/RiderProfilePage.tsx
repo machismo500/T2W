@@ -88,13 +88,8 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
         const legacyAvatar = localStorage.getItem(`t2w_avatar_${riderId}`);
         const avatar = sharedAvatar || legacyAvatar;
         if (avatar) setAvatarUrl(avatar);
-        // Load saved edits
-        const savedEdits = localStorage.getItem(`t2w_profile_${riderId}`);
-        if (savedEdits) {
-          const parsed = JSON.parse(savedEdits);
-          setEditForm((prev) => ({ ...prev, ...parsed }));
-          setRider((prev) => (prev ? { ...prev, ...parsed } : prev));
-        }
+        // Grid store is the primary source - data is already loaded from api.riders.get
+        // No need for separate localStorage overrides
       })
       .catch((err: unknown) => {
         const e = err as Error;
@@ -130,9 +125,14 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
   const handleSaveProfile = async () => {
     if (!rider) return;
     const updates = { ...editForm };
-    // Save to localStorage for rider profile page display
-    localStorage.setItem(`t2w_profile_${riderId}`, JSON.stringify(updates));
-    // Also persist to user record so admin panel and account data stay in sync
+    // Save to grid store (primary database) - persists across all pages
+    try {
+      await api.riders.update(riderId, updates);
+    } catch {
+      // Fallback: save to localStorage
+      localStorage.setItem(`t2w_profile_${riderId}`, JSON.stringify(updates));
+    }
+    // Also update user record for account data sync
     try {
       await api.users.update(riderId, {
         name: updates.name,
@@ -140,7 +140,7 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
         phone: updates.phone,
       });
     } catch {
-      // User record may not exist yet for static rider profiles; localStorage still persists
+      // User record may not exist yet for static rider profiles
     }
     setRider({ ...rider, ...updates });
     setEditing(false);

@@ -10,11 +10,31 @@ import {
   mockRidePosts,
 } from "@/data/mock";
 import {
-  riderProfiles,
-  riderNameToId,
   type RiderProfile,
 } from "@/data/rider-profiles";
+import {
+  getGridRiders,
+  getGridRider,
+  getGridRiderByEmail,
+  getGridRiderNameToId,
+  getRidersForRide,
+  updateGridRider,
+  setGridParticipation,
+  type GridRider,
+} from "@/lib/grid-store";
 import type { Ride, BlogPost, User, UserRole, RidePost, BlogApprovalStatus, RideRegistration } from "@/types";
+
+// ── Grid-backed accessors (replacing static imports) ──
+// These functions read from the grid store which is the single source of truth.
+// The grid store is seeded from the Excel-imported static data and can be
+// edited by the Super Admin via the participation matrix grid.
+function getRiderProfiles(): GridRider[] {
+  return getGridRiders();
+}
+
+function getRiderNameToIdMap(): Record<string, string> {
+  return getGridRiderNameToId();
+}
 
 // ── Helpers ──
 function delay(ms = 100) {
@@ -56,7 +76,7 @@ const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (shared across 
 const EMAIL_OTP_KEY = "t2w_email_otp"; // email -> { code, expiresAt }
 const RESET_OTP_KEY = "t2w_reset_otp"; // email -> { code, expiresAt }
 const RESET_VERIFIED_KEY = "t2w_reset_verified"; // email -> expiresAt (verified session)
-const PARTICIPATION_OVERRIDES_KEY = "t2w_participation_overrides"; // riderId -> { added: rideId[], removed: rideId[] }
+// Participation is now managed by grid-store.ts (the primary database)
 
 // ── Activity Log ──
 export type ActivityAction =
@@ -121,10 +141,9 @@ interface StoredUser {
   linkedRiderId?: string;
 }
 
-// ── Find rider profile by email match ──
-function findRiderByEmail(email: string): RiderProfile | undefined {
-  const lowerEmail = email.toLowerCase().trim();
-  return riderProfiles.find((r) => r.email.toLowerCase().trim() === lowerEmail);
+// ── Find rider profile by email match (uses grid store as primary) ──
+function findRiderByEmail(email: string): GridRider | undefined {
+  return getGridRiderByEmail(email);
 }
 
 // ── Determine role based on rider participation ──
@@ -148,7 +167,7 @@ function getBuiltinUsers(): StoredUser[] {
       role: "superadmin",
       joinDate: "2024-03-16",
       isApproved: true,
-      linkedRiderId: riderProfiles.find((r) => r.email.toLowerCase() === "roshan.manuel@gmail.com")?.id,
+      linkedRiderId: getRiderProfiles().find((r) => r.email.toLowerCase() === "roshan.manuel@gmail.com")?.id,
     },
     {
       id: "admin-6",
@@ -199,9 +218,9 @@ function saveCustomUsers(users: StoredUser[]) {
 function buildUserData(dbUser: StoredUser): {
   user: Record<string, unknown>;
 } {
-  // Find linked rider profile
+  // Find linked rider profile from grid store (single source of truth)
   const linkedRider = dbUser.linkedRiderId
-    ? riderProfiles.find((r) => r.id === dbUser.linkedRiderId)
+    ? getGridRider(dbUser.linkedRiderId)
     : findRiderByEmail(dbUser.email);
 
   const ridesCompleted = linkedRider?.ridesCompleted || 0;
@@ -451,21 +470,22 @@ export const api = {
         throw new Error("An account with this email already exists");
       }
 
-      // Check if this email matches an existing rider profile
+      // Check if this email matches an existing rider in the grid (primary database)
       const matchedRider = findRiderByEmail(email);
       const role = determineRoleForRider(matchedRider);
 
+      // If email matches a grid rider, merge: use grid data as base, user-provided data as override
       const newUser: StoredUser = {
-        id: `user-${Date.now()}`,
-        name: String(data.name || ""),
+        id: matchedRider ? matchedRider.id : `user-${Date.now()}`,
+        name: String(data.name || matchedRider?.name || ""),
         email: String(data.email || ""),
         password: String(data.password || ""),
-        phone: String(data.phone || ""),
+        phone: String(data.phone || matchedRider?.phone || ""),
         city: String(data.city || ""),
-        ridingExperience: String(data.ridingExperience || ""),
+        ridingExperience: String(data.ridingExperience || (matchedRider && matchedRider.ridesCompleted > 10 ? "veteran" : matchedRider && matchedRider.ridesCompleted > 3 ? "experienced" : "")),
         motorcycle: String(data.motorcycle || ""),
         role,
-        joinDate: new Date().toISOString().split("T")[0],
+        joinDate: matchedRider?.joinDate || new Date().toISOString().split("T")[0],
         isApproved: role === "t2w_rider", // T2W riders auto-approved; regular riders need approval
         linkedRiderId: matchedRider?.id,
       };
@@ -535,7 +555,7 @@ export const api = {
         });
 
       // 3. Add all rider profiles from past rides (as t2w_rider)
-      riderProfiles.forEach((rider) => {
+      getRiderProfiles().forEach((rider) => {
         if (addedEmails.has(rider.email.toLowerCase())) return;
         combined.push({
           id: rider.id,
@@ -569,10 +589,10 @@ export const api = {
         if (data.phone !== undefined) user.phone = String(data.phone);
         saveCustomUsers(users);
       } else {
-        // User may exist only in static data (riderProfiles/mockAllUsers).
+        // User may exist only in static data (getRiderProfiles()/mockAllUsers).
         // Create a custom record so changes persist.
         const staticUser = mockAllUsers.find((u) => u.id === id);
-        const riderProfile = riderProfiles.find((r) => r.id === id);
+        const riderProfile = getRiderProfiles().find((r) => r.id === id);
         const source = staticUser || riderProfile;
         if (source) {
           const newUser: StoredUser = {
@@ -647,10 +667,10 @@ export const api = {
         }
         saveCustomUsers(users);
       } else {
-        // User may exist only in static data (riderProfiles/mockAllUsers).
+        // User may exist only in static data (getRiderProfiles()/mockAllUsers).
         // Create a custom record so the user shows up in queries.
         const staticUser = mockAllUsers.find((u) => u.id === id);
-        const riderProfile = riderProfiles.find((r) => r.id === id);
+        const riderProfile = getRiderProfiles().find((r) => r.id === id);
         const source = staticUser || riderProfile;
         if (source) {
           // Try to link to a rider profile for avatar/stats
@@ -705,11 +725,17 @@ export const api = {
       const ride = getAllRides().find((r) => r.id === id);
       if (!ride) throw new Error("Ride not found");
       const regs = getRideRegistrations();
+      // Get rider names from grid store (primary source of truth)
+      const gridRiderNames = getRidersForRide(id);
+      // Merge with any custom riders added directly to the ride
+      const customRiders = ride.riders || [];
+      const allRiderNames = [...new Set([...gridRiderNames, ...customRiders])];
       return {
         ride: {
           ...ride,
           registrations: regs[id] || [],
-          riders: ride.riders || [],
+          riders: allRiderNames,
+          registeredRiders: allRiderNames.length,
         },
       };
     },
@@ -859,20 +885,26 @@ export const api = {
   riders: {
     list: async () => {
       await delay(150);
-      return { riders: riderProfiles };
+      return { riders: getRiderProfiles() };
     },
     get: async (id: string) => {
       await delay(100);
-      const rider = riderProfiles.find((r) => r.id === id);
+      const rider = getGridRider(id);
       if (!rider) throw new Error("Rider not found");
+      return { rider };
+    },
+    update: async (id: string, data: Partial<RiderProfile>) => {
+      await delay(100);
+      updateGridRider(id, data);
+      const rider = getGridRider(id);
       return { rider };
     },
     getByName: async (name: string) => {
       await delay(50);
       const key = name.toLowerCase().trim();
-      const id = riderNameToId[key];
+      const id = getRiderNameToIdMap()[key];
       if (id) {
-        const rider = riderProfiles.find((r) => r.id === id);
+        const rider = getRiderProfiles().find((r) => r.id === id);
         return { rider: rider || null, riderId: id };
       }
       return { rider: null, riderId: null };
@@ -1123,7 +1155,7 @@ export const api = {
           totalUsers: new Set([
             ...mockAllUsers.map((u) => u.email.toLowerCase()),
             ...getRegisteredUsers().map((u) => u.email.toLowerCase()),
-            ...riderProfiles.map((r) => r.email.toLowerCase()),
+            ...getRiderProfiles().map((r) => r.email.toLowerCase()),
           ]).size,
           pendingUsers: mockPendingUsers.length,
           activeRides: allRides.filter((r) => r.status === "upcoming").length,
@@ -1263,48 +1295,27 @@ export const api = {
     },
   },
 
-  // Rider-ride participation overrides (SuperAdmin editable)
+  // Rider-ride participation — backed by grid store (primary database)
   participation: {
     getOverrides: (): Record<string, { added: string[]; removed: string[] }> => {
-      return getStorage<Record<string, { added: string[]; removed: string[] }>>(PARTICIPATION_OVERRIDES_KEY, {});
+      // Legacy compat: return empty since grid store is now the source of truth
+      return {};
     },
     toggle: (riderId: string, rideId: string, participate: boolean) => {
-      const overrides = getStorage<Record<string, { added: string[]; removed: string[] }>>(PARTICIPATION_OVERRIDES_KEY, {});
-      if (!overrides[riderId]) overrides[riderId] = { added: [], removed: [] };
-      const rider = riderProfiles.find((r) => r.id === riderId);
-      const hasInBase = rider?.ridesParticipated.some((r) => r.rideId === rideId) || false;
-
-      if (participate) {
-        // Adding participation
-        overrides[riderId].removed = overrides[riderId].removed.filter((id) => id !== rideId);
-        if (!hasInBase) {
-          if (!overrides[riderId].added.includes(rideId)) overrides[riderId].added.push(rideId);
-        }
-      } else {
-        // Removing participation
-        overrides[riderId].added = overrides[riderId].added.filter((id) => id !== rideId);
-        if (hasInBase) {
-          if (!overrides[riderId].removed.includes(rideId)) overrides[riderId].removed.push(rideId);
-        }
-      }
-      // Clean up empty entries
-      if (overrides[riderId].added.length === 0 && overrides[riderId].removed.length === 0) {
-        delete overrides[riderId];
-      }
-      setStorage(PARTICIPATION_OVERRIDES_KEY, overrides);
+      // Delegate to grid store — the single source of truth
+      setGridParticipation(riderId, rideId, participate ? 5 : 0);
+      return { success: true };
+    },
+    setPoints: (riderId: string, rideId: string, points: number) => {
+      setGridParticipation(riderId, rideId, points);
       return { success: true };
     },
     getEffectiveParticipation: (riderId: string): string[] => {
-      const rider = riderProfiles.find((r) => r.id === riderId);
-      const baseRides = rider?.ridesParticipated.map((r) => r.rideId) || [];
-      const overrides = getStorage<Record<string, { added: string[]; removed: string[] }>>(PARTICIPATION_OVERRIDES_KEY, {});
-      const riderOverrides = overrides[riderId];
-      if (!riderOverrides) return baseRides;
-      const result = baseRides.filter((id) => !riderOverrides.removed.includes(id));
-      for (const id of riderOverrides.added) {
-        if (!result.includes(id)) result.push(id);
-      }
-      return result;
+      const rider = getGridRider(riderId);
+      if (!rider) return [];
+      return Object.entries(rider.participationMap)
+        .filter(([, pts]) => pts > 0)
+        .map(([rideId]) => rideId);
     },
   },
 

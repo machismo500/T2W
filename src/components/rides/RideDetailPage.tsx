@@ -31,14 +31,15 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
-import { riderNameToId } from "@/data/rider-profiles";
+import { getGridRiderNameToId } from "@/lib/grid-store";
 import type { RidePost } from "@/types";
 
-// Helper: look up a rider profile link by name
+// Helper: look up a rider profile link by name (uses grid store)
 function getRiderLink(name: string): string | null {
   if (!name) return null;
   const key = name.toLowerCase().trim();
-  return riderNameToId[key] ? `/rider/${riderNameToId[key]}` : null;
+  const nameToId = getGridRiderNameToId();
+  return nameToId[key] ? `/rider/${nameToId[key]}` : null;
 }
 
 // Helper: build a Google Maps search URL for a location
@@ -556,7 +557,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 </h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {ride.riders.map((riderName, index) => {
-                    const riderId = riderNameToId[riderName.toLowerCase().trim()];
+                    const riderId = getGridRiderNameToId()[riderName.toLowerCase().trim()];
                     return riderId ? (
                       <Link
                         key={`${riderName}-${index}`}
