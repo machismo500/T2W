@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   title:
     "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & India",
   description:
-    "Join India's #1 motorcycle riding community. Group rides from Bangalore to Nandi Hills, Coorg, Chikmagalur, Hampi, Goa & across India. 500+ riders, 120+ rides completed, 2.5 lakh km covered. Register for upcoming rides today!",
+    "Join India's #1 motorcycle riding community. Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan across India. 500+ riders, 120+ rides completed, 2.5 lakh km covered. Register for upcoming rides today!",
   keywords: [
     "motorcycle rides Bangalore",
     "bike rides near Bangalore",
