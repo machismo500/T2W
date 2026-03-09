@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     template: "%s | T2W - Tales on 2 Wheels",
   },
   description:
-    "India’s premier motorcycle riding community based in Bangalore, Karnataka. Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan &amp; across India. Every ride tells a story.. Tales on 2 Wheels - where every ride tells a story.",
+    "India’s premier motorcycle riding community based in Bangalore, Karnataka. Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan across India. Every ride tells a story.. Tales on 2 Wheels - where every ride tells a story.",
   keywords: [
     "motorcycle rides Bangalore",
     "group riding Bangalore",
