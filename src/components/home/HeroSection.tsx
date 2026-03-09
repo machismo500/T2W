@@ -111,7 +111,7 @@ export function HeroSection() {
             }`}
           >
             India&apos;s premier motorcycle riding community, based in Bangalore.
-            Group rides to Nandi Hills, Coorg, Chikmagalur, Hampi, Goa &amp;
+            Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan &amp;
             across India. Join 500+ riders and write your own tale on two wheels.
           </p>
 
