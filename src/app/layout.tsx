@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     template: "%s | T2W - Tales on 2 Wheels",
   },
   description:
-    "India's premier motorcycle riding community based in Bangalore. Join group rides to Nandi Hills, Coorg, Chikmagalur, Hampi, Goa & across India. Register for upcoming motorcycle tours, earn badges, and connect with passionate riders. Tales on 2 Wheels - where every ride tells a story.",
+    "India’s premier motorcycle riding community based in Bangalore, Karnataka. Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan &amp; across India. Every ride tells a story.. Tales on 2 Wheels - where every ride tells a story.",
   keywords: [
     "motorcycle rides Bangalore",
     "group riding Bangalore",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     "motorcycle club Karnataka",
     "Tales on 2 Wheels",
     "T2W rides",
-    "motorcycle travel India",
+    "BMW GS travel India",
     "riding community India",
     "bike trips from Bangalore",
     "motorcycle rides near me",
@@ -38,8 +38,8 @@ export const metadata: Metadata = {
     "Hampi bike ride",
     "Western Ghats motorcycle ride",
     "South India bike tours",
-    "motorcycle rides Mumbai",
-    "motorcycle rides Pune",
+    "Bengaluru Motorcycle Club",
+    "Bangalore Motorcycle Club",
     "Ladakh bike trip",
     "Spiti Valley motorcycle ride",
     "best motorcycle rides India",
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
     title:
       "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & Across India",
     description:
-      "Join India's premier motorcycle riding community. Discover epic group rides from Bangalore, Mumbai & across India. Register for upcoming tours and connect with passionate riders.",
+      "Join India's premier motorcycle riding community. Discover epic group rides from Bangalore & across India. Register for upcoming tours and connect with passionate riders.",
     images: [
       {
         url: "/og-image.jpg",
@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "T2W - Tales on 2 Wheels | Motorcycle Rides India",
     description:
-      "India's premier motorcycle riding community. Group rides from Bangalore, Mumbai & across India. Every ride tells a story.",
+      "India's premier motorcycle riding community. Group rides from Bangalore & across India. Every ride tells a story.",
     images: ["/og-image.jpg"],
   },
   robots: {
@@ -139,11 +139,11 @@ const organizationSchema = {
     },
     {
       "@type": "City",
-      name: "Mumbai",
+      name: "Mysore",
     },
     {
       "@type": "City",
-      name: "Pune",
+      name: "Mangalore",
     },
   ],
   contactPoint: {
