@@ -23,6 +23,7 @@ model User {
   ridingExperience String?
   totalKm        Float    @default(0)
   ridesCompleted Int      @default(0)
+  linkedRiderId  String?  // links to RiderProfile.id when email matches
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -31,6 +32,50 @@ model User {
   rideRegistrations RideRegistration[]
   blogPosts         BlogPost[]
   notifications     Notification[]
+  riderProfile      RiderProfile? @relation(fields: [linkedRiderId], references: [id])
+}
+
+// Rider profile data - the primary record for all riders (imported from Excel/admin)
+// A User account may link to a RiderProfile when their emails match
+model RiderProfile {
+  id               String   @id @default(cuid())
+  name             String
+  email            String
+  phone            String   @default("")
+  address          String   @default("")
+  emergencyContact String   @default("")
+  emergencyPhone   String   @default("")
+  bloodGroup       String   @default("")
+  joinDate         DateTime @default(now())
+  avatarUrl        String?
+  ridesOrganized   Int      @default(0)
+  sweepsDone       Int      @default(0)
+  pilotsDone       Int      @default(0)
+  mergedIntoId     String?  // if this profile was merged into another
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  linkedUsers      User[]
+  participations   RideParticipation[]
+  mergedInto       RiderProfile?  @relation("ProfileMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom       RiderProfile[] @relation("ProfileMerge")
+
+  @@index([email])
+  @@index([mergedIntoId])
+}
+
+// Tracks which riders participated in which rides with points
+model RideParticipation {
+  id             String   @id @default(cuid())
+  riderProfileId String
+  rideId         String
+  points         Float    @default(5)
+  createdAt      DateTime @default(now())
+
+  riderProfile RiderProfile @relation(fields: [riderProfileId], references: [id], onDelete: Cascade)
+  ride         Ride         @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@unique([riderProfileId, rideId])
 }
 
 model Motorcycle {
@@ -94,7 +139,8 @@ model Ride {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  registrations RideRegistration[]
+  registrations    RideRegistration[]
+  participations   RideParticipation[]
 }
 
 model RideRegistration {

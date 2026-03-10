@@ -35,14 +35,16 @@ import {
   RotateCcw,
   Activity,
   Grid3X3,
+  Merge,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
 import { ParticipationMatrix } from "./ParticipationMatrix";
+import { MergeProfiles } from "./MergeProfiles";
 import type { ActivityLogEntry } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "content" | "approvals" | "form-settings" | "activity";
+type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "content" | "approvals" | "form-settings" | "activity";
 
 type PendingUser = {
   id: string;
@@ -667,6 +669,9 @@ export function AdminPage() {
     ...(isSuperAdmin
       ? [{ key: "matrix" as const, label: "Matrix", icon: Grid3X3 }]
       : []),
+    ...(isSuperAdmin
+      ? [{ key: "merge" as const, label: "Merge Profiles", icon: Merge }]
+      : []),
     { key: "approvals" as const, label: "Approvals", icon: BookOpen, badge: pendingBlogs.length + pendingPosts.length },
     { key: "content" as const, label: "Content", icon: Copyright },
     ...(isSuperAdmin
@@ -1156,6 +1161,11 @@ export function AdminPage() {
         {/* Matrix Tab */}
         {activeTab === "matrix" && isSuperAdmin && (
           <ParticipationMatrix isSuperAdmin={isSuperAdmin} />
+        )}
+
+        {/* Merge Profiles Tab */}
+        {activeTab === "merge" && isSuperAdmin && (
+          <MergeProfiles />
         )}
 
         {/* Approvals Tab */}

@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canEditProfile = (profileRiderId: string) => {
     if (isSuperAdmin) return true;
     if (!user) return false;
-    return user.id === profileRiderId;
+    return user.id === profileRiderId || user.linkedRiderId === profileRiderId;
   };
 
   const canEditRide = isCoreOrAbove;

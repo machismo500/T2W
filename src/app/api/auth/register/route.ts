@@ -26,16 +26,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if email already exists
+    // Check if a user account already exists with this email
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json(
-        { error: "An account with this email already exists" },
+        { error: "An account with this email already exists. Please log in instead.", existingAccount: true },
         { status: 409 }
       );
     }
 
     const hashedPassword = await hashPassword(password);
+
+    // Check if a rider profile exists with this email (from admin-imported data)
+    const existingProfile = await prisma.riderProfile.findFirst({
+      where: { email, mergedIntoId: null },
+      include: {
+        participations: {
+          include: { ride: { select: { distanceKm: true } } },
+        },
+      },
+    });
+
+    // Calculate stats from rider profile if it exists
+    const totalKm = existingProfile
+      ? existingProfile.participations.reduce((sum: number, p: typeof existingProfile.participations[number]) => sum + p.ride.distanceKm, 0)
+      : 0;
+    const ridesCompleted = existingProfile
+      ? existingProfile.participations.length
+      : 0;
 
     const user = await prisma.user.create({
       data: {
@@ -47,6 +65,9 @@ export async function POST(req: NextRequest) {
         ridingExperience,
         role: "rider",
         isApproved: false,
+        linkedRiderId: existingProfile?.id || null,
+        totalKm,
+        ridesCompleted,
       },
       include: {
         motorcycles: true,
@@ -54,10 +75,24 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // If no rider profile exists, create one for this new user
+    if (!existingProfile) {
+      const newProfile = await prisma.riderProfile.create({
+        data: {
+          name,
+          email,
+          phone: phone || "",
+        },
+      });
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { linkedRiderId: newProfile.id },
+      });
+    }
+
     // Create motorcycle if provided
     const motorcycleStr = String(data.motorcycle || "").trim();
     if (motorcycleStr) {
-      // Try to parse "Make Model Year CC" format, or just store as make
       await prisma.motorcycle.create({
         data: {
           make: motorcycleStr,
@@ -73,7 +108,7 @@ export async function POST(req: NextRequest) {
     const token = await createToken(user.id);
     await setAuthCookie(token);
 
-    // Re-fetch with relations after motorcycle creation
+    // Re-fetch with relations after all updates
     const fullUser = await prisma.user.findUnique({
       where: { id: user.id },
       include: {

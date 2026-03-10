@@ -1,17 +1,25 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Search, Check, X, Save, Loader2, UserPlus, Trash2 } from "lucide-react";
-import { pastRides } from "@/data/past-rides";
-import { mockUpcomingRides } from "@/data/mock";
-import {
-  getGridRiders,
-  setGridParticipation,
-  updateGridRider,
-  addGridRider,
-  deleteGridRider,
-  type GridRider,
-} from "@/lib/grid-store";
+import { Search, X, Save, Loader2, UserPlus, Trash2 } from "lucide-react";
+import { api } from "@/lib/api-client";
+
+interface RiderData {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+  participationMap: Record<string, number>;
+}
+
+interface RideData {
+  id: string;
+  rideNumber: string;
+  title: string;
+}
 
 interface Props {
   isSuperAdmin: boolean;
@@ -21,7 +29,9 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [riders, setRiders] = useState<GridRider[]>([]);
+  const [riders, setRiders] = useState<RiderData[]>([]);
+  const [rides, setRides] = useState<RideData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddRider, setShowAddRider] = useState(false);
   const [newRiderName, setNewRiderName] = useState("");
   const [newRiderEmail, setNewRiderEmail] = useState("");
@@ -34,29 +44,47 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
     Record<string, Record<string, number>>
   >({});
 
-  // Load riders from grid store
-  const loadRiders = useCallback(() => {
-    setRiders(getGridRiders());
+  // Load riders and rides from API
+  const loadData = useCallback(async () => {
+    try {
+      const [ridersRes, ridesRes] = await Promise.all([
+        api.riders.list(),
+        api.rides.list(),
+      ]);
+      const riderData = (ridersRes.riders || []).map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        name: r.name as string,
+        email: r.email as string,
+        phone: r.phone as string,
+        address: r.address as string,
+        emergencyContact: r.emergencyContact as string,
+        emergencyPhone: r.emergencyPhone as string,
+        participationMap: (r.participationMap || {}) as Record<string, number>,
+      }));
+      setRiders(riderData);
+
+      const rideData = (ridesRes.rides || [])
+        .map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          rideNumber: r.rideNumber as string,
+          title: r.title as string,
+        }))
+        .sort((a: RideData, b: RideData) => {
+          const numA = parseInt(a.rideNumber.replace("#", ""));
+          const numB = parseInt(b.rideNumber.replace("#", ""));
+          return numA - numB;
+        });
+      setRides(rideData);
+    } catch (err) {
+      console.error("Failed to load matrix data:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    loadRiders();
-    // Listen for storage updates from other components
-    const handler = () => loadRiders();
-    window.addEventListener("t2w-storage-update", handler);
-    return () => window.removeEventListener("t2w-storage-update", handler);
-  }, [loadRiders]);
-
-  // All rides sorted by number
-  const allRides = useMemo(
-    () =>
-      [...pastRides, ...mockUpcomingRides].sort((a, b) => {
-        const numA = parseInt(a.rideNumber.replace("#", ""));
-        const numB = parseInt(b.rideNumber.replace("#", ""));
-        return numA - numB;
-      }),
-    []
-  );
+    loadData();
+  }, [loadData]);
 
   // Filter riders by search
   const filteredRiders = useMemo(() => {
@@ -72,7 +100,6 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
 
   // Get effective points for a rider in a ride
   const getPoints = (riderId: string, rideId: string): number => {
-    // Check local changes first (edit mode)
     if (editing && localChanges[riderId]?.[rideId] !== undefined) {
       return localChanges[riderId][rideId];
     }
@@ -103,19 +130,29 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    // Apply all local participation changes to grid store
-    for (const [riderId, rides] of Object.entries(localChanges)) {
-      for (const [rideId, points] of Object.entries(rides)) {
-        setGridParticipation(riderId, rideId, points);
+    try {
+      // Build bulk changes array
+      const changes: Array<{ riderProfileId: string; rideId: string; points: number }> = [];
+      for (const [riderId, rideChanges] of Object.entries(localChanges)) {
+        for (const [rideId, points] of Object.entries(rideChanges)) {
+          changes.push({ riderProfileId: riderId, rideId, points });
+        }
       }
+      if (changes.length > 0) {
+        await api.participation.bulkSave(changes);
+      }
+      // Reload data
+      await loadData();
+      setLocalChanges({});
+      setEditing(false);
+    } catch (err) {
+      console.error("Failed to save:", err);
+      alert("Failed to save changes. Please try again.");
+    } finally {
+      setSaving(false);
     }
-    // Reload from grid store
-    loadRiders();
-    setLocalChanges({});
-    setEditing(false);
-    setSaving(false);
   };
 
   const handleCancel = () => {
@@ -123,35 +160,37 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
     setEditing(false);
   };
 
-  const handleAddRider = () => {
+  const handleAddRider = async () => {
     if (!newRiderName.trim()) return;
-    const id = `rider-${Date.now()}`;
-    addGridRider({
-      id,
-      name: newRiderName.trim(),
-      email: newRiderEmail.trim().toLowerCase(),
-      phone: newRiderPhone.trim(),
-      address: "",
-      emergencyContact: "",
-      emergencyPhone: "",
-      bloodGroup: "",
-      joinDate: new Date().toISOString().split("T")[0],
-      avatarUrl: undefined,
-    });
-    setNewRiderName("");
-    setNewRiderEmail("");
-    setNewRiderPhone("");
-    setShowAddRider(false);
-    loadRiders();
+    try {
+      await api.riders.create({
+        name: newRiderName.trim(),
+        email: newRiderEmail.trim().toLowerCase(),
+        phone: newRiderPhone.trim(),
+      });
+      setNewRiderName("");
+      setNewRiderEmail("");
+      setNewRiderPhone("");
+      setShowAddRider(false);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to add rider:", err);
+      alert("Failed to add rider.");
+    }
   };
 
-  const handleDeleteRider = (riderId: string) => {
+  const handleDeleteRider = async (riderId: string) => {
     if (!confirm("Are you sure you want to remove this rider from the grid?")) return;
-    deleteGridRider(riderId);
-    loadRiders();
+    try {
+      await api.riders.delete(riderId);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to delete rider:", err);
+      alert("Failed to delete rider.");
+    }
   };
 
-  const handleEditRider = (rider: GridRider) => {
+  const handleEditRider = (rider: RiderData) => {
     setEditingRider(rider.id);
     setEditRiderForm({
       name: rider.name,
@@ -163,22 +202,36 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
     });
   };
 
-  const handleSaveRiderEdit = () => {
+  const handleSaveRiderEdit = async () => {
     if (!editingRider) return;
-    updateGridRider(editingRider, editRiderForm);
-    setEditingRider(null);
-    loadRiders();
+    try {
+      await api.riders.update(editingRider, editRiderForm);
+      setEditingRider(null);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to save rider edit:", err);
+      alert("Failed to save rider details.");
+    }
   };
 
   // Count rides per rider
   const getRideCount = (riderId: string): number => {
-    return allRides.filter((ride) => isParticipating(riderId, ride.id)).length;
+    return rides.filter((ride) => isParticipating(riderId, ride.id)).length;
   };
 
   // Get total points per rider
   const getTotalPoints = (riderId: string): number => {
-    return allRides.reduce((sum, ride) => sum + getPoints(riderId, ride.id), 0);
+    return rides.reduce((sum, ride) => sum + getPoints(riderId, ride.id), 0);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-t2w-accent" />
+        <span className="ml-3 text-t2w-muted">Loading participation data...</span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -188,7 +241,7 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
             Rider-Ride Participation Grid
           </h2>
           <p className="text-sm text-t2w-muted">
-            {riders.length} riders &middot; {allRides.length} rides &middot; Primary Database
+            {riders.length} riders &middot; {rides.length} rides &middot; Database-backed
           </p>
           <p className="text-xs text-t2w-muted/70 mt-1">
             Click cells to cycle: -- &rarr; 5 &rarr; 7.5 &rarr; 10 &rarr; --
@@ -298,7 +351,7 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
               <th className="sticky z-10 bg-t2w-surface-light px-2 py-3 text-center font-semibold text-t2w-gold min-w-[50px]" title="Total Points">
                 Pts
               </th>
-              {allRides.map((ride) => (
+              {rides.map((ride) => (
                 <th
                   key={ride.id}
                   className="bg-t2w-surface-light px-1 py-3 text-center font-medium text-t2w-muted min-w-[44px]"
@@ -338,7 +391,7 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
                   <td className="sticky z-10 bg-inherit px-2 py-2 text-center font-bold text-t2w-gold text-xs">
                     {points}
                   </td>
-                  {allRides.map((ride) => {
+                  {rides.map((ride) => {
                     const pts = getPoints(rider.id, ride.id);
                     const participating = pts > 0;
                     const hasLocalChange =

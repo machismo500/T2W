@@ -1,0 +1,116 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+
+// GET /api/riders - list all rider profiles with participation stats
+export async function GET(req: NextRequest) {
+  try {
+    const searchParams = req.nextUrl.searchParams;
+    const search = searchParams.get("search") || "";
+    const includemerged = searchParams.get("includemerged") === "true";
+
+    const where: Record<string, unknown> = {};
+    if (!includemerged) {
+      where.mergedIntoId = null;
+    }
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    const profiles = await prisma.riderProfile.findMany({
+      where,
+      include: {
+        participations: {
+          include: { ride: { select: { id: true, rideNumber: true, title: true, startDate: true, distanceKm: true } } },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+
+    const riders = profiles.map((p: typeof profiles[number]) => ({
+      id: p.id,
+      name: p.name,
+      email: p.email,
+      phone: p.phone,
+      address: p.address,
+      emergencyContact: p.emergencyContact,
+      emergencyPhone: p.emergencyPhone,
+      bloodGroup: p.bloodGroup,
+      joinDate: p.joinDate.toISOString(),
+      avatarUrl: p.avatarUrl,
+      ridesOrganized: p.ridesOrganized,
+      sweepsDone: p.sweepsDone,
+      pilotsDone: p.pilotsDone,
+      mergedIntoId: p.mergedIntoId,
+      ridesCompleted: p.participations.length,
+      totalKm: p.participations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
+      totalPoints: p.participations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
+      ridesParticipated: p.participations.map((pp: typeof p.participations[number]) => ({
+        rideId: pp.ride.id,
+        rideNumber: pp.ride.rideNumber,
+        rideTitle: pp.ride.title,
+        rideDate: pp.ride.startDate.toISOString(),
+        distanceKm: pp.ride.distanceKm,
+        points: pp.points,
+      })),
+      participationMap: Object.fromEntries(
+        p.participations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
+      ),
+    }));
+
+    return NextResponse.json({ riders });
+  } catch (error) {
+    console.error("[T2W] List riders error:", error);
+    return NextResponse.json({ error: "Failed to load riders" }, { status: 500 });
+  }
+}
+
+// POST /api/riders - create a new rider profile (admin only)
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "superadmin" && user.role !== "core_member")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const data = await req.json();
+    const { name, email, phone, address, emergencyContact, emergencyPhone, bloodGroup } = data;
+
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    const profile = await prisma.riderProfile.create({
+      data: {
+        name: name.trim(),
+        email: (email || "").toLowerCase().trim(),
+        phone: phone || "",
+        address: address || "",
+        emergencyContact: emergencyContact || "",
+        emergencyPhone: emergencyPhone || "",
+        bloodGroup: bloodGroup || "",
+      },
+    });
+
+    // Auto-link if a user with this email exists
+    if (profile.email) {
+      const matchingUser = await prisma.user.findUnique({
+        where: { email: profile.email },
+      });
+      if (matchingUser && !matchingUser.linkedRiderId) {
+        await prisma.user.update({
+          where: { id: matchingUser.id },
+          data: { linkedRiderId: profile.id },
+        });
+      }
+    }
+
+    return NextResponse.json({ profile });
+  } catch (error) {
+    console.error("[T2W] Create rider error:", error);
+    return NextResponse.json({ error: "Failed to create rider" }, { status: 500 });
+  }
+}
