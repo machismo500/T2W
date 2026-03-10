@@ -4,12 +4,12 @@
   "description": "This is a repo for T2W Website",
   "scripts": {
     "dev": "next dev",
-    "build": "npx prisma generate && npx prisma db push && npx tsx scripts/seed-admins.ts && next build",
+    "build": "npx prisma generate && npx prisma db push && npx tsx scripts/seed-admins.ts && npx tsx scripts/seed-rider-profiles.ts && next build",
     "start": "next start",
     "db:push": "npx prisma db push",
     "lint": "next lint",
     "db:migrate": "npx prisma migrate dev",
-    "db:seed": "npx tsx scripts/seed-admins.ts",
+    "db:seed": "npx tsx scripts/seed-admins.ts && npx tsx scripts/seed-rider-profiles.ts",
     "db:reset": "npx prisma migrate reset --force",
     "db:studio": "npx prisma studio",
     "postinstall": "npx prisma generate"

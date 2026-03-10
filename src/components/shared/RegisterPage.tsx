@@ -48,9 +48,19 @@ export function RegisterPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [emailCheckResult, setEmailCheckResult] = useState<{
+    hasAccount: boolean;
+    hasRiderProfile: boolean;
+    riderProfileName: string | null;
+  } | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
 
   const handleChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    // Reset email check when email changes
+    if (field === "email") {
+      setEmailCheckResult(null);
+    }
   };
 
   const handleSendOtp = async () => {
@@ -113,6 +123,29 @@ export function RegisterPage() {
         setError("Please enter a valid phone number");
         return;
       }
+
+      // Check if email already has an account
+      setCheckingEmail(true);
+      try {
+        const res = await fetch("/api/riders/check-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: formData.email }),
+        });
+        const data = await res.json();
+        setEmailCheckResult(data);
+
+        if (data.hasAccount) {
+          setError("An account with this email already exists. Please log in instead.");
+          setCheckingEmail(false);
+          return;
+        }
+      } catch {
+        // If check fails, proceed anyway (registration will catch duplicates)
+      } finally {
+        setCheckingEmail(false);
+      }
+
       // Move to email verification step
       setStep(2);
       return;
@@ -201,9 +234,16 @@ export function RegisterPage() {
         <div className="card">
           {/* Error Message */}
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                {error}
+                {error.includes("already exists") && (
+                  <Link href="/login" className="ml-1 font-medium text-t2w-accent hover:underline">
+                    Go to Login &rarr;
+                  </Link>
+                )}
+              </div>
             </div>
           )}
 
@@ -310,6 +350,12 @@ export function RegisterPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {step === 1 ? (
                 <>
+                  {emailCheckResult?.hasRiderProfile && !emailCheckResult?.hasAccount && (
+                    <div className="mb-2 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-400">
+                      <CheckCircle className="mr-1.5 inline h-4 w-4" />
+                      Welcome back, {emailCheckResult.riderProfileName}! Your existing rider profile will be linked to your account.
+                    </div>
+                  )}
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-300">
                       Full Name
@@ -412,10 +458,20 @@ export function RegisterPage() {
 
                   <button
                     type="submit"
+                    disabled={checkingEmail}
                     className="btn-primary flex w-full items-center justify-center gap-2"
                   >
-                    Continue
-                    <ArrowRight className="h-4 w-4" />
+                    {checkingEmail ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Checking...
+                      </>
+                    ) : (
+                      <>
+                        Continue
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
                   </button>
                 </>
               ) : (

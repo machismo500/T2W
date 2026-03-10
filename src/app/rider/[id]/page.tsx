@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import { riderProfiles } from "@/data/rider-profiles";
+import { prisma } from "@/lib/db";
 import { RiderProfilePage } from "@/components/rider/RiderProfilePage";
 
-export function generateStaticParams() {
-  return riderProfiles.map((rider) => ({
-    id: rider.id,
-  }));
-}
+// Use dynamic rendering since rider data comes from DB now
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -14,35 +11,60 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const rider = riderProfiles.find((r) => r.id === id);
 
-  if (!rider) {
+  // Query DB for rider metadata
+  let riderName: string | null = null;
+  let ridesCompleted = 0;
+  let totalKm = 0;
+
+  try {
+    const profile = await prisma.riderProfile.findUnique({
+      where: { id },
+      include: {
+        participations: {
+          include: { ride: { select: { distanceKm: true } } },
+        },
+      },
+    });
+    if (profile) {
+      riderName = profile.name;
+      ridesCompleted = profile.participations.length;
+      totalKm = profile.participations.reduce(
+        (sum: number, p: (typeof profile.participations)[number]) => sum + p.ride.distanceKm,
+        0
+      );
+    }
+  } catch {
+    // DB may not be available during build
+  }
+
+  if (!riderName) {
     return {
-      title: "Rider Not Found",
-      description: "The requested rider profile could not be found.",
+      title: "Rider Profile | Tales on 2 Wheels",
+      description: "View rider profile on Tales on 2 Wheels motorcycle community.",
     };
   }
 
-  const title = `${rider.name} - T2W Rider Profile | Tales on 2 Wheels`;
-  const description = `${rider.name} has completed ${rider.ridesCompleted} rides covering ${rider.totalKm.toLocaleString()} km with Tales on 2 Wheels motorcycle community. View ride history and achievements.`;
+  const title = `${riderName} - T2W Rider Profile | Tales on 2 Wheels`;
+  const description = `${riderName} has completed ${ridesCompleted} rides covering ${totalKm.toLocaleString()} km with Tales on 2 Wheels motorcycle community. View ride history and achievements.`;
 
   return {
     title,
     description,
     openGraph: {
-      title: `${rider.name} | Tales on 2 Wheels Rider`,
+      title: `${riderName} | Tales on 2 Wheels Rider`,
       description,
       images: [
         {
           url: "/og-image.jpg",
           width: 1200,
           height: 630,
-          alt: `${rider.name} - Tales on 2 Wheels Rider Profile`,
+          alt: `${riderName} - Tales on 2 Wheels Rider Profile`,
         },
       ],
     },
     alternates: {
-      canonical: `https://taleson2wheels.com/rider/${rider.id}`,
+      canonical: `https://taleson2wheels.com/rider/${id}`,
     },
   };
 }

@@ -31,14 +31,29 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
-import { getGridRiderNameToId } from "@/lib/grid-store";
 import type { RidePost } from "@/types";
 
-// Helper: look up a rider profile link by name (uses grid store)
-function getRiderLink(name: string): string | null {
+// Cache for rider name->id lookups (loaded once from API)
+let _riderNameToId: Record<string, string> | null = null;
+async function loadRiderNameToId(): Promise<Record<string, string>> {
+  if (_riderNameToId) return _riderNameToId;
+  try {
+    const data = await api.riders.list();
+    const map: Record<string, string> = {};
+    for (const r of data.riders || []) {
+      map[(r.name as string).toLowerCase().trim()] = r.id as string;
+    }
+    _riderNameToId = map;
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+// Helper: look up a rider profile link by name (uses API-loaded cache)
+function getRiderLink(name: string, nameToId: Record<string, string>): string | null {
   if (!name) return null;
   const key = name.toLowerCase().trim();
-  const nameToId = getGridRiderNameToId();
   return nameToId[key] ? `/rider/${nameToId[key]}` : null;
 }
 
@@ -88,6 +103,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const [registering, setRegistering] = useState(false);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
+  const [riderNameToId, setRiderNameToId] = useState<Record<string, string>>({});
 
   // Registration form state
   const [regForm, setRegForm] = useState({
@@ -131,6 +147,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   // Load admin-configured form settings
   useEffect(() => {
     api.regFormSettings.get().then((s) => setFormSettings(s));
+  }, []);
+
+  // Load rider name-to-id map for linking
+  useEffect(() => {
+    loadRiderNameToId().then(setRiderNameToId);
   }, []);
 
   const cancellationText = (formSettings.cancellationText as string) ||
@@ -523,7 +544,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     ? [{ label: "Accounts", name: ride.accountsBy, iconColor: "bg-green-400/10", textColor: "text-green-400" }]
                     : []),
                 ].filter(c => c.name).map((crew) => {
-                  const link = getRiderLink(crew.name);
+                  const link = getRiderLink(crew.name, riderNameToId);
                   const inner = (
                     <>
                       <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${crew.iconColor}`}>
@@ -557,7 +578,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 </h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {ride.riders.map((riderName, index) => {
-                    const riderId = getGridRiderNameToId()[riderName.toLowerCase().trim()];
+                    const riderId = riderNameToId[riderName.toLowerCase().trim()];
                     return riderId ? (
                       <Link
                         key={`${riderName}-${index}`}
@@ -1088,8 +1109,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 {ride.organisedBy && (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-t2w-muted">Organised By</span>
-                    {getRiderLink(ride.organisedBy) ? (
-                      <Link href={getRiderLink(ride.organisedBy)!} className="font-medium text-t2w-accent hover:underline">
+                    {getRiderLink(ride.organisedBy, riderNameToId) ? (
+                      <Link href={getRiderLink(ride.organisedBy, riderNameToId)!} className="font-medium text-t2w-accent hover:underline">
                         {ride.organisedBy}
                       </Link>
                     ) : (
@@ -1100,8 +1121,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 {ride.accountsBy && (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-t2w-muted">Accounts</span>
-                    {getRiderLink(ride.accountsBy) ? (
-                      <Link href={getRiderLink(ride.accountsBy)!} className="font-medium text-t2w-accent hover:underline">
+                    {getRiderLink(ride.accountsBy, riderNameToId) ? (
+                      <Link href={getRiderLink(ride.accountsBy, riderNameToId)!} className="font-medium text-t2w-accent hover:underline">
                         {ride.accountsBy}
                       </Link>
                     ) : (

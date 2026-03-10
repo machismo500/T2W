@@ -12,14 +12,13 @@ import {
 import {
   type RiderProfile,
 } from "@/data/rider-profiles";
+// Grid store still used for backward-compat in mock user/blog functions.
+// Rider data is now served via /api/riders (database-backed).
 import {
   getGridRiders,
   getGridRider,
   getGridRiderByEmail,
   getGridRiderNameToId,
-  getRidersForRide,
-  updateGridRider,
-  setGridParticipation,
   type GridRider,
 } from "@/lib/grid-store";
 import type { Ride, BlogPost, User, UserRole, RidePost, BlogApprovalStatus, RideRegistration } from "@/types";
@@ -725,11 +724,26 @@ export const api = {
       const ride = getAllRides().find((r) => r.id === id);
       if (!ride) throw new Error("Ride not found");
       const regs = getRideRegistrations();
-      // Get rider names from grid store (primary source of truth)
-      const gridRiderNames = getRidersForRide(id);
-      // Merge with any custom riders added directly to the ride
+      // Get rider names from API (database-backed)
+      let dbRiderNames: string[] = [];
+      try {
+        const ridersRes = await fetch(`/api/riders?rideId=${id}`);
+        if (ridersRes.ok) {
+          const data = await ridersRes.json();
+          const riders = data.riders || [];
+          // Filter riders who participated in this ride
+          dbRiderNames = riders
+            .filter((r: Record<string, unknown>) => {
+              const pMap = r.participationMap as Record<string, number> | undefined;
+              return pMap && pMap[id] && pMap[id] > 0;
+            })
+            .map((r: Record<string, unknown>) => r.name as string);
+        }
+      } catch {
+        // Fallback: use static ride.riders if API fails
+      }
       const customRiders = ride.riders || [];
-      const allRiderNames = [...new Set([...gridRiderNames, ...customRiders])];
+      const allRiderNames = [...new Set([...dbRiderNames, ...customRiders])];
       return {
         ride: {
           ...ride,
@@ -883,31 +897,65 @@ export const api = {
   },
 
   riders: {
-    list: async () => {
-      await delay(150);
-      return { riders: getRiderProfiles() };
+    list: async (search?: string) => {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      const res = await fetch(`/api/riders?${params}`);
+      if (!res.ok) throw new Error("Failed to load riders");
+      return res.json();
     },
     get: async (id: string) => {
-      await delay(100);
-      const rider = getGridRider(id);
-      if (!rider) throw new Error("Rider not found");
-      return { rider };
+      const res = await fetch(`/api/riders/${id}`);
+      if (!res.ok) {
+        const data = await res.json();
+        if (data.mergedIntoId) {
+          // Follow the merge redirect
+          const res2 = await fetch(`/api/riders/${data.mergedIntoId}`);
+          if (!res2.ok) throw new Error("Rider not found");
+          return res2.json();
+        }
+        throw new Error("Rider not found");
+      }
+      return res.json();
     },
     update: async (id: string, data: Partial<RiderProfile>) => {
-      await delay(100);
-      updateGridRider(id, data);
-      const rider = getGridRider(id);
-      return { rider };
+      const res = await fetch(`/api/riders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update rider");
+      return res.json();
+    },
+    create: async (data: Record<string, unknown>) => {
+      const res = await fetch("/api/riders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create rider");
+      return res.json();
+    },
+    delete: async (id: string) => {
+      const res = await fetch(`/api/riders/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete rider");
+      return res.json();
+    },
+    checkEmail: async (email: string) => {
+      const res = await fetch("/api/riders/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error("Failed to check email");
+      return res.json();
     },
     getByName: async (name: string) => {
-      await delay(50);
-      const key = name.toLowerCase().trim();
-      const id = getRiderNameToIdMap()[key];
-      if (id) {
-        const rider = getRiderProfiles().find((r) => r.id === id);
-        return { rider: rider || null, riderId: id };
-      }
-      return { rider: null, riderId: null };
+      const data = await api.riders.list(name);
+      const rider = (data.riders as RiderProfile[]).find(
+        (r: RiderProfile) => r.name.toLowerCase().trim() === name.toLowerCase().trim()
+      );
+      return { rider: rider || null, riderId: rider?.id || null };
     },
   },
 
@@ -1295,32 +1343,70 @@ export const api = {
     },
   },
 
-  // Rider-ride participation — backed by grid store (primary database)
+  // Rider-ride participation — backed by database
   participation: {
     getOverrides: (): Record<string, { added: string[]; removed: string[] }> => {
-      // Legacy compat: return empty since grid store is now the source of truth
       return {};
     },
-    toggle: (riderId: string, rideId: string, participate: boolean) => {
-      // Delegate to grid store — the single source of truth
-      setGridParticipation(riderId, rideId, participate ? 5 : 0);
-      return { success: true };
+    toggle: async (riderId: string, rideId: string, participate: boolean) => {
+      const res = await fetch("/api/riders/participation", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ riderProfileId: riderId, rideId, points: participate ? 5 : 0 }),
+      });
+      if (!res.ok) throw new Error("Failed to update participation");
+      return res.json();
     },
-    setPoints: (riderId: string, rideId: string, points: number) => {
-      setGridParticipation(riderId, rideId, points);
-      return { success: true };
+    setPoints: async (riderId: string, rideId: string, points: number) => {
+      const res = await fetch("/api/riders/participation", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ riderProfileId: riderId, rideId, points }),
+      });
+      if (!res.ok) throw new Error("Failed to set points");
+      return res.json();
     },
-    getEffectiveParticipation: (riderId: string): string[] => {
-      const rider = getGridRider(riderId);
-      if (!rider) return [];
-      return Object.entries(rider.participationMap)
-        .filter(([, pts]) => pts > 0)
-        .map(([rideId]) => rideId);
+    bulkSave: async (changes: Array<{ riderProfileId: string; rideId: string; points: number }>) => {
+      const res = await fetch("/api/riders/participation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changes }),
+      });
+      if (!res.ok) throw new Error("Failed to save participation");
+      return res.json();
+    },
+    getEffectiveParticipation: async (riderId: string): Promise<string[]> => {
+      try {
+        const data = await api.riders.get(riderId);
+        const rider = data.rider;
+        if (!rider?.ridesParticipated) return [];
+        return rider.ridesParticipated.map((r: { rideId: string }) => r.rideId);
+      } catch {
+        return [];
+      }
+    },
+  },
+
+  // Profile merging (super admin)
+  merge: {
+    findDuplicates: async () => {
+      const res = await fetch("/api/riders/merge");
+      if (!res.ok) throw new Error("Failed to find duplicates");
+      return res.json();
+    },
+    mergeProfiles: async (sourceId: string, targetId: string) => {
+      const res = await fetch("/api/riders/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceId, targetId }),
+      });
+      if (!res.ok) throw new Error("Failed to merge profiles");
+      return res.json();
     },
   },
 
   seed: async () => {
     await delay(100);
-    return { success: true, message: "Using client-side mock data" };
+    return { success: true, message: "Using database-backed data" };
   },
 };

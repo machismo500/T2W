@@ -80,8 +80,27 @@ export async function getCurrentUser() {
 
   if (!user) return null;
 
+  // Auto-link to rider profile if not already linked
+  let linkedRiderId = user.linkedRiderId;
+  if (!linkedRiderId) {
+    try {
+      const matchingProfile = await prisma.riderProfile.findFirst({
+        where: { email: user.email.toLowerCase().trim(), mergedIntoId: null },
+      });
+      if (matchingProfile) {
+        linkedRiderId = matchingProfile.id;
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { linkedRiderId: matchingProfile.id },
+        });
+      }
+    } catch {
+      // RiderProfile table may not exist yet during migration
+    }
+  }
+
   const { password: _, ...userWithoutPassword } = user;
-  return userWithoutPassword;
+  return { ...userWithoutPassword, linkedRiderId };
 }
 
 export function requireAuth(user: unknown): asserts user is NonNullable<
