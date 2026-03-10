@@ -63,11 +63,11 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
       }));
       setRiders(riderData);
 
-      const rideData = (ridesRes.rides || [])
-        .map((r: Record<string, unknown>) => ({
-          id: r.id as string,
-          rideNumber: r.rideNumber as string,
-          title: r.title as string,
+      const rideData = ((ridesRes.rides || []) as Array<{ id: string; rideNumber: string; title: string }>)
+        .map((r) => ({
+          id: r.id,
+          rideNumber: r.rideNumber,
+          title: r.title,
         }))
         .sort((a: RideData, b: RideData) => {
           const numA = parseInt(a.rideNumber.replace("#", ""));
