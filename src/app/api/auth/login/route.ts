@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyPassword, createToken, setAuthCookie } from "@/lib/auth";
+import { awardBadgesForUser } from "@/app/api/badges/route";
 
 export async function POST(req: NextRequest) {
   try {
@@ -72,10 +73,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Auto-award badges based on totalKm
+    try {
+      await awardBadgesForUser(user.id, user.totalKm);
+    } catch {
+      // Badge table may not exist yet
+    }
+
+    // Re-fetch with updated badges
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        motorcycles: true,
+        earnedBadges: { include: { badge: true } },
+      },
+    });
+
     const token = await createToken(user.id);
     await setAuthCookie(token);
 
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, ...userWithoutPassword } = updatedUser!;
     return NextResponse.json({
       user: { ...userWithoutPassword, linkedRiderId },
     });

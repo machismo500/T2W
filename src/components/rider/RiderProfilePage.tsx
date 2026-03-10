@@ -83,13 +83,12 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
             })
             .catch(() => {});
         }
-        // Load avatar from shared store first, then per-key fallback
+        // Load avatar: DB avatarUrl > localStorage cache > legacy localStorage
+        const dbAvatar = d.rider.avatarUrl;
         const sharedAvatar = api.avatars.get(riderId);
-        const legacyAvatar = localStorage.getItem(`t2w_avatar_${riderId}`);
-        const avatar = sharedAvatar || legacyAvatar;
+        const legacyAvatar = typeof window !== "undefined" ? localStorage.getItem(`t2w_avatar_${riderId}`) : null;
+        const avatar = dbAvatar || sharedAvatar || legacyAvatar;
         if (avatar) setAvatarUrl(avatar);
-        // Grid store is the primary source - data is already loaded from api.riders.get
-        // No need for separate localStorage overrides
       })
       .catch((err: unknown) => {
         const e = err as Error;
@@ -100,7 +99,7 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       });
   }, [riderId, user?.linkedRiderId]);
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -111,39 +110,40 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       alert("Image must be under 5MB");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setAvatarUrl(dataUrl);
-      // Save to both legacy per-key and shared store for visibility
-      localStorage.setItem(`t2w_avatar_${riderId}`, dataUrl);
-      api.avatars.save(riderId, dataUrl);
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Upload to server and persist URL in RiderProfile.avatarUrl
+      const url = await api.avatars.upload(riderId, file);
+      setAvatarUrl(url);
+      // Also update the local rider state
+      if (rider) setRider({ ...rider, avatarUrl: url });
+    } catch (err) {
+      console.error("Avatar upload failed:", err);
+      // Fallback: store as base64 in localStorage
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setAvatarUrl(dataUrl);
+        api.avatars.save(riderId, dataUrl);
+      };
+      reader.readAsDataURL(file);
+    }
   };
+
+  const [saving, setSaving] = useState(false);
 
   const handleSaveProfile = async () => {
     if (!rider) return;
-    const updates = { ...editForm };
-    // Save to grid store (primary database) - persists across all pages
+    setSaving(true);
     try {
-      await api.riders.update(riderId, updates);
-    } catch {
-      // Fallback: save to localStorage
-      localStorage.setItem(`t2w_profile_${riderId}`, JSON.stringify(updates));
+      await api.riders.update(riderId, editForm);
+      setRider({ ...rider, ...editForm });
+      setEditing(false);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      alert("Failed to save profile. Please try again.");
+    } finally {
+      setSaving(false);
     }
-    // Also update user record for account data sync
-    try {
-      await api.users.update(riderId, {
-        name: updates.name,
-        email: updates.email,
-        phone: updates.phone,
-      });
-    } catch {
-      // User record may not exist yet for static rider profiles
-    }
-    setRider({ ...rider, ...updates });
-    setEditing(false);
   };
 
   const handleCancelEdit = () => {
@@ -466,10 +466,11 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
             <div className="mt-4 flex gap-3">
               <button
                 onClick={handleSaveProfile}
+                disabled={saving}
                 className="btn-primary flex items-center gap-2"
               >
-                <Save className="h-4 w-4" />
-                Save Changes
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {saving ? "Saving..." : "Save Changes"}
               </button>
               <button
                 onClick={handleCancelEdit}

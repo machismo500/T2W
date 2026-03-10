@@ -41,3 +41,6 @@ next-env.d.ts
 
 # generated prisma client (regenerated on build)
 /generated/
+
+# user uploads
+/public/uploads/

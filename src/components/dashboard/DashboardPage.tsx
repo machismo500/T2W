@@ -22,6 +22,9 @@ import {
   Edit3,
   Loader2,
   LogIn,
+  Trash2,
+  X,
+  Save,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
@@ -47,12 +50,40 @@ const badgeIcons: Record<string, React.ElementType> = {
   crown: Crown,
 };
 
+type Motorcycle = {
+  id: string;
+  make: string;
+  model: string;
+  year: number;
+  cc: number;
+  color: string;
+  nickname?: string | null;
+};
+
+const emptyMotoForm = { make: "", model: "", year: new Date().getFullYear(), cc: 0, color: "", nickname: "" };
+
 export function DashboardPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState<"overview" | "rides" | "bikes" | "badges">("overview");
   const [completedRides, setCompletedRides] = useState<DashboardRide[]>([]);
   const [upcomingRides, setUpcomingRides] = useState<DashboardRide[]>([]);
   const [loading, setLoading] = useState(true);
+  const [motorcycles, setMotorcycles] = useState<Motorcycle[]>([]);
+  const [showMotoForm, setShowMotoForm] = useState(false);
+  const [editingMotoId, setEditingMotoId] = useState<string | null>(null);
+  const [motoForm, setMotoForm] = useState(emptyMotoForm);
+  const [motoSaving, setMotoSaving] = useState(false);
+  const [dashAvatar, setDashAvatar] = useState<string | null>(null);
+
+  const loadMotorcycles = async () => {
+    try {
+      const data = await api.motorcycles.list();
+      setMotorcycles((data as { motorcycles: Motorcycle[] }).motorcycles || []);
+    } catch {
+      // Use user.motorcycles as fallback
+      if (user?.motorcycles) setMotorcycles(user.motorcycles as Motorcycle[]);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -68,7 +99,73 @@ export function DashboardPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    loadMotorcycles();
+
+    // Load avatar from linked rider profile
+    if (user.linkedRiderId) {
+      api.riders.get(user.linkedRiderId)
+        .then((data: { rider?: { avatarUrl?: string } }) => {
+          if (data.rider?.avatarUrl) setDashAvatar(data.rider.avatarUrl);
+        })
+        .catch(() => {
+          const cached = api.avatars.get(user.linkedRiderId!);
+          if (cached) setDashAvatar(cached);
+        });
+    }
   }, [user]);
+
+  const handleSaveMoto = async () => {
+    if (!motoForm.make || !motoForm.model) return;
+    setMotoSaving(true);
+    try {
+      if (editingMotoId) {
+        await api.motorcycles.update(editingMotoId, motoForm);
+      } else {
+        await api.motorcycles.create(motoForm);
+      }
+      await loadMotorcycles();
+      await refreshUser();
+      setShowMotoForm(false);
+      setEditingMotoId(null);
+      setMotoForm(emptyMotoForm);
+    } catch (err) {
+      console.error("Failed to save motorcycle:", err);
+      alert("Failed to save motorcycle. Please try again.");
+    } finally {
+      setMotoSaving(false);
+    }
+  };
+
+  const handleEditMoto = (moto: Motorcycle) => {
+    setEditingMotoId(moto.id);
+    setMotoForm({
+      make: moto.make,
+      model: moto.model,
+      year: moto.year,
+      cc: moto.cc,
+      color: moto.color,
+      nickname: moto.nickname || "",
+    });
+    setShowMotoForm(true);
+  };
+
+  const handleDeleteMoto = async (id: string) => {
+    if (!confirm("Delete this motorcycle?")) return;
+    try {
+      await api.motorcycles.delete(id);
+      await loadMotorcycles();
+      await refreshUser();
+    } catch (err) {
+      console.error("Failed to delete motorcycle:", err);
+    }
+  };
+
+  const handleCancelMotoForm = () => {
+    setShowMotoForm(false);
+    setEditingMotoId(null);
+    setMotoForm(emptyMotoForm);
+  };
 
   if (authLoading) {
     return (
@@ -116,11 +213,17 @@ export function DashboardPage() {
           <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-t2w-accent/20 to-t2w-gold/20" />
           <div className="relative flex flex-col gap-6 sm:flex-row sm:items-end">
             <div className="relative">
-              <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-t2w-accent to-red-600 font-display text-3xl font-bold text-white shadow-xl shadow-t2w-accent/20">
-                {user.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")}
+              <div className="h-24 w-24 overflow-hidden rounded-2xl shadow-xl shadow-t2w-accent/20">
+                {dashAvatar ? (
+                  <img src={dashAvatar} alt={user.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-t2w-accent to-red-600 font-display text-3xl font-bold text-white">
+                    {user.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
+                  </div>
+                )}
               </div>
               {user.linkedRiderId && (
                 <Link href={`/rider/${user.linkedRiderId}`} className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-t2w-surface border border-t2w-border text-t2w-muted hover:text-white transition-colors" title="Edit avatar on your rider profile">
@@ -178,7 +281,7 @@ export function DashboardPage() {
             { icon: Bike, label: "Rides Completed", value: user.ridesCompleted, color: "text-t2w-accent" },
             { icon: Gauge, label: "Total KMs", value: user.totalKm.toLocaleString(), color: "text-t2w-gold" },
             { icon: Trophy, label: "Badges Earned", value: userBadges.length, color: "text-purple-400" },
-            { icon: Bike, label: "Motorcycles", value: user.motorcycles.length, color: "text-green-400" },
+            { icon: Bike, label: "Motorcycles", value: motorcycles.length, color: "text-green-400" },
           ].map(({ icon: Icon, label, value, color }) => (
             <div key={label} className="card text-center">
               <Icon className={`mx-auto h-6 w-6 ${color}`} />
@@ -349,19 +452,80 @@ export function DashboardPage() {
               <div>
                 <div className="mb-6 flex items-center justify-between">
                   <h3 className="font-display text-xl font-bold text-white">
-                    My Motorcycles ({user.motorcycles.length})
+                    My Motorcycles ({motorcycles.length})
                   </h3>
-                  <button className="btn-secondary flex items-center gap-2 !px-4 !py-2 text-sm">
+                  <button
+                    onClick={() => { setEditingMotoId(null); setMotoForm(emptyMotoForm); setShowMotoForm(true); }}
+                    className="btn-secondary flex items-center gap-2 !px-4 !py-2 text-sm"
+                  >
                     <Plus className="h-4 w-4" />
                     Add Motorcycle
                   </button>
                 </div>
-                <div className="grid gap-6 sm:grid-cols-2">
-                  {user.motorcycles.map((moto) => (
-                    <div key={moto.id} className="card group relative">
-                      <button className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-lg bg-t2w-surface-light text-t2w-muted opacity-0 transition-all group-hover:opacity-100 hover:text-white">
-                        <Edit3 className="h-3.5 w-3.5" />
+
+                {/* Add/Edit Motorcycle Form */}
+                {showMotoForm && (
+                  <div className="card mb-6 border border-t2w-accent/30">
+                    <h4 className="mb-4 font-display text-lg font-bold text-white">
+                      {editingMotoId ? "Edit Motorcycle" : "Add New Motorcycle"}
+                    </h4>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-xs text-t2w-muted">Make *</label>
+                        <input type="text" placeholder="e.g. Royal Enfield" value={motoForm.make} onChange={(e) => setMotoForm({ ...motoForm, make: e.target.value })} className="input-field" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-t2w-muted">Model *</label>
+                        <input type="text" placeholder="e.g. Himalayan 450" value={motoForm.model} onChange={(e) => setMotoForm({ ...motoForm, model: e.target.value })} className="input-field" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-t2w-muted">Year</label>
+                        <input type="number" placeholder="2024" value={motoForm.year} onChange={(e) => setMotoForm({ ...motoForm, year: Number(e.target.value) })} className="input-field" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-t2w-muted">Engine CC</label>
+                        <input type="number" placeholder="450" value={motoForm.cc || ""} onChange={(e) => setMotoForm({ ...motoForm, cc: Number(e.target.value) })} className="input-field" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-t2w-muted">Color</label>
+                        <input type="text" placeholder="e.g. Black" value={motoForm.color} onChange={(e) => setMotoForm({ ...motoForm, color: e.target.value })} className="input-field" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-t2w-muted">Nickname</label>
+                        <input type="text" placeholder='e.g. "The Beast"' value={motoForm.nickname} onChange={(e) => setMotoForm({ ...motoForm, nickname: e.target.value })} className="input-field" />
+                      </div>
+                    </div>
+                    <div className="mt-4 flex gap-3">
+                      <button onClick={handleSaveMoto} disabled={motoSaving || !motoForm.make || !motoForm.model} className="btn-primary flex items-center gap-2">
+                        {motoSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {editingMotoId ? "Save Changes" : "Add Motorcycle"}
                       </button>
+                      <button onClick={handleCancelMotoForm} className="flex items-center gap-2 rounded-xl bg-t2w-surface-light px-4 py-2 text-sm font-medium text-t2w-muted hover:text-white">
+                        <X className="h-4 w-4" /> Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {motorcycles.map((moto) => (
+                    <div key={moto.id} className="card group relative">
+                      <div className="absolute top-4 right-4 flex gap-1 opacity-0 transition-all group-hover:opacity-100">
+                        <button
+                          onClick={() => handleEditMoto(moto)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-t2w-surface-light text-t2w-muted hover:text-white"
+                          title="Edit"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMoto(moto.id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-t2w-surface-light text-t2w-muted hover:text-red-400"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                       <div className="flex items-start gap-4">
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-t2w-accent/20 to-red-600/20">
                           <Bike className="h-8 w-8 text-t2w-accent" />
@@ -374,14 +538,26 @@ export function DashboardPage() {
                             <p className="text-sm text-t2w-accent">&quot;{moto.nickname}&quot;</p>
                           )}
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="rounded-lg bg-t2w-surface-light px-2.5 py-1 text-xs text-t2w-muted">{moto.year}</span>
-                            <span className="rounded-lg bg-t2w-surface-light px-2.5 py-1 text-xs text-t2w-muted">{moto.cc}cc</span>
-                            <span className="rounded-lg bg-t2w-surface-light px-2.5 py-1 text-xs text-t2w-muted">{moto.color}</span>
+                            {moto.year > 0 && <span className="rounded-lg bg-t2w-surface-light px-2.5 py-1 text-xs text-t2w-muted">{moto.year}</span>}
+                            {moto.cc > 0 && <span className="rounded-lg bg-t2w-surface-light px-2.5 py-1 text-xs text-t2w-muted">{moto.cc}cc</span>}
+                            {moto.color && <span className="rounded-lg bg-t2w-surface-light px-2.5 py-1 text-xs text-t2w-muted">{moto.color}</span>}
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
+                  {motorcycles.length === 0 && !showMotoForm && (
+                    <div className="col-span-full py-12 text-center">
+                      <Bike className="mx-auto h-12 w-12 text-t2w-border" />
+                      <p className="mt-3 text-t2w-muted">No motorcycles added yet.</p>
+                      <button
+                        onClick={() => setShowMotoForm(true)}
+                        className="mt-4 btn-primary inline-flex items-center gap-2 text-sm"
+                      >
+                        <Plus className="h-4 w-4" /> Add Your First Motorcycle
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

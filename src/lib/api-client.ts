@@ -1106,20 +1106,32 @@ export const api = {
 
   motorcycles: {
     list: async () => {
-      await delay(100);
-      return { motorcycles: mockCurrentUser.motorcycles };
+      const res = await fetch("/api/motorcycles");
+      if (!res.ok) throw new Error("Failed to load motorcycles");
+      return res.json();
     },
     create: async (data: Record<string, unknown>) => {
-      await delay(300);
-      return { motorcycle: { id: `moto-${Date.now()}`, ...data } };
+      const res = await fetch("/api/motorcycles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create motorcycle");
+      return res.json();
     },
     update: async (id: string, data: Record<string, unknown>) => {
-      await delay(200);
-      return { motorcycle: { id, ...data } };
+      const res = await fetch(`/api/motorcycles/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update motorcycle");
+      return res.json();
     },
     delete: async (id: string) => {
-      await delay(200);
-      return { success: true, id };
+      const res = await fetch(`/api/motorcycles/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete motorcycle");
+      return res.json();
     },
   },
 
@@ -1330,17 +1342,60 @@ export const api = {
     },
   },
 
-  // Shared avatar storage
+  // Avatar storage - persisted to DB via upload API
   avatars: {
     get: (riderId: string): string | null => {
+      // Check localStorage cache first for immediate display
       const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
       return avatars[riderId] || null;
     },
     save: (riderId: string, dataUrl: string) => {
+      // Cache locally for immediate display
       const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
       avatars[riderId] = dataUrl;
       setStorage(AVATARS_KEY, avatars);
     },
+    // Upload file to server and persist URL in RiderProfile.avatarUrl
+    upload: async (riderId: string, file: File): Promise<string> => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "avatar");
+      formData.append("targetId", riderId);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Failed to upload avatar");
+      const data = await res.json();
+      // Cache the URL locally too
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      avatars[riderId] = data.url;
+      setStorage(AVATARS_KEY, avatars);
+      return data.url as string;
+    },
+  },
+
+  // Badge management
+  badges: {
+    list: async () => {
+      const res = await fetch("/api/badges");
+      if (!res.ok) throw new Error("Failed to load badges");
+      return res.json();
+    },
+    checkAndAward: async () => {
+      const res = await fetch("/api/badges", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to check badges");
+      return res.json();
+    },
+  },
+
+  // File upload
+  upload: async (file: File, type?: string, targetId?: string): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (type) formData.append("type", type);
+    if (targetId) formData.append("targetId", targetId);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    if (!res.ok) throw new Error("Failed to upload file");
+    const data = await res.json();
+    return data.url as string;
   },
 
   // Rider-ride participation — backed by database
