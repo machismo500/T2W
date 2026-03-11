@@ -33,20 +33,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "File must be under 5MB" }, { status: 400 });
     }
 
-    // Generate unique filename
-    const ext = file.name.split(".").pop() || "jpg";
-    const hash = crypto.randomBytes(8).toString("hex");
-    const filename = `${type || "img"}-${hash}.${ext}`;
-
-    // Save to public/uploads directory
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadDir, { recursive: true });
-
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    await writeFile(path.join(uploadDir, filename), buffer);
+    let url: string;
 
-    const url = `/uploads/${filename}`;
+    // Try file-system storage first (works locally), fall back to base64 in DB (works on Vercel)
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const hash = crypto.randomBytes(8).toString("hex");
+      const filename = `${type || "img"}-${hash}.${ext}`;
+      const uploadDir = path.join(process.cwd(), "public", "uploads");
+      await mkdir(uploadDir, { recursive: true });
+      await writeFile(path.join(uploadDir, filename), buffer);
+      url = `/uploads/${filename}`;
+    } catch {
+      // File system is read-only (e.g. Vercel) — store as base64 data URL in DB directly
+      const base64 = buffer.toString("base64");
+      url = `data:${file.type};base64,${base64}`;
+    }
 
     // If this is an avatar upload, update the RiderProfile in the database
     if (type === "avatar" && targetId) {
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ url, filename });
+    return NextResponse.json({ url });
   } catch (error) {
     console.error("[T2W] Upload error:", error);
     return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
