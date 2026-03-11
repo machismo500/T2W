@@ -12,6 +12,7 @@ interface RiderData {
   address: string;
   emergencyContact: string;
   emergencyPhone: string;
+  userRole: string | null;
   participationMap: Record<string, number>;
 }
 
@@ -59,6 +60,7 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
         address: r.address as string,
         emergencyContact: r.emergencyContact as string,
         emergencyPhone: r.emergencyPhone as string,
+        userRole: (r.userRole as string) || null,
         participationMap: (r.participationMap || {}) as Record<string, number>,
       }));
       setRiders(riderData);
@@ -383,7 +385,12 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
                   }`}
                 >
                   <td className="sticky left-0 z-10 bg-inherit px-4 py-2 font-medium text-white whitespace-nowrap">
-                    <span title={`${rider.email}\n${rider.phone}`}>{rider.name}</span>
+                    <span title={`${rider.email}\n${rider.phone}`} className="inline-flex items-center gap-1.5">
+                      {rider.name}
+                      {(rider.userRole === "core_member" || rider.userRole === "superadmin") && (
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
+                      )}
+                    </span>
                   </td>
                   <td className="sticky z-10 bg-inherit px-2 py-2 text-center font-bold text-t2w-accent">
                     {count}

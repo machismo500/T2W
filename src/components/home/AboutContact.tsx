@@ -109,9 +109,8 @@ export function AboutContact() {
     { icon: Users, title: "Our Community", key: "community" as const },
   ];
 
-  // Build crew display list
-  const crewDisplay = crewMembers.length > 0
-    ? crewMembers.map((m) => {
+  // Build crew display list - fully dynamic from DB roles
+  const crewDisplay = crewMembers.map((m) => {
         // Avatar: prefer DB-backed URL from API, fallback to localStorage
         const localAvatar = m.linkedRiderId ? api.avatars.get(m.linkedRiderId) : null;
         const legacyAvatar = m.linkedRiderId && typeof window !== "undefined"
@@ -129,15 +128,7 @@ export function AboutContact() {
           riderId: m.linkedRiderId,
           avatarUrl: m.avatarUrl || localAvatar || legacyAvatar,
         };
-      })
-    : [
-        // Fallback static list
-        { name: "Roshan Manuel", role: "Core Member", initials: "RM", riderId: undefined as string | undefined, avatarUrl: null as string | null },
-        { name: "Sanjeev Kumar", role: "Core Member", initials: "SK", riderId: undefined as string | undefined, avatarUrl: null as string | null },
-        { name: "Jay Trivedi", role: "Ride Organiser & Pilot", initials: "JT", riderId: undefined as string | undefined, avatarUrl: null as string | null },
-        { name: "Shreyas BM", role: "Ride Organiser", initials: "SB", riderId: undefined as string | undefined, avatarUrl: null as string | null },
-        { name: "Harish Mysuru", role: "Ride Organiser & Accounts", initials: "HM", riderId: undefined as string | undefined, avatarUrl: null as string | null },
-      ];
+      });
 
   return (
     <section id="about" className="relative py-24">
@@ -210,7 +201,8 @@ export function AboutContact() {
             </div>
           )}
 
-          {/* Team */}
+          {/* Team - only shown when core members exist in DB */}
+          {crewDisplay.length > 0 && (
           <div className="mt-16 text-center">
             <h3 className="mb-8 font-display text-2xl font-bold text-white">
               The Crew
@@ -252,6 +244,7 @@ export function AboutContact() {
               })}
             </div>
           </div>
+          )}
         </div>
 
         {/* Contact Section */}
