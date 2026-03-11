@@ -20,6 +20,10 @@ export async function GET(
             },
           },
         },
+        linkedUsers: {
+          select: { role: true },
+          take: 1,
+        },
       },
     });
 
@@ -49,6 +53,7 @@ export async function GET(
       ridesOrganized: profile.ridesOrganized,
       sweepsDone: profile.sweepsDone,
       pilotsDone: profile.pilotsDone,
+      userRole: profile.linkedUsers[0]?.role || null,
       ridesCompleted: profile.participations.length,
       totalKm: profile.participations.reduce((sum: number, p: typeof profile.participations[number]) => sum + p.ride.distanceKm, 0),
       totalPoints: profile.participations.reduce((sum: number, p: typeof profile.participations[number]) => sum + p.points, 0),

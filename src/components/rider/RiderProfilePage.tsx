@@ -438,6 +438,11 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 <h1 className="font-display text-3xl font-bold text-white">
                   {rider.name}
                 </h1>
+                {rider.userRole && (rider.userRole === "core_member" || rider.userRole === "superadmin") && (
+                  <span className="rounded-lg bg-t2w-accent/20 px-3 py-1 text-xs font-semibold text-t2w-accent">
+                    Core
+                  </span>
+                )}
                 <span
                   className={`rounded-lg px-3 py-1 text-xs font-semibold ${badge.color} ${badge.bg}`}
                 >

@@ -33,10 +33,11 @@ import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import type { RidePost } from "@/types";
 
-// Cache for rider name->id and avatar lookups (loaded once from API)
+// Cache for rider name->id, avatar, and role lookups (loaded once from API)
 type RiderLookupCache = {
   nameToId: Record<string, string>;
   idToAvatar: Record<string, string>;
+  idToRole: Record<string, string>;
 };
 let _riderCache: RiderLookupCache | null = null;
 let _riderCacheTime = 0;
@@ -64,7 +65,8 @@ async function loadRiderCache(): Promise<RiderLookupCache> {
     const data = await api.riders.list();
     const nameToId: Record<string, string> = {};
     const idToAvatar: Record<string, string> = {};
-    const riders = (data.riders || []) as Array<{ id: string; name: string; avatarUrl?: string }>;
+    const idToRole: Record<string, string> = {};
+    const riders = (data.riders || []) as Array<{ id: string; name: string; avatarUrl?: string; userRole?: string }>;
 
     // Also load localStorage-cached avatars as fallback (for when server upload failed on Vercel)
     let localAvatars: Record<string, string> = {};
@@ -113,12 +115,16 @@ async function loadRiderCache(): Promise<RiderLookupCache> {
       if (avatar) {
         idToAvatar[r.id] = avatar;
       }
+      // Track user role for "Core" tagging
+      if (r.userRole) {
+        idToRole[r.id] = r.userRole;
+      }
     }
-    _riderCache = { nameToId, idToAvatar };
+    _riderCache = { nameToId, idToAvatar, idToRole };
     _riderCacheTime = Date.now();
     return _riderCache;
   } catch {
-    return { nameToId: {}, idToAvatar: {} };
+    return { nameToId: {}, idToAvatar: {}, idToRole: {} };
   }
 }
 
@@ -197,6 +203,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const posterInputRef = useRef<HTMLInputElement>(null);
   const [riderNameToId, setRiderNameToId] = useState<Record<string, string>>({});
   const [riderIdToAvatar, setRiderIdToAvatar] = useState<Record<string, string>>({});
+  const [riderIdToRole, setRiderIdToRole] = useState<Record<string, string>>({});
 
   // Registration form state
   const [regForm, setRegForm] = useState({
@@ -247,6 +254,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     loadRiderCache().then((cache) => {
       setRiderNameToId(cache.nameToId);
       setRiderIdToAvatar(cache.idToAvatar);
+      setRiderIdToRole(cache.idToRole);
     });
   }, []);
 
@@ -655,7 +663,12 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                       </div>
                       <div>
                         <p className="text-xs text-t2w-muted">{crew.label}</p>
-                        <p className={`font-semibold ${link ? "text-t2w-accent" : "text-white"}`}>{crew.name}</p>
+                        <p className={`font-semibold ${link ? "text-t2w-accent" : "text-white"} flex items-center gap-1.5`}>
+                          {crew.name}
+                          {crewRiderId && (riderIdToRole[crewRiderId] === "core_member" || riderIdToRole[crewRiderId] === "superadmin") && (
+                            <span className="inline-flex items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
+                          )}
+                        </p>
                       </div>
                     </>
                   );
@@ -701,8 +714,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3 transition-all hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30"
                       >
                         {thumbEl}
-                        <span className="text-sm text-t2w-accent truncate hover:underline">
+                        <span className="text-sm text-t2w-accent truncate hover:underline flex items-center gap-1.5">
                           {riderName}
+                          {riderId && (riderIdToRole[riderId] === "core_member" || riderIdToRole[riderId] === "superadmin") && (
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
+                          )}
                         </span>
                       </Link>
                     ) : (
@@ -711,8 +727,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3"
                       >
                         {thumbEl}
-                        <span className="text-sm text-gray-300 truncate">
+                        <span className="text-sm text-gray-300 truncate flex items-center gap-1.5">
                           {riderName}
+                          {riderId && (riderIdToRole[riderId] === "core_member" || riderIdToRole[riderId] === "superadmin") && (
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
+                          )}
                         </span>
                       </div>
                     );

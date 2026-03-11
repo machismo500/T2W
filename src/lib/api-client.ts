@@ -647,49 +647,48 @@ export const api = {
       await delay(200);
       return { success: true, id };
     },
-    // Change role (SuperAdmin only) – persisted via role overrides map
+    // Change role (SuperAdmin only) – persisted to database
     changeRole: async (id: string, newRole: UserRole) => {
+      // Persist to DB first
+      try {
+        const res = await fetch("/api/users/role", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: id, newRole }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Also update localStorage for immediate UI reflection
+          const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+          roleOverrides[id] = newRole;
+          setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
+          return { success: true, id: data.userId || id, role: newRole };
+        }
+        const errData = await res.json().catch(() => ({}));
+        // If user not found in DB, fall through to localStorage-only
+        if (res.status !== 404) {
+          throw new Error(errData.error || "Failed to change role");
+        }
+      } catch (e) {
+        // If it's a real error (not 404 fallthrough), re-throw
+        if (e instanceof Error && e.message !== "Failed to change role") {
+          console.warn("[T2W] DB role change failed, falling back to localStorage:", e.message);
+        }
+      }
+      // Fallback: persist via localStorage role overrides
       await delay(200);
-      // Persist the role override for ALL user types (built-in, custom, static)
       const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
       roleOverrides[id] = newRole;
       setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
-      // Also update custom users if they exist there
       const users = getRegisteredUsers();
       const user = users.find((u) => u.id === id);
       if (user) {
         user.role = newRole;
-        // Ensure linkedRiderId is set for crew display
         if (!user.linkedRiderId) {
           const linkedRider = findRiderByEmail(user.email);
           if (linkedRider) user.linkedRiderId = linkedRider.id;
         }
         saveCustomUsers(users);
-      } else {
-        // User may exist only in static data (getRiderProfiles()/mockAllUsers).
-        // Create a custom record so the user shows up in queries.
-        const staticUser = mockAllUsers.find((u) => u.id === id);
-        const riderProfile = getRiderProfiles().find((r) => r.id === id);
-        const source = staticUser || riderProfile;
-        if (source) {
-          // Try to link to a rider profile for avatar/stats
-          const linkedRider = findRiderByEmail(source.email);
-          const newUser: StoredUser = {
-            id: source.id,
-            name: source.name,
-            email: source.email,
-            password: "",
-            phone: "phone" in source ? String(source.phone) : "",
-            city: "",
-            ridingExperience: "",
-            motorcycle: "",
-            role: newRole,
-            joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
-            isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
-            linkedRiderId: linkedRider?.id || ("id" in source ? source.id : undefined),
-          };
-          saveCustomUsers([...users, newUser]);
-        }
       }
       return { success: true, id, role: newRole };
     },
