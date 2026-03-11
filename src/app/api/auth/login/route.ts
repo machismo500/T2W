@@ -41,15 +41,38 @@ export async function POST(req: NextRequest) {
 
     // On login, ensure user is linked to their rider profile (if one exists)
     let linkedRiderId = user.linkedRiderId;
-    if (!linkedRiderId) {
-      const matchingProfile = await prisma.riderProfile.findFirst({
-        where: { email: normalizedEmail, mergedIntoId: null },
+
+    // If currently linked to a merged profile, re-link to the merge target
+    if (linkedRiderId) {
+      const currentProfile = await prisma.riderProfile.findUnique({
+        where: { id: linkedRiderId },
+        select: { mergedIntoId: true },
       });
-      if (matchingProfile) {
-        linkedRiderId = matchingProfile.id;
+      if (currentProfile?.mergedIntoId) {
+        linkedRiderId = currentProfile.mergedIntoId;
         await prisma.user.update({
           where: { id: user.id },
-          data: { linkedRiderId: matchingProfile.id },
+          data: { linkedRiderId: currentProfile.mergedIntoId },
+        });
+      }
+    }
+
+    if (!linkedRiderId) {
+      // Find the best matching profile: unmerged, with most participations
+      const matchingProfiles = await prisma.riderProfile.findMany({
+        where: { email: normalizedEmail, mergedIntoId: null },
+        include: { _count: { select: { participations: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+      if (matchingProfiles.length > 0) {
+        // Pick the one with most participations, or earliest
+        const best = matchingProfiles.sort(
+          (a, b) => b._count.participations - a._count.participations || a.createdAt.getTime() - b.createdAt.getTime()
+        )[0];
+        linkedRiderId = best.id;
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { linkedRiderId: best.id },
         });
       }
     }

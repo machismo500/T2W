@@ -46,6 +46,7 @@ model RiderProfile {
   emergencyContact String   @default("")
   emergencyPhone   String   @default("")
   bloodGroup       String   @default("")
+  role             String   @default("rider") // rider | core_member | t2w_rider
   joinDate         DateTime @default(now())
   avatarUrl        String?
   ridesOrganized   Int      @default(0)

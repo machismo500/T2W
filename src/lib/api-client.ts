@@ -517,6 +517,32 @@ export const api = {
       if (params?.includes("pending")) {
         return { users: mockPendingUsers };
       }
+
+      // Fetch DB roles from /api/riders (includes userRole from RiderProfile.role)
+      let dbRoles: Record<string, string> = {}; // email -> role
+      let dbRolesById: Record<string, string> = {}; // id -> role
+      try {
+        const res = await fetch("/api/riders");
+        if (res.ok) {
+          const data = await res.json();
+          for (const r of (data.riders || []) as Array<{ id: string; email: string; userRole?: string | null }>) {
+            if (r.userRole && r.userRole !== "rider") {
+              dbRoles[r.email.toLowerCase().trim()] = r.userRole;
+              dbRolesById[r.id] = r.userRole;
+            }
+          }
+        }
+      } catch { /* ignore - will fall back to localStorage roles */ }
+
+      // Role overrides from localStorage (immediate UI update before DB propagates)
+      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
+
+      // Helper: resolve role for a user/rider, preferring DB > localStorage override > default
+      function resolveRole(id: string, email: string, defaultRole: string): string {
+        const emailKey = email.toLowerCase().trim();
+        return dbRoles[emailKey] || dbRolesById[id] || roleOverrides[id] || defaultRole;
+      }
+
       // Start with registered users (built-in + localStorage signups)
       const registeredUsers = getRegisteredUsers();
       const combined: Array<{
@@ -528,13 +554,14 @@ export const api = {
         joinDate: string;
       }> = [];
 
-      // 1. Add all mockAllUsers, merging role from registeredUsers
+      // 1. Add all mockAllUsers, merging role from DB/overrides/registeredUsers
       const addedEmails = new Set<string>();
       mockAllUsers.forEach((u) => {
         const reg = registeredUsers.find(
           (r) => r.email.toLowerCase() === u.email.toLowerCase()
         );
-        combined.push(reg ? { ...u, role: reg.role } : u);
+        const baseRole = reg ? reg.role : u.role;
+        combined.push({ ...u, role: resolveRole(u.id, u.email, baseRole) });
         addedEmails.add(u.email.toLowerCase());
       });
 
@@ -546,21 +573,22 @@ export const api = {
             id: r.id,
             name: r.name,
             email: r.email,
-            role: r.role,
+            role: resolveRole(r.id, r.email, r.role),
             isApproved: r.isApproved,
             joinDate: r.joinDate,
           });
           addedEmails.add(r.email.toLowerCase());
         });
 
-      // 3. Add all rider profiles from past rides (as t2w_rider)
+      // 3. Add all rider profiles from past rides
       getRiderProfiles().forEach((rider) => {
         if (addedEmails.has(rider.email.toLowerCase())) return;
+        const defaultRole = rider.ridesCompleted > 0 ? "t2w_rider" : "rider";
         combined.push({
           id: rider.id,
           name: rider.name,
           email: rider.email,
-          role: rider.ridesCompleted > 0 ? "t2w_rider" : "rider",
+          role: resolveRole(rider.id, rider.email, defaultRole),
           isApproved: true,
           joinDate: rider.joinDate || "2024-03-16",
         });
@@ -647,83 +675,79 @@ export const api = {
       await delay(200);
       return { success: true, id };
     },
-    // Change role (SuperAdmin only) – persisted via role overrides map
+    // Change role (SuperAdmin only) – persisted to DB + localStorage
     changeRole: async (id: string, newRole: UserRole) => {
-      await delay(200);
-      // Persist the role override for ALL user types (built-in, custom, static)
+      // Find the user's email for DB lookup (the id may be a frontend-only ID)
+      const allKnown = getRegisteredUsers();
+      const knownUser = allKnown.find((u) => u.id === id);
+      const staticUser = mockAllUsers.find((u) => u.id === id);
+      const riderProfile = getRiderProfiles().find((r) => r.id === id);
+      const email = knownUser?.email || staticUser?.email || riderProfile?.email || undefined;
+
+      // Always persist to localStorage immediately for instant UI feedback
       const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
       roleOverrides[id] = newRole;
       setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
-      // Also update custom users if they exist there
-      const users = getRegisteredUsers();
-      const user = users.find((u) => u.id === id);
-      if (user) {
-        user.role = newRole;
-        // Ensure linkedRiderId is set for crew display
-        if (!user.linkedRiderId) {
-          const linkedRider = findRiderByEmail(user.email);
-          if (linkedRider) user.linkedRiderId = linkedRider.id;
+
+      // Also persist to DB (RiderProfile.role + User.role)
+      try {
+        const res = await fetch("/api/users/role", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ userId: id, email, newRole }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          console.log("[T2W] Role persisted to DB:", data);
+          return { success: true, id: data.userId || id, role: newRole };
         }
-        saveCustomUsers(users);
-      } else {
-        // User may exist only in static data (getRiderProfiles()/mockAllUsers).
-        // Create a custom record so the user shows up in queries.
-        const staticUser = mockAllUsers.find((u) => u.id === id);
-        const riderProfile = getRiderProfiles().find((r) => r.id === id);
-        const source = staticUser || riderProfile;
-        if (source) {
-          // Try to link to a rider profile for avatar/stats
-          const linkedRider = findRiderByEmail(source.email);
-          const newUser: StoredUser = {
-            id: source.id,
-            name: source.name,
-            email: source.email,
-            password: "",
-            phone: "phone" in source ? String(source.phone) : "",
-            city: "",
-            ridingExperience: "",
-            motorcycle: "",
-            role: newRole,
-            joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
-            isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
-            linkedRiderId: linkedRider?.id || ("id" in source ? source.id : undefined),
-          };
-          saveCustomUsers([...users, newUser]);
-        }
+        console.warn("[T2W] DB role change returned", res.status, data.error || "");
+      } catch (e) {
+        console.warn("[T2W] DB role change network error:", e);
       }
+
+      // DB failed — localStorage is already updated above, return success
       return { success: true, id, role: newRole };
     },
     // Get crew members (superadmin + core_member roles) for "The Crew" section
     getCrew: async () => {
-      await delay(100);
-      const users = getRegisteredUsers();
-      const crewRoles = new Set(["superadmin", "core_member"]);
-
-      // Fetch rider profiles from DB for avatar URLs
-      let riderAvatars: Record<string, string> = {};
+      // Fetch crew from DB API (superadmin + core_member users with avatar URLs)
       try {
-        const ridersRes = await fetch("/api/riders");
-        if (ridersRes.ok) {
-          const data = await ridersRes.json();
-          for (const r of data.riders || []) {
-            if (r.avatarUrl) riderAvatars[r.id] = r.avatarUrl;
+        const res = await fetch("/api/crew");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.crew && data.crew.length > 0) {
+            // Enrich with localStorage avatars as fallback
+            for (const m of data.crew) {
+              if (!m.avatarUrl && m.linkedRiderId) {
+                const localAvatar = api.avatars.get(m.linkedRiderId);
+                const legacyAvatar = typeof window !== "undefined"
+                  ? localStorage.getItem(`t2w_avatar_${m.linkedRiderId}`)
+                  : null;
+                m.avatarUrl = localAvatar || legacyAvatar || null;
+              }
+            }
+            return data;
           }
         }
-      } catch { /* ignore */ }
+      } catch { /* fall through to localStorage fallback */ }
 
+      // Fallback: use localStorage-based users if DB is unavailable
+      const users = getRegisteredUsers();
+      const crewRoles = new Set(["superadmin", "core_member"]);
       const crew = users
         .filter((u) => crewRoles.has(u.role))
-        // Hide "T2W Official" system account from crew display
         .filter((u) => !u.email.toLowerCase().includes("taleson2wheels.official"))
         .map((u) => {
-          // Try to resolve linkedRiderId by email if not set
           const riderId = u.linkedRiderId || findRiderByEmail(u.email)?.id;
+          const localAvatar = riderId ? api.avatars.get(riderId) : null;
           return {
             id: u.id,
             name: u.name,
             role: u.role,
             linkedRiderId: riderId,
-            avatarUrl: riderId ? (riderAvatars[riderId] || null) : null,
+            avatarUrl: localAvatar || null,
           };
         });
       return { crew };

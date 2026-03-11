@@ -15,6 +15,7 @@ export interface RiderProfile {
   sweepsDone: number;
   pilotsDone: number;
   avatarUrl?: string;
+  userRole?: string | null;
   ridesParticipated: {
     rideId: string;
     rideNumber: string;
