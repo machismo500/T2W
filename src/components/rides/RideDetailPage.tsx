@@ -39,6 +39,8 @@ type RiderLookupCache = {
   idToAvatar: Record<string, string>;
 };
 let _riderCache: RiderLookupCache | null = null;
+let _riderCacheTime = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Normalize a name for fuzzy matching: lowercase, strip titles/periods, collapse whitespace
 function normalizeName(n: string): string {
@@ -57,12 +59,21 @@ function firstName(n: string): string {
 }
 
 async function loadRiderCache(): Promise<RiderLookupCache> {
-  if (_riderCache) return _riderCache;
+  if (_riderCache && Date.now() - _riderCacheTime < CACHE_TTL) return _riderCache;
   try {
     const data = await api.riders.list();
     const nameToId: Record<string, string> = {};
     const idToAvatar: Record<string, string> = {};
     const riders = (data.riders || []) as Array<{ id: string; name: string; avatarUrl?: string }>;
+
+    // Also load localStorage-cached avatars as fallback (for when server upload failed on Vercel)
+    let localAvatars: Record<string, string> = {};
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("t2w_avatars");
+        if (raw) localAvatars = JSON.parse(raw);
+      } catch { /* ignore */ }
+    }
 
     // Track first-name uniqueness for first-name-only matching
     const firstNameCount: Record<string, number> = {};
@@ -96,11 +107,14 @@ async function loadRiderCache(): Promise<RiderLookupCache> {
         }
       }
 
-      if (r.avatarUrl) {
-        idToAvatar[r.id] = r.avatarUrl;
+      // Avatar: prefer DB value, fallback to localStorage cache
+      const avatar = r.avatarUrl || localAvatars[r.id];
+      if (avatar) {
+        idToAvatar[r.id] = avatar;
       }
     }
     _riderCache = { nameToId, idToAvatar };
+    _riderCacheTime = Date.now();
     return _riderCache;
   } catch {
     return { nameToId: {}, idToAvatar: {} };
