@@ -147,6 +147,17 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
         const legacyAvatar = typeof window !== "undefined" ? localStorage.getItem(`t2w_avatar_${riderId}`) : null;
         const avatar = dbAvatar || sharedAvatar || legacyAvatar;
         if (avatar) setAvatarUrl(avatar);
+        // Auto-migrate: if avatar exists only in localStorage, persist to DB
+        if (!dbAvatar && (sharedAvatar || legacyAvatar)) {
+          const localAvatar = sharedAvatar || legacyAvatar;
+          if (localAvatar && localAvatar.startsWith("data:")) {
+            fetch("/api/upload/avatar-sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ riderId, avatarDataUrl: localAvatar }),
+            }).catch(() => {});
+          }
+        }
       })
       .catch((err: unknown) => {
         const e = err as Error;

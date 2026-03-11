@@ -107,8 +107,9 @@ async function loadRiderCache(): Promise<RiderLookupCache> {
         }
       }
 
-      // Avatar: prefer DB value, fallback to localStorage cache
-      const avatar = r.avatarUrl || localAvatars[r.id];
+      // Avatar: prefer DB value, fallback to shared localStorage, then legacy localStorage
+      const legacyAvatar = (typeof window !== "undefined") ? localStorage.getItem(`t2w_avatar_${r.id}`) : null;
+      const avatar = r.avatarUrl || localAvatars[r.id] || legacyAvatar;
       if (avatar) {
         idToAvatar[r.id] = avatar;
       }
