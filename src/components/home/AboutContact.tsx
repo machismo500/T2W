@@ -38,7 +38,7 @@ const DEFAULT_ABOUT = {
 
 // Role labels for display in The Crew section
 const ROLE_LABELS: Record<string, string> = {
-  superadmin: "Founder & Lead Organiser",
+  superadmin: "Core Member",
   core_member: "Core Member",
 };
 
@@ -132,8 +132,8 @@ export function AboutContact() {
       })
     : [
         // Fallback static list
-        { name: "Roshan Manuel", role: "Founder & Lead Organiser", initials: "RM", riderId: undefined as string | undefined, avatarUrl: null as string | null },
-        { name: "Sanjeev Kumar", role: "Co-Founder & Sweep Rider", initials: "SK", riderId: undefined as string | undefined, avatarUrl: null as string | null },
+        { name: "Roshan Manuel", role: "Core Member", initials: "RM", riderId: undefined as string | undefined, avatarUrl: null as string | null },
+        { name: "Sanjeev Kumar", role: "Core Member", initials: "SK", riderId: undefined as string | undefined, avatarUrl: null as string | null },
         { name: "Jay Trivedi", role: "Ride Organiser & Pilot", initials: "JT", riderId: undefined as string | undefined, avatarUrl: null as string | null },
         { name: "Shreyas BM", role: "Ride Organiser", initials: "SB", riderId: undefined as string | undefined, avatarUrl: null as string | null },
         { name: "Harish Mysuru", role: "Ride Organiser & Accounts", initials: "HM", riderId: undefined as string | undefined, avatarUrl: null as string | null },

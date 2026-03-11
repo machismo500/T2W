@@ -695,35 +695,42 @@ export const api = {
     },
     // Get crew members (superadmin + core_member roles) for "The Crew" section
     getCrew: async () => {
-      await delay(100);
-      const users = getRegisteredUsers();
-      const crewRoles = new Set(["superadmin", "core_member"]);
-
-      // Fetch rider profiles from DB for avatar URLs
-      let riderAvatars: Record<string, string> = {};
+      // Fetch crew from DB API (superadmin + core_member users with avatar URLs)
       try {
-        const ridersRes = await fetch("/api/riders");
-        if (ridersRes.ok) {
-          const data = await ridersRes.json();
-          for (const r of data.riders || []) {
-            if (r.avatarUrl) riderAvatars[r.id] = r.avatarUrl;
+        const res = await fetch("/api/crew");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.crew && data.crew.length > 0) {
+            // Enrich with localStorage avatars as fallback
+            for (const m of data.crew) {
+              if (!m.avatarUrl && m.linkedRiderId) {
+                const localAvatar = api.avatars.get(m.linkedRiderId);
+                const legacyAvatar = typeof window !== "undefined"
+                  ? localStorage.getItem(`t2w_avatar_${m.linkedRiderId}`)
+                  : null;
+                m.avatarUrl = localAvatar || legacyAvatar || null;
+              }
+            }
+            return data;
           }
         }
-      } catch { /* ignore */ }
+      } catch { /* fall through to localStorage fallback */ }
 
+      // Fallback: use localStorage-based users if DB is unavailable
+      const users = getRegisteredUsers();
+      const crewRoles = new Set(["superadmin", "core_member"]);
       const crew = users
         .filter((u) => crewRoles.has(u.role))
-        // Hide "T2W Official" system account from crew display
         .filter((u) => !u.email.toLowerCase().includes("taleson2wheels.official"))
         .map((u) => {
-          // Try to resolve linkedRiderId by email if not set
           const riderId = u.linkedRiderId || findRiderByEmail(u.email)?.id;
+          const localAvatar = riderId ? api.avatars.get(riderId) : null;
           return {
             id: u.id,
             name: u.name,
             role: u.role,
             linkedRiderId: riderId,
-            avatarUrl: riderId ? (riderAvatars[riderId] || null) : null,
+            avatarUrl: localAvatar || null,
           };
         });
       return { crew };
