@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
 // PUT /api/users/role - change a user's role (superadmin only)
-// Also handles riders who only have a RiderProfile (no User account yet)
+// Searches by userId, linkedRiderId, riderProfile ID, or email
 export async function PUT(req: NextRequest) {
   try {
     const currentUser = await getCurrentUser();
@@ -11,9 +11,9 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Only super admins can change roles" }, { status: 403 });
     }
 
-    const { userId, newRole } = await req.json();
-    if (!userId || !newRole) {
-      return NextResponse.json({ error: "userId and newRole are required" }, { status: 400 });
+    const { userId, email, newRole } = await req.json();
+    if (!newRole || (!userId && !email)) {
+      return NextResponse.json({ error: "newRole and either userId or email are required" }, { status: 400 });
     }
 
     const validRoles = ["superadmin", "core_member", "t2w_rider", "rider", "guest"];
@@ -21,25 +21,28 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: `Invalid role. Must be one of: ${validRoles.join(", ")}` }, { status: 400 });
     }
 
-    // Try to find the user by ID in the User table
-    let user = await prisma.user.findUnique({ where: { id: userId } });
+    // Try to find the user by multiple strategies
+    let user = userId ? await prisma.user.findUnique({ where: { id: userId } }) : null;
 
-    if (!user) {
+    if (!user && userId) {
       // The ID might be a RiderProfile ID - check if a User is linked to it
       user = await prisma.user.findFirst({ where: { linkedRiderId: userId } });
     }
 
-    if (!user) {
-      // No User account exists. Check if there's a RiderProfile with this ID
-      // and create a minimal User account linked to it.
+    if (!user && email) {
+      // Try by email directly
+      user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+    }
+
+    if (!user && userId) {
+      // Check if there's a RiderProfile with this ID and a User with the same email
       const riderProfile = await prisma.riderProfile.findUnique({
         where: { id: userId },
       });
-      if (riderProfile) {
-        // Check if a user already exists with this email
+      if (riderProfile && riderProfile.email) {
         user = await prisma.user.findUnique({ where: { email: riderProfile.email } });
         if (user) {
-          // Link and update role
+          // Also link the user to the rider profile
           await prisma.user.update({
             where: { id: user.id },
             data: { role: newRole, linkedRiderId: riderProfile.id },
@@ -50,12 +53,13 @@ export async function PUT(req: NextRequest) {
             role: newRole,
           });
         }
-        // No user at all - can't create without password, just return info
-        return NextResponse.json({
-          error: "This rider has no user account. They need to register first before their role can be changed.",
-        }, { status: 404 });
       }
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (!user) {
+      return NextResponse.json({
+        error: "No user account found. The rider needs to register first.",
+      }, { status: 404 });
     }
 
     const previousRole = user.role;

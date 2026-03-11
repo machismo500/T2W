@@ -649,12 +649,18 @@ export const api = {
     },
     // Change role (SuperAdmin only) – persisted to database
     changeRole: async (id: string, newRole: UserRole) => {
+      // Find the user's email for DB lookup (the id may be a frontend-only ID)
+      const allKnown = getRegisteredUsers();
+      const knownUser = allKnown.find((u) => u.id === id);
+      const riderProfile = getRiderProfiles().find((r) => r.id === id);
+      const email = knownUser?.email || riderProfile?.email || undefined;
+
       // Persist to DB first
       try {
         const res = await fetch("/api/users/role", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: id, newRole }),
+          body: JSON.stringify({ userId: id, email, newRole }),
         });
         if (res.ok) {
           const data = await res.json();
