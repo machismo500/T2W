@@ -38,6 +38,7 @@ type RiderLookupCache = {
   nameToId: Record<string, string>;
   idToAvatar: Record<string, string>;
   idToRole: Record<string, string>;
+  nameToRole: Record<string, string>; // normalized name -> role for direct Core tag lookup
 };
 let _riderCache: RiderLookupCache | null = null;
 let _riderCacheTime = 0;
@@ -66,6 +67,7 @@ async function loadRiderCache(): Promise<RiderLookupCache> {
     const nameToId: Record<string, string> = {};
     const idToAvatar: Record<string, string> = {};
     const idToRole: Record<string, string> = {};
+    const nameToRole: Record<string, string> = {};
     const riders = (data.riders || []) as Array<{ id: string; name: string; avatarUrl?: string; userRole?: string }>;
 
     // Also load localStorage-cached avatars as fallback (for when server upload failed on Vercel)
@@ -115,16 +117,23 @@ async function loadRiderCache(): Promise<RiderLookupCache> {
       if (avatar) {
         idToAvatar[r.id] = avatar;
       }
-      // Track user role for "Core" tagging
-      if (r.userRole) {
+      // Track user role for "Core" tagging (by ID and by name)
+      if (r.userRole && r.userRole !== "rider") {
         idToRole[r.id] = r.userRole;
+        // Index by all name forms so crew name matching works
+        nameToRole[r.name.toLowerCase().trim()] = r.userRole;
+        nameToRole[normalizeName(r.name)] = r.userRole;
+        const fn = firstName(r.name);
+        if (firstNameCount[fn] === 1) {
+          nameToRole[fn] = r.userRole;
+        }
       }
     }
-    _riderCache = { nameToId, idToAvatar, idToRole };
+    _riderCache = { nameToId, idToAvatar, idToRole, nameToRole };
     _riderCacheTime = Date.now();
     return _riderCache;
   } catch {
-    return { nameToId: {}, idToAvatar: {}, idToRole: {} };
+    return { nameToId: {}, idToAvatar: {}, idToRole: {}, nameToRole: {} };
   }
 }
 
@@ -153,6 +162,33 @@ function getRiderId(name: string, nameToId: Record<string, string>): string | nu
   const fn = firstName(name);
   if (nameToId[fn]) return nameToId[fn];
   return null;
+}
+
+// Helper: check if a rider is a core member by name or ID
+function isCoreByNameOrId(
+  name: string,
+  riderId: string | null,
+  idToRole: Record<string, string>,
+  nameToRoleMap: Record<string, string>
+): boolean {
+  // Check by ID first
+  if (riderId) {
+    const r = idToRole[riderId];
+    if (r === "core_member" || r === "superadmin") return true;
+  }
+  // Check by name (multiple forms)
+  if (name) {
+    const key = name.toLowerCase().trim();
+    const nr = nameToRoleMap[key];
+    if (nr === "core_member" || nr === "superadmin") return true;
+    const norm = normalizeName(name);
+    const nr2 = nameToRoleMap[norm];
+    if (nr2 === "core_member" || nr2 === "superadmin") return true;
+    const fn = firstName(name);
+    const nr3 = nameToRoleMap[fn];
+    if (nr3 === "core_member" || nr3 === "superadmin") return true;
+  }
+  return false;
 }
 
 // Helper: build a Google Maps search URL for a location
@@ -204,6 +240,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const [riderNameToId, setRiderNameToId] = useState<Record<string, string>>({});
   const [riderIdToAvatar, setRiderIdToAvatar] = useState<Record<string, string>>({});
   const [riderIdToRole, setRiderIdToRole] = useState<Record<string, string>>({});
+  const [riderNameToRole, setRiderNameToRole] = useState<Record<string, string>>({});
 
   // Registration form state
   const [regForm, setRegForm] = useState({
@@ -255,6 +292,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
       setRiderNameToId(cache.nameToId);
       setRiderIdToAvatar(cache.idToAvatar);
       setRiderIdToRole(cache.idToRole);
+      setRiderNameToRole(cache.nameToRole);
     });
   }, []);
 
@@ -665,7 +703,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         <p className="text-xs text-t2w-muted">{crew.label}</p>
                         <p className={`font-semibold ${link ? "text-t2w-accent" : "text-white"} flex items-center gap-1.5`}>
                           {crew.name}
-                          {crewRiderId && (riderIdToRole[crewRiderId] === "core_member" || riderIdToRole[crewRiderId] === "superadmin") && (
+                          {isCoreByNameOrId(crew.name, crewRiderId, riderIdToRole, riderNameToRole) && (
                             <span className="inline-flex items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
                           )}
                         </p>
@@ -716,7 +754,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         {thumbEl}
                         <span className="text-sm text-t2w-accent truncate hover:underline flex items-center gap-1.5">
                           {riderName}
-                          {riderId && (riderIdToRole[riderId] === "core_member" || riderIdToRole[riderId] === "superadmin") && (
+                          {isCoreByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole) && (
                             <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
                           )}
                         </span>
@@ -729,7 +767,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         {thumbEl}
                         <span className="text-sm text-gray-300 truncate flex items-center gap-1.5">
                           {riderName}
-                          {riderId && (riderIdToRole[riderId] === "core_member" || riderIdToRole[riderId] === "superadmin") && (
+                          {isCoreByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole) && (
                             <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
                           )}
                         </span>
