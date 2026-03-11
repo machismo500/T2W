@@ -1,6 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { pastRides } from "@/data/past-rides";
+
+// Name normalization for matching crew names to rider profile names
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+const crewNameAliases: Record<string, string> = {
+  "suren": "surendar p velu",
+  "surendar": "surendar p velu",
+  "surendar velu": "surendar p velu",
+};
+
+function crewNameMatchesRider(crewName: string, riderName: string): boolean {
+  const crewLower = crewName.toLowerCase().trim();
+  const riderLower = riderName.toLowerCase().trim();
+  if (crewLower === riderLower) return true;
+  if (normalizeName(crewName) === normalizeName(riderName)) return true;
+  const alias = crewNameAliases[crewLower];
+  if (alias && normalizeName(alias) === normalizeName(riderName)) return true;
+  if (!crewLower.includes(" ")) {
+    const riderFirstName = riderLower.split(/\s+/)[0];
+    if (crewLower === riderFirstName) return true;
+  }
+  return false;
+}
+
+function computeRideRoleStats(riderName: string): { pilotsDone: number; sweepsDone: number; ridesOrganized: number } {
+  let pilotsDone = 0, sweepsDone = 0, ridesOrganized = 0;
+  for (const ride of pastRides) {
+    if (ride.leadRider && crewNameMatchesRider(ride.leadRider, riderName)) pilotsDone++;
+    if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, riderName)) sweepsDone++;
+    if (ride.organisedBy && crewNameMatchesRider(ride.organisedBy, riderName)) ridesOrganized++;
+  }
+  return { pilotsDone, sweepsDone, ridesOrganized };
+}
 
 // GET /api/riders - list all rider profiles with participation stats
 export async function GET(req: NextRequest) {
@@ -34,7 +70,21 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
     });
 
-    const riders = profiles.map((p: typeof profiles[number]) => ({
+    // Also count from DB rides not in static data
+    const dbRides = await prisma.ride.findMany({
+      select: { id: true, leadRider: true, sweepRider: true },
+    });
+    const staticRideIds = new Set(pastRides.map((r) => r.id));
+    const extraDbRides = dbRides.filter((r) => !staticRideIds.has(r.id));
+
+    const riders = profiles.map((p: typeof profiles[number]) => {
+      const stats = computeRideRoleStats(p.name);
+      // Add DB-only rides
+      for (const ride of extraDbRides) {
+        if (ride.leadRider && crewNameMatchesRider(ride.leadRider, p.name)) stats.pilotsDone++;
+        if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, p.name)) stats.sweepsDone++;
+      }
+      return {
       id: p.id,
       name: p.name,
       email: p.email,
@@ -45,9 +95,7 @@ export async function GET(req: NextRequest) {
       bloodGroup: p.bloodGroup,
       joinDate: p.joinDate.toISOString(),
       avatarUrl: p.avatarUrl,
-      ridesOrganized: p.ridesOrganized,
-      sweepsDone: p.sweepsDone,
-      pilotsDone: p.pilotsDone,
+      ...stats,
       mergedIntoId: p.mergedIntoId,
       userRole: p.role !== "rider" ? p.role : (p.linkedUsers[0]?.role || null),
       ridesCompleted: p.participations.length,
@@ -64,7 +112,8 @@ export async function GET(req: NextRequest) {
       participationMap: Object.fromEntries(
         p.participations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
       ),
-    }));
+    };
+    });
 
     return NextResponse.json({ riders });
   } catch (error) {
