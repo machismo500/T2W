@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
 async function syncUserStats(riderProfileId: string) {
   const linkedUsers = await prisma.user.findMany({
     where: { linkedRiderId: riderProfileId },
-    select: { id: true },
+    select: { id: true, role: true },
   });
 
   if (linkedUsers.length === 0) return;
@@ -106,9 +106,14 @@ async function syncUserStats(riderProfileId: string) {
   const ridesCompleted = participations.length;
 
   for (const u of linkedUsers) {
+    const updateData: Record<string, unknown> = { totalKm, ridesCompleted };
+    // Auto-upgrade: "rider" → "t2w_rider" when they have at least 1 ride participation
+    if (u.role === "rider" && ridesCompleted > 0) {
+      updateData.role = "t2w_rider";
+    }
     await prisma.user.update({
       where: { id: u.id },
-      data: { totalKm, ridesCompleted },
+      data: updateData,
     });
   }
 }

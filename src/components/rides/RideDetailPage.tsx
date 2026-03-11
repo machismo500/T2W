@@ -33,28 +33,105 @@ import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import type { RidePost } from "@/types";
 
-// Cache for rider name->id lookups (loaded once from API)
-let _riderNameToId: Record<string, string> | null = null;
-async function loadRiderNameToId(): Promise<Record<string, string>> {
-  if (_riderNameToId) return _riderNameToId;
+// Cache for rider name->id and avatar lookups (loaded once from API)
+type RiderLookupCache = {
+  nameToId: Record<string, string>;
+  idToAvatar: Record<string, string>;
+};
+let _riderCache: RiderLookupCache | null = null;
+
+// Normalize a name for fuzzy matching: lowercase, strip titles/periods, collapse whitespace
+function normalizeName(n: string): string {
+  return n
+    .toLowerCase()
+    .replace(/\(.*?\)/g, "") // remove parentheticals like "(Rajnish's Son)"
+    .replace(/^dr\.?\s*/i, "") // strip Dr. prefix
+    .replace(/\./g, "") // remove periods
+    .replace(/\s+/g, " ") // collapse multiple spaces
+    .trim();
+}
+
+// Extract first name
+function firstName(n: string): string {
+  return normalizeName(n).split(" ")[0];
+}
+
+async function loadRiderCache(): Promise<RiderLookupCache> {
+  if (_riderCache) return _riderCache;
   try {
     const data = await api.riders.list();
-    const map: Record<string, string> = {};
-    for (const r of data.riders || []) {
-      map[(r.name as string).toLowerCase().trim()] = r.id as string;
+    const nameToId: Record<string, string> = {};
+    const idToAvatar: Record<string, string> = {};
+    const riders = (data.riders || []) as Array<{ id: string; name: string; avatarUrl?: string }>;
+
+    // Track first-name uniqueness for first-name-only matching
+    const firstNameCount: Record<string, number> = {};
+    const firstNameToFullName: Record<string, string> = {};
+    for (const r of riders) {
+      const fn = firstName(r.name);
+      firstNameCount[fn] = (firstNameCount[fn] || 0) + 1;
+      firstNameToFullName[fn] = r.name;
     }
-    _riderNameToId = map;
-    return map;
+
+    for (const r of riders) {
+      const exact = r.name.toLowerCase().trim();
+      const normalized = normalizeName(r.name);
+      nameToId[exact] = r.id;
+      if (normalized !== exact) nameToId[normalized] = r.id;
+
+      // Also index by first name if unique
+      const fn = firstName(r.name);
+      if (firstNameCount[fn] === 1) {
+        nameToId[fn] = r.id;
+      }
+
+      // Index partial forms: "Firstname L" matching "Firstname Lastname"
+      const parts = normalized.split(" ");
+      if (parts.length >= 2) {
+        // "firstname l" for "firstname lastname"
+        nameToId[parts[0] + " " + parts[parts.length - 1][0]] = r.id;
+        // If 3+ parts, index without middle: "first last"
+        if (parts.length >= 3) {
+          nameToId[parts[0] + " " + parts[parts.length - 1]] = r.id;
+        }
+      }
+
+      if (r.avatarUrl) {
+        idToAvatar[r.id] = r.avatarUrl;
+      }
+    }
+    _riderCache = { nameToId, idToAvatar };
+    return _riderCache;
   } catch {
-    return {};
+    return { nameToId: {}, idToAvatar: {} };
   }
 }
 
 // Helper: look up a rider profile link by name (uses API-loaded cache)
 function getRiderLink(name: string, nameToId: Record<string, string>): string | null {
   if (!name) return null;
+  // Try exact lowercase
   const key = name.toLowerCase().trim();
-  return nameToId[key] ? `/rider/${nameToId[key]}` : null;
+  if (nameToId[key]) return `/rider/${nameToId[key]}`;
+  // Try normalized
+  const norm = normalizeName(name);
+  if (nameToId[norm]) return `/rider/${nameToId[norm]}`;
+  // Try first name only
+  const fn = firstName(name);
+  if (nameToId[fn]) return `/rider/${nameToId[fn]}`;
+  return null;
+}
+
+// Helper: get rider id from name
+function getRiderId(name: string, nameToId: Record<string, string>): string | null {
+  if (!name) return null;
+  const key = name.toLowerCase().trim();
+  if (nameToId[key]) return nameToId[key];
+  const norm = normalizeName(name);
+  if (nameToId[norm]) return nameToId[norm];
+  const fn = firstName(name);
+  if (nameToId[fn]) return nameToId[fn];
+  return null;
 }
 
 // Helper: build a Google Maps search URL for a location
@@ -104,6 +181,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
   const [riderNameToId, setRiderNameToId] = useState<Record<string, string>>({});
+  const [riderIdToAvatar, setRiderIdToAvatar] = useState<Record<string, string>>({});
 
   // Registration form state
   const [regForm, setRegForm] = useState({
@@ -149,9 +227,12 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     api.regFormSettings.get().then((s) => setFormSettings(s));
   }, []);
 
-  // Load rider name-to-id map for linking
+  // Load rider name-to-id map and avatars for linking
   useEffect(() => {
-    loadRiderNameToId().then(setRiderNameToId);
+    loadRiderCache().then((cache) => {
+      setRiderNameToId(cache.nameToId);
+      setRiderIdToAvatar(cache.idToAvatar);
+    });
   }, []);
 
   const cancellationText = (formSettings.cancellationText as string) ||
@@ -545,10 +626,17 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     : []),
                 ].filter(c => c.name).map((crew) => {
                   const link = getRiderLink(crew.name, riderNameToId);
+                  const crewRiderId = getRiderId(crew.name, riderNameToId);
+                  const crewAvatar = crewRiderId ? riderIdToAvatar[crewRiderId] : null;
+                  const crewInitials = crew.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
                   const inner = (
                     <>
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${crew.iconColor}`}>
-                        <User className={`h-6 w-6 ${crew.textColor}`} />
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden ${crew.iconColor}`}>
+                        {crewAvatar ? (
+                          <img src={crewAvatar} alt={crew.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className={`font-display text-sm font-bold ${crew.textColor}`}>{crewInitials}</span>
+                        )}
                       </div>
                       <div>
                         <p className="text-xs text-t2w-muted">{crew.label}</p>
@@ -578,16 +666,26 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 </h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {ride.riders.map((riderName, index) => {
-                    const riderId = riderNameToId[riderName.toLowerCase().trim()];
-                    return riderId ? (
+                    const riderId = getRiderId(riderName, riderNameToId);
+                    const avatar = riderId ? riderIdToAvatar[riderId] : null;
+                    const initials = riderName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+                    const link = riderId ? `/rider/${riderId}` : null;
+                    const thumbEl = avatar ? (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full overflow-hidden bg-t2w-accent/10">
+                        <img src={avatar} alt={riderName} className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-[10px] font-bold text-t2w-accent">
+                        {initials}
+                      </div>
+                    );
+                    return link ? (
                       <Link
                         key={`${riderName}-${index}`}
-                        href={`/rider/${riderId}`}
+                        href={link}
                         className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3 transition-all hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30"
                       >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
-                          {index + 1}
-                        </div>
+                        {thumbEl}
                         <span className="text-sm text-t2w-accent truncate hover:underline">
                           {riderName}
                         </span>
@@ -597,9 +695,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         key={`${riderName}-${index}`}
                         className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3"
                       >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
-                          {index + 1}
-                        </div>
+                        {thumbEl}
                         <span className="text-sm text-gray-300 truncate">
                           {riderName}
                         </span>

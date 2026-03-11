@@ -63,13 +63,20 @@ export async function POST(req: NextRequest) {
       const totalKm = participations.reduce((sum: number, p: typeof participations[number]) => sum + p.ride.distanceKm, 0);
       const ridesCompleted = participations.length;
 
-      if (user.totalKm !== totalKm || user.ridesCompleted !== ridesCompleted) {
+      const needsUpdate = user.totalKm !== totalKm || user.ridesCompleted !== ridesCompleted;
+      // Auto-upgrade: "rider" → "t2w_rider" when they have ride participation
+      const needsRoleUpgrade = user.role === "rider" && ridesCompleted > 0;
+
+      if (needsUpdate || needsRoleUpgrade) {
+        const updateData: Record<string, unknown> = { totalKm, ridesCompleted };
+        if (needsRoleUpgrade) updateData.role = "t2w_rider";
         await prisma.user.update({
           where: { id: user.id },
-          data: { totalKm, ridesCompleted },
+          data: updateData,
         });
         user.totalKm = totalKm;
         user.ridesCompleted = ridesCompleted;
+        if (needsRoleUpgrade) (user as Record<string, unknown>).role = "t2w_rider";
       }
     }
 
