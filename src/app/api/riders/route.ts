@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { pastRides } from "@/data/past-rides";
 
 // Name normalization for matching crew names to rider profile names
 function normalizeName(name: string): string {
@@ -28,9 +27,12 @@ function crewNameMatchesRider(crewName: string, riderName: string): boolean {
   return false;
 }
 
-function computeRideRoleStats(riderName: string): { pilotsDone: number; sweepsDone: number; ridesOrganized: number } {
+function computeRideRoleStats(
+  riderName: string,
+  allRides: Array<{ leadRider: string; sweepRider: string; organisedBy: string | null }>
+): { pilotsDone: number; sweepsDone: number; ridesOrganized: number } {
   let pilotsDone = 0, sweepsDone = 0, ridesOrganized = 0;
-  for (const ride of pastRides) {
+  for (const ride of allRides) {
     if (ride.leadRider && crewNameMatchesRider(ride.leadRider, riderName)) pilotsDone++;
     if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, riderName)) sweepsDone++;
     if (ride.organisedBy && crewNameMatchesRider(ride.organisedBy, riderName)) ridesOrganized++;
@@ -70,20 +72,13 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
     });
 
-    // Also count from DB rides not in static data
-    const dbRides = await prisma.ride.findMany({
-      select: { id: true, leadRider: true, sweepRider: true },
+    // Load all rides from DB for role stats computation
+    const allRides = await prisma.ride.findMany({
+      select: { leadRider: true, sweepRider: true, organisedBy: true },
     });
-    const staticRideIds = new Set(pastRides.map((r) => r.id));
-    const extraDbRides = dbRides.filter((r) => !staticRideIds.has(r.id));
 
     const riders = profiles.map((p: typeof profiles[number]) => {
-      const stats = computeRideRoleStats(p.name);
-      // Add DB-only rides
-      for (const ride of extraDbRides) {
-        if (ride.leadRider && crewNameMatchesRider(ride.leadRider, p.name)) stats.pilotsDone++;
-        if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, p.name)) stats.sweepsDone++;
-      }
+      const stats = computeRideRoleStats(p.name, allRides);
       return {
       id: p.id,
       name: p.name,

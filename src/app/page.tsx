@@ -3,7 +3,9 @@ import { HeroSection } from "@/components/home/HeroSection";
 import { UpcomingRides } from "@/components/home/UpcomingRides";
 import { NotificationBoard } from "@/components/home/NotificationBoard";
 import { AboutContact } from "@/components/home/AboutContact";
-import { mockRides } from "@/data/mock";
+import { prisma } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title:
@@ -30,15 +32,34 @@ export const metadata: Metadata = {
   },
 };
 
-function EventSchemas() {
-  const upcomingRides = mockRides.filter((r) => r.status === "upcoming");
+async function EventSchemas() {
+  let upcomingRides: Array<{
+    id: string; title: string; description: string; startDate: Date;
+    endDate: Date; startLocation: string; fee: number; maxRiders: number;
+    leadRider: string;
+  }> = [];
+
+  try {
+    upcomingRides = await prisma.ride.findMany({
+      where: { status: "upcoming" },
+      select: {
+        id: true, title: true, description: true, startDate: true,
+        endDate: true, startLocation: true, fee: true, maxRiders: true, leadRider: true,
+      },
+    });
+  } catch {
+    // DB unavailable
+  }
+
+  if (upcomingRides.length === 0) return null;
+
   const schemas = upcomingRides.map((ride) => ({
     "@context": "https://schema.org",
     "@type": "Event",
     name: ride.title,
     description: ride.description,
-    startDate: ride.startDate,
-    endDate: ride.endDate,
+    startDate: ride.startDate.toISOString(),
+    endDate: ride.endDate.toISOString(),
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     location: {
@@ -59,20 +80,12 @@ function EventSchemas() {
       "@type": "Offer",
       price: ride.fee,
       priceCurrency: "INR",
-      availability:
-        ride.registeredRiders < ride.maxRiders
-          ? "https://schema.org/InStock"
-          : "https://schema.org/SoldOut",
       url: `https://taleson2wheels.com/ride/${ride.id}`,
       validFrom: "2026-01-01",
     },
     maximumAttendeeCapacity: ride.maxRiders,
-    remainingAttendeeCapacity: ride.maxRiders - ride.registeredRiders,
     image: "https://taleson2wheels.com/og-image.jpg",
-    performer: {
-      "@type": "Person",
-      name: ride.leadRider,
-    },
+    performer: { "@type": "Person", name: ride.leadRider },
   }));
 
   return (

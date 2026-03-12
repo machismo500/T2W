@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { pastRides } from "@/data/past-rides";
 
 // Name normalization for matching crew names to rider profile names
 function normalizeName(name: string): string {
@@ -19,38 +18,28 @@ const crewNameAliases: Record<string, string> = {
 function crewNameMatchesRider(crewName: string, riderName: string): boolean {
   const crewLower = crewName.toLowerCase().trim();
   const riderLower = riderName.toLowerCase().trim();
-
-  // Exact match
   if (crewLower === riderLower) return true;
-
-  // Normalized match (strips punctuation)
   if (normalizeName(crewName) === normalizeName(riderName)) return true;
-
-  // Alias match
   const alias = crewNameAliases[crewLower];
   if (alias && normalizeName(alias) === normalizeName(riderName)) return true;
-
-  // First-name match (only if crew name is a single word)
   if (!crewLower.includes(" ")) {
     const riderFirstName = riderLower.split(/\s+/)[0];
     if (crewLower === riderFirstName) return true;
   }
-
   return false;
 }
 
-// Compute pilot/sweep/organised counts from ride data for a given rider name
-function computeRideRoleStats(riderName: string): { pilotsDone: number; sweepsDone: number; ridesOrganized: number } {
-  let pilotsDone = 0;
-  let sweepsDone = 0;
-  let ridesOrganized = 0;
-
-  for (const ride of pastRides) {
+// Compute pilot/sweep/organised counts from DB rides for a given rider name
+function computeRideRoleStats(
+  riderName: string,
+  dbRides: Array<{ leadRider: string; sweepRider: string; organisedBy: string | null }>
+): { pilotsDone: number; sweepsDone: number; ridesOrganized: number } {
+  let pilotsDone = 0, sweepsDone = 0, ridesOrganized = 0;
+  for (const ride of dbRides) {
     if (ride.leadRider && crewNameMatchesRider(ride.leadRider, riderName)) pilotsDone++;
     if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, riderName)) sweepsDone++;
     if (ride.organisedBy && crewNameMatchesRider(ride.organisedBy, riderName)) ridesOrganized++;
   }
-
   return { pilotsDone, sweepsDone, ridesOrganized };
 }
 
@@ -91,19 +80,11 @@ export async function GET(
       }, { status: 301 });
     }
 
-    // Compute role stats live from ride data (static + DB rides)
-    const stats = computeRideRoleStats(profile.name);
-
-    // Also count from DB rides not in static data
-    const dbRides = await prisma.ride.findMany({
-      select: { id: true, leadRider: true, sweepRider: true },
+    // Compute role stats live from all DB rides
+    const allRides = await prisma.ride.findMany({
+      select: { leadRider: true, sweepRider: true, organisedBy: true },
     });
-    const staticRideIds = new Set(pastRides.map((r) => r.id));
-    for (const ride of dbRides) {
-      if (staticRideIds.has(ride.id)) continue;
-      if (ride.leadRider && crewNameMatchesRider(ride.leadRider, profile.name)) stats.pilotsDone++;
-      if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, profile.name)) stats.sweepsDone++;
-    }
+    const stats = computeRideRoleStats(profile.name, allRides);
 
     const rider = {
       id: profile.id,

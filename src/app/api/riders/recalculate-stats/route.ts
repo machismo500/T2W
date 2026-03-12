@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { pastRides } from "@/data/past-rides";
 
 // Helper: normalize a name for matching (lowercase, collapse whitespace, strip non-alpha)
 function normalizeName(name: string): string {
@@ -70,38 +69,23 @@ export async function POST() {
       return null;
     }
 
-    // Count stats from all sources
+    // Count stats from all DB rides
     const pilotCounts: Record<string, number> = {};
     const sweepCounts: Record<string, number> = {};
     const organizedCounts: Record<string, number> = {};
 
-    // 1. Count from static past rides
-    for (const ride of pastRides) {
+    const dbRides = await prisma.ride.findMany({
+      select: { id: true, rideNumber: true, leadRider: true, sweepRider: true, organisedBy: true },
+    });
+
+    for (const ride of dbRides) {
       const leadId = resolveProfileId(ride.leadRider);
       const sweepId = resolveProfileId(ride.sweepRider);
-      const orgId = resolveProfileId(ride.organisedBy);
+      const orgId = resolveProfileId(ride.organisedBy || undefined);
 
       if (leadId) pilotCounts[leadId] = (pilotCounts[leadId] || 0) + 1;
       if (sweepId) sweepCounts[sweepId] = (sweepCounts[sweepId] || 0) + 1;
       if (orgId) organizedCounts[orgId] = (organizedCounts[orgId] || 0) + 1;
-    }
-
-    // 2. Count from DB rides (which may include rides not in static data)
-    const dbRides = await prisma.ride.findMany({
-      select: { id: true, leadRider: true, sweepRider: true },
-    });
-
-    // Avoid double-counting rides that exist in both static and DB
-    const staticRideIds = new Set(pastRides.map((r) => r.id));
-    for (const ride of dbRides) {
-      if (staticRideIds.has(ride.id)) continue; // already counted from static data
-
-      const leadId = resolveProfileId(ride.leadRider);
-      const sweepId = resolveProfileId(ride.sweepRider);
-
-      if (leadId) pilotCounts[leadId] = (pilotCounts[leadId] || 0) + 1;
-      if (sweepId) sweepCounts[sweepId] = (sweepCounts[sweepId] || 0) + 1;
-      // DB rides don't have organisedBy field
     }
 
     // Update all profiles
@@ -137,7 +121,7 @@ export async function POST() {
 
     // Report unmatched names for debugging
     const unmatchedNames: string[] = [];
-    for (const ride of pastRides) {
+    for (const ride of dbRides) {
       if (ride.leadRider && !resolveProfileId(ride.leadRider)) unmatchedNames.push(`Lead: ${ride.leadRider} (${ride.rideNumber})`);
       if (ride.sweepRider && !resolveProfileId(ride.sweepRider)) unmatchedNames.push(`Sweep: ${ride.sweepRider} (${ride.rideNumber})`);
       if (ride.organisedBy && !resolveProfileId(ride.organisedBy)) unmatchedNames.push(`Organised: ${ride.organisedBy} (${ride.rideNumber})`);
@@ -145,7 +129,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
-      totalRides: pastRides.length + dbRides.filter((r) => !staticRideIds.has(r.id)).length,
+      totalRides: dbRides.length,
       profilesUpdated: updates.length,
       changes: updates.map((u) => ({
         rider: u.name,
