@@ -146,8 +146,8 @@ export function AdminPage() {
 
   const [rideForm, setRideForm] = useState({
     title: "", rideNumber: "", type: "day", startDate: "", endDate: "",
-    startLocation: "", endLocation: "", distanceKm: "", maxRiders: "20",
-    fee: "0", difficulty: "easy", description: "",
+    startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "",
+    distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "",
   });
   const [publishingRide, setPublishingRide] = useState(false);
 
@@ -155,7 +155,7 @@ export function AdminPage() {
   const [editingRideId, setEditingRideId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     title: "", rideNumber: "", type: "day", status: "upcoming",
-    startDate: "", endDate: "", startLocation: "", endLocation: "",
+    startDate: "", endDate: "", startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "",
     distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy",
     description: "", leadRider: "", sweepRider: "", meetupTime: "",
     rideStartTime: "", startingPoint: "", organisedBy: "", accountsBy: "",
@@ -309,7 +309,9 @@ export function AdminPage() {
         startDate: String(r.startDate || "").split("T")[0],
         endDate: String(r.endDate || "").split("T")[0],
         startLocation: String(r.startLocation || ""),
+        startLocationUrl: String(r.startLocationUrl || ""),
         endLocation: String(r.endLocation || ""),
+        endLocationUrl: String(r.endLocationUrl || ""),
         distanceKm: String(r.distanceKm || ""),
         maxRiders: String(r.maxRiders || "20"),
         fee: String(r.fee || "0"),
@@ -369,7 +371,9 @@ export function AdminPage() {
         startDate: editForm.startDate,
         endDate: editForm.endDate || editForm.startDate,
         startLocation: editForm.startLocation,
+        startLocationUrl: editForm.startLocationUrl || null,
         endLocation: editForm.endLocation,
+        endLocationUrl: editForm.endLocationUrl || null,
         distanceKm: Number(editForm.distanceKm) || 0,
         maxRiders: Number(editForm.maxRiders) || 20,
         fee: Number(editForm.fee) || 0,
@@ -546,7 +550,9 @@ export function AdminPage() {
         startDate: rideForm.startDate,
         endDate: rideForm.endDate || rideForm.startDate,
         startLocation: rideForm.startLocation,
+        startLocationUrl: rideForm.startLocationUrl || null,
         endLocation: rideForm.endLocation,
+        endLocationUrl: rideForm.endLocationUrl || null,
         distanceKm: Number(rideForm.distanceKm) || 0,
         maxRiders: Number(rideForm.maxRiders) || 20,
         registeredRiders: 0,
@@ -568,7 +574,7 @@ export function AdminPage() {
         details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})`,
       });
       setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_created", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: newRide.id, targetName: rideForm.title, details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})` }, ...prev]);
-      setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", endLocation: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "" });
+      setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "" });
     } catch (err) {
       console.error("Failed to create ride:", err);
     } finally {
@@ -1005,8 +1011,10 @@ export function AdminPage() {
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Type</label><select className="input-field cursor-pointer" value={rideForm.type} onChange={(e) => setRideForm({ ...rideForm, type: e.target.value })}><option value="day">Day Ride</option><option value="weekend">Weekend</option><option value="multi-day">Multi-Day</option><option value="expedition">Expedition</option></select></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Date</label><input type="date" className="input-field" value={rideForm.startDate} onChange={(e) => setRideForm({ ...rideForm, startDate: e.target.value })} /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Date</label><input type="date" className="input-field" value={rideForm.endDate} onChange={(e) => setRideForm({ ...rideForm, endDate: e.target.value })} /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location</label><input type="text" className="input-field" placeholder="Starting point" value={rideForm.startLocation} onChange={(e) => setRideForm({ ...rideForm, startLocation: e.target.value })} /></div>
-                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location</label><input type="text" className="input-field" placeholder="Destination" value={rideForm.endLocation} onChange={(e) => setRideForm({ ...rideForm, endLocation: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location Name</label><input type="text" className="input-field" placeholder="e.g., Parle G" value={rideForm.startLocation} onChange={(e) => setRideForm({ ...rideForm, startLocation: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location Map Link</label><input type="url" className="input-field" placeholder="Google Maps URL" value={rideForm.startLocationUrl} onChange={(e) => setRideForm({ ...rideForm, startLocationUrl: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location Name</label><input type="text" className="input-field" placeholder="e.g., Lonavala" value={rideForm.endLocation} onChange={(e) => setRideForm({ ...rideForm, endLocation: e.target.value })} /></div>
+                  <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location Map Link</label><input type="url" className="input-field" placeholder="Google Maps URL" value={rideForm.endLocationUrl} onChange={(e) => setRideForm({ ...rideForm, endLocationUrl: e.target.value })} /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Distance (km)</label><input type="number" className="input-field" placeholder="0" value={rideForm.distanceKm} onChange={(e) => setRideForm({ ...rideForm, distanceKm: e.target.value })} /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders</label><input type="number" className="input-field" placeholder="20" value={rideForm.maxRiders} onChange={(e) => setRideForm({ ...rideForm, maxRiders: e.target.value })} /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee</label><input type="number" className="input-field" placeholder="0" value={rideForm.fee} onChange={(e) => setRideForm({ ...rideForm, fee: e.target.value })} /></div>
@@ -1070,8 +1078,10 @@ export function AdminPage() {
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Date</label><input type="date" className="input-field" value={editForm.startDate} onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Date</label><input type="date" className="input-field" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulty</label><select className="input-field cursor-pointer" value={editForm.difficulty} onChange={(e) => setEditForm({ ...editForm, difficulty: e.target.value })}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="challenging">Challenging</option><option value="extreme">Extreme</option></select></div>
-                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location</label><input type="text" className="input-field" value={editForm.startLocation} onChange={(e) => setEditForm({ ...editForm, startLocation: e.target.value })} /></div>
-                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location</label><input type="text" className="input-field" value={editForm.endLocation} onChange={(e) => setEditForm({ ...editForm, endLocation: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location Name</label><input type="text" className="input-field" value={editForm.startLocation} onChange={(e) => setEditForm({ ...editForm, startLocation: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Start Location Map Link</label><input type="url" className="input-field" placeholder="Google Maps URL" value={editForm.startLocationUrl} onChange={(e) => setEditForm({ ...editForm, startLocationUrl: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location Name</label><input type="text" className="input-field" value={editForm.endLocation} onChange={(e) => setEditForm({ ...editForm, endLocation: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location Map Link</label><input type="url" className="input-field" placeholder="Google Maps URL" value={editForm.endLocationUrl} onChange={(e) => setEditForm({ ...editForm, endLocationUrl: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Starting Point</label><input type="text" className="input-field" placeholder="Meetup location" value={editForm.startingPoint} onChange={(e) => setEditForm({ ...editForm, startingPoint: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Distance (km)</label><input type="number" className="input-field" value={editForm.distanceKm} onChange={(e) => setEditForm({ ...editForm, distanceKm: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders</label><input type="number" className="input-field" value={editForm.maxRiders} onChange={(e) => setEditForm({ ...editForm, maxRiders: e.target.value })} /></div>

@@ -42,7 +42,9 @@ export interface Ride {
   startDate: string;
   endDate: string;
   startLocation: string;
+  startLocationUrl?: string;
   endLocation: string;
+  endLocationUrl?: string;
   route: string[];
   distanceKm: number;
   maxRiders: number;

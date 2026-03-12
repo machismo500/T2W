@@ -126,7 +126,9 @@ model Ride {
   startDate        DateTime
   endDate          DateTime
   startLocation    String
+  startLocationUrl String?
   endLocation      String
+  endLocationUrl   String?
   route            String   // JSON array stored as string
   distanceKm       Float
   maxRiders        Int

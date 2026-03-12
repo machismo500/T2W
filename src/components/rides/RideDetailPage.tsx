@@ -205,7 +205,9 @@ interface Ride {
   startDate: string;
   endDate: string;
   startLocation: string;
+  startLocationUrl?: string;
   endLocation: string;
+  endLocationUrl?: string;
   route: string[];
   highlights: string[];
   distanceKm: number;
@@ -1252,15 +1254,23 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-t2w-muted">Start</span>
-                  <span className="font-medium text-white">
-                    {ride.startLocation}
-                  </span>
+                  {ride.startLocationUrl ? (
+                    <a href={ride.startLocationUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-t2w-accent hover:underline">
+                      {ride.startLocation} ↗
+                    </a>
+                  ) : (
+                    <span className="font-medium text-white">{ride.startLocation}</span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-t2w-muted">End</span>
-                  <span className="font-medium text-white">
-                    {ride.endLocation}
-                  </span>
+                  {ride.endLocationUrl ? (
+                    <a href={ride.endLocationUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-t2w-accent hover:underline">
+                      {ride.endLocation} ↗
+                    </a>
+                  ) : (
+                    <span className="font-medium text-white">{ride.endLocation}</span>
+                  )}
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-t2w-muted">Duration</span>

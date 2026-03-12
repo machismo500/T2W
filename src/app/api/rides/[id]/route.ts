@@ -48,7 +48,9 @@ export async function GET(
       startDate: ride.startDate.toISOString(),
       endDate: ride.endDate.toISOString(),
       startLocation: ride.startLocation,
+      startLocationUrl: ride.startLocationUrl,
       endLocation: ride.endLocation,
+      endLocationUrl: ride.endLocationUrl,
       route: safeJsonParse(ride.route, []),
       distanceKm: ride.distanceKm,
       maxRiders: ride.maxRiders,
@@ -91,7 +93,7 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
-      "title", "type", "status", "startLocation", "endLocation",
+      "title", "type", "status", "startLocation", "startLocationUrl", "endLocation", "endLocationUrl",
       "distanceKm", "maxRiders", "difficulty", "description",
       "posterUrl", "fee", "leadRider", "sweepRider",
       "organisedBy", "accountsBy", "meetupTime", "rideStartTime", "startingPoint",
