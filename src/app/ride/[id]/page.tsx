@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
-import { mockRides } from "@/data/mock";
+import { prisma } from "@/lib/db";
 import { RideDetailPage } from "@/components/rides/RideDetailPage";
 
-// Pre-render all ride pages at build time for static export
-export function generateStaticParams() {
-  return mockRides.map((ride) => ({
-    id: ride.id,
-  }));
+// All ride pages are dynamic (data from DB)
+export const dynamic = "force-dynamic";
+
+function safeJsonParse(value: string | null | undefined, fallback: unknown): unknown {
+  if (!value) return fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
 }
 
 export async function generateMetadata({
@@ -15,17 +16,37 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const ride = mockRides.find((r) => r.id === id);
+
+  let ride: {
+    title: string; rideNumber: string; type: string; status: string;
+    startLocation: string; endLocation: string; distanceKm: number;
+    maxRiders: number; fee: number; description: string; id: string;
+    startingPoint: string | null; leadRider: string;
+  } | null = null;
+  let registeredRiders = 0;
+
+  try {
+    const r = await prisma.ride.findUnique({
+      where: { id },
+      include: { registrations: { select: { id: true } } },
+    });
+    if (r) {
+      ride = r;
+      registeredRiders = r.registrations.length;
+    }
+  } catch {
+    // DB may not be available during build
+  }
 
   if (!ride) {
     return {
-      title: "Ride Not Found",
+      title: "Ride Not Found | Tales on 2 Wheels",
       description: "The requested ride could not be found.",
     };
   }
 
   const title = `${ride.rideNumber} ${ride.title} | ${ride.startLocation} to ${ride.endLocation} Motorcycle Ride`;
-  const description = `${ride.description} ${ride.distanceKm} km ${ride.type} ride from ${ride.startLocation} to ${ride.endLocation}. ${ride.status === "upcoming" ? `Register now - only ${ride.maxRiders - ride.registeredRiders} spots left! Fee: ₹${ride.fee}` : `${ride.registeredRiders} riders participated.`} Organised by Tales on 2 Wheels.`;
+  const description = `${ride.description} ${ride.distanceKm} km ${ride.type} ride from ${ride.startLocation} to ${ride.endLocation}. ${ride.status === "upcoming" ? `Register now - only ${ride.maxRiders - registeredRiders} spots left! Fee: ₹${ride.fee}` : `${registeredRiders} riders participated.`} Organised by Tales on 2 Wheels.`;
   const url = `https://taleson2wheels.com/ride/${ride.id}`;
 
   return {
@@ -34,11 +55,8 @@ export async function generateMetadata({
     keywords: [
       `${ride.endLocation} motorcycle ride`,
       `${ride.startLocation} to ${ride.endLocation} bike ride`,
-      `motorcycle ride ${ride.endLocation}`,
       `T2W ride ${ride.rideNumber}`,
       `${ride.title} motorcycle tour`,
-      `group ride ${ride.endLocation}`,
-      `motorcycle tour ${ride.type}`,
       "Tales on 2 Wheels",
       "T2W rides",
       "motorcycle group ride India",
@@ -47,14 +65,7 @@ export async function generateMetadata({
       title: `${ride.rideNumber} ${ride.title} | Tales on 2 Wheels`,
       description: `${ride.distanceKm} km ${ride.type} ride: ${ride.startLocation} → ${ride.endLocation}. ${ride.status === "upcoming" ? "Register now!" : "View ride details."}`,
       url,
-      images: [
-        {
-          url: "/og-image.jpg",
-          width: 1200,
-          height: 630,
-          alt: `${ride.title} - Tales on 2 Wheels Motorcycle Ride`,
-        },
-      ],
+      images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: `${ride.title} - Tales on 2 Wheels Motorcycle Ride` }],
     },
     twitter: {
       card: "summary_large_image",
@@ -62,16 +73,32 @@ export async function generateMetadata({
       description: `${ride.distanceKm} km ${ride.type} ride: ${ride.startLocation} → ${ride.endLocation}`,
       images: ["/og-image.jpg"],
     },
-    alternates: {
-      canonical: url,
-    },
+    alternates: { canonical: url },
   };
 }
 
-function RideEventSchema({ rideId }: { rideId: string }) {
-  const ride = mockRides.find((r) => r.id === rideId);
+async function RideEventSchema({ rideId }: { rideId: string }) {
+  let ride: Record<string, unknown> | null = null;
+  try {
+    const r = await prisma.ride.findUnique({
+      where: { id: rideId },
+      include: { registrations: { select: { id: true } } },
+    });
+    if (r) {
+      ride = {
+        ...r,
+        startDate: r.startDate.toISOString(),
+        endDate: r.endDate.toISOString(),
+        registeredRiders: r.registrations.length,
+      };
+    }
+  } catch {
+    return null;
+  }
+
   if (!ride) return null;
 
+  const registeredRiders = (ride.registeredRiders as number) || 0;
   const schema = {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -79,48 +106,35 @@ function RideEventSchema({ rideId }: { rideId: string }) {
     description: ride.description,
     startDate: ride.startDate,
     endDate: ride.endDate,
-    eventStatus:
-      ride.status === "upcoming"
-        ? "https://schema.org/EventScheduled"
-        : "https://schema.org/EventCompleted",
+    eventStatus: ride.status === "upcoming"
+      ? "https://schema.org/EventScheduled"
+      : "https://schema.org/EventCompleted",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     location: {
       "@type": "Place",
-      name: ride.startingPoint || ride.startLocation,
+      name: (ride.startingPoint as string) || (ride.startLocation as string),
       address: {
         "@type": "PostalAddress",
-        addressLocality: ride.startLocation.split(",")[0].trim(),
-        addressRegion: ride.startLocation.split(",")[1]?.trim() || "Karnataka",
+        addressLocality: (ride.startLocation as string).split(",")[0].trim(),
+        addressRegion: (ride.startLocation as string).split(",")[1]?.trim() || "Karnataka",
         addressCountry: "IN",
       },
     },
-    organizer: {
-      "@type": "Organization",
-      name: "Tales on 2 Wheels",
-      url: "https://taleson2wheels.com",
-    },
+    organizer: { "@type": "Organization", name: "Tales on 2 Wheels", url: "https://taleson2wheels.com" },
     offers: {
       "@type": "Offer",
       price: ride.fee,
       priceCurrency: "INR",
-      availability:
-        ride.registeredRiders < ride.maxRiders
-          ? "https://schema.org/InStock"
-          : "https://schema.org/SoldOut",
+      availability: registeredRiders < (ride.maxRiders as number)
+        ? "https://schema.org/InStock"
+        : "https://schema.org/SoldOut",
       url: `https://taleson2wheels.com/ride/${ride.id}`,
       validFrom: "2024-01-01",
     },
     maximumAttendeeCapacity: ride.maxRiders,
-    remainingAttendeeCapacity: ride.maxRiders - ride.registeredRiders,
+    remainingAttendeeCapacity: (ride.maxRiders as number) - registeredRiders,
     image: "https://taleson2wheels.com/og-image.jpg",
-    performer: ride.leadRider
-      ? { "@type": "Person", name: ride.leadRider }
-      : undefined,
-    ...(ride.status === "upcoming" && {
-      isAccessibleForFree: ride.fee === 0,
-      typicalAgeRange: "18-",
-      keywords: `motorcycle ride, ${ride.endLocation}, group ride, ${ride.type} ride, T2W`,
-    }),
+    performer: ride.leadRider ? { "@type": "Person", name: ride.leadRider } : undefined,
   };
 
   return (

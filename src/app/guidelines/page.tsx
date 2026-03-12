@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { GuidelinesPage } from "@/components/shared/GuidelinesPage";
-import { mockGuidelines } from "@/data/mock";
+import { prisma } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title:
@@ -29,11 +31,13 @@ export const metadata: Metadata = {
   },
 };
 
-function FAQSchema() {
+async function FAQSchema() {
+  const guidelines = await prisma.guideline.findMany();
+
   const faqSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: mockGuidelines.map((g) => ({
+    mainEntity: guidelines.map((g) => ({
       "@type": "Question",
       name: g.title,
       acceptedAnswer: {

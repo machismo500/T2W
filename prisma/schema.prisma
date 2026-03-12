@@ -137,6 +137,12 @@ model Ride {
   fee              Float
   leadRider        String
   sweepRider       String
+  organisedBy      String?
+  accountsBy       String?
+  meetupTime       String?
+  rideStartTime    String?
+  startingPoint    String?
+  riders           String?  // JSON array of rider names
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

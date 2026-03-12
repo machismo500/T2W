@@ -77,6 +77,20 @@ async function main() {
       where: { rideNumber: ride.rideNumber },
     });
     if (existing) {
+      // Update existing ride with new fields if missing
+      if (!existing.organisedBy && ride.organisedBy) {
+        await prisma.ride.update({
+          where: { id: existing.id },
+          data: {
+            organisedBy: ride.organisedBy || null,
+            accountsBy: ride.accountsBy || null,
+            meetupTime: ride.meetupTime || null,
+            rideStartTime: ride.rideStartTime || null,
+            startingPoint: ride.startingPoint || null,
+            riders: ride.riders ? JSON.stringify(ride.riders) : null,
+          },
+        });
+      }
       ridesSkipped++;
       continue;
     }
@@ -101,6 +115,12 @@ async function main() {
           fee: ride.fee || 0,
           leadRider: ride.leadRider || "",
           sweepRider: ride.sweepRider || "",
+          organisedBy: ride.organisedBy || null,
+          accountsBy: ride.accountsBy || null,
+          meetupTime: ride.meetupTime || null,
+          rideStartTime: ride.rideStartTime || null,
+          startingPoint: ride.startingPoint || null,
+          riders: ride.riders ? JSON.stringify(ride.riders) : null,
         },
       });
       ridesCreated++;
