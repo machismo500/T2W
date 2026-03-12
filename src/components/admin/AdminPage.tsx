@@ -6,6 +6,7 @@ import {
   Shield,
   Users,
   Bike,
+  Download,
   FileText,
   UserPlus,
   UserCheck,
@@ -188,6 +189,7 @@ export function AdminPage() {
     upiId: "taleson2wheels@upi",
     bankDetails: "Contact admin for details",
     hiddenFields: [] as string[],
+    enableTshirtSize: false,
   });
 
   useEffect(() => {
@@ -1050,6 +1052,11 @@ export function AdminPage() {
                       <Link href={`/ride/${ride.id}`} className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
                         <Eye className="h-3.5 w-3.5" />View
                       </Link>
+                      {isCoreOrAbove && (
+                        <button onClick={() => api.exportRideRegistrations(ride.id, ride.title)} className="flex items-center gap-1.5 rounded-lg bg-green-400/10 px-3 py-2 text-xs text-green-400 transition-colors hover:bg-green-400/20">
+                          <Download className="h-3.5 w-3.5" />Export
+                        </button>
+                      )}
                       {isSuperAdmin && (
                         <button onClick={() => editingRideId === ride.id ? setEditingRideId(null) : startEditRide(ride.id)} className="flex items-center gap-1.5 rounded-lg bg-t2w-accent/10 px-3 py-2 text-xs text-t2w-accent transition-colors hover:bg-t2w-accent/20">
                           <Edit3 className="h-3.5 w-3.5" />{editingRideId === ride.id ? "Cancel" : "Edit"}
@@ -1339,6 +1346,24 @@ export function AdminPage() {
                         </button>
                       </div>
                     ))}
+                  </div>
+
+                  {/* T-Shirt Size Toggle (opt-in, disabled by default) */}
+                  <div className="mt-4 pt-4 border-t border-t2w-border">
+                    <p className="mb-3 text-sm font-medium text-t2w-accent">Optional Add-ons</p>
+                    <div className="flex items-center justify-between rounded-xl border border-t2w-border bg-t2w-bg px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">T-Shirt Size Collection</p>
+                        <p className="text-xs text-t2w-muted">Enable to collect T-shirt sizes (XS, S, M, L, XL, XXL, XXXL) during ride registration</p>
+                      </div>
+                      <button onClick={() => setFormSettings({ ...formSettings, enableTshirtSize: !formSettings.enableTshirtSize })} className="text-t2w-accent">
+                        {formSettings.enableTshirtSize ? (
+                          <ToggleRight className="h-8 w-8 text-t2w-accent" />
+                        ) : (
+                          <ToggleLeft className="h-8 w-8 text-t2w-muted" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

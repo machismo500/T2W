@@ -831,6 +831,7 @@ export const api = {
         ridingType: String(data?.ridingType || "") as RideRegistration["ridingType"],
         vehicleModel: String(data?.vehicleModel || ""),
         vehicleRegNumber: String(data?.vehicleRegNumber || ""),
+        tshirtSize: String(data?.tshirtSize || "") as RideRegistration["tshirtSize"],
         agreedCancellationTerms: Boolean(data?.agreedCancellationTerms),
         agreedIndemnity: Boolean(data?.agreedIndemnity),
         paymentScreenshot: String(data?.paymentScreenshot || ""),
@@ -872,6 +873,46 @@ export const api = {
       });
       return { success: true, riders };
     },
+  },
+
+  exportRideRegistrations: (rideId: string, rideTitle: string) => {
+    const regs = getRideRegistrations();
+    const entries = regs[rideId] || [];
+    if (entries.length === 0) {
+      alert("No registrations found for this ride");
+      return;
+    }
+
+    const headers = [
+      "Rider Name", "Email", "Phone", "Address", "Emergency Contact Name",
+      "Emergency Contact Phone", "Blood Group", "Food Preference", "Riding Type",
+      "Vehicle Model", "Vehicle Reg Number", "T-Shirt Size", "Referred By",
+      "Payment Screenshot", "Registered At", "Confirmation Code",
+    ];
+
+    const escapeCsv = (val: string) => {
+      if (!val) return "";
+      if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+
+    const rows = entries.map((r: RideRegistration) => [
+      r.riderName, r.email, r.phone, r.address, r.emergencyContactName,
+      r.emergencyContactPhone, r.bloodGroup, r.foodPreference, r.ridingType,
+      r.vehicleModel, r.vehicleRegNumber, r.tshirtSize || "", r.referredBy,
+      r.paymentScreenshot ? "Yes" : "No", r.registeredAt, r.confirmationCode,
+    ].map(escapeCsv).join(","));
+
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${rideTitle.replace(/[^a-zA-Z0-9]/g, "_")}_registrations.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   },
 
   regFormSettings: {

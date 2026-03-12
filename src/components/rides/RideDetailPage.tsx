@@ -258,6 +258,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     ridingType: "" as "solo" | "rider-with-pillion" | "pillion-rider" | "",
     vehicleModel: "",
     vehicleRegNumber: "",
+    tshirtSize: "" as "XS" | "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "",
     agreedCancellationTerms: false,
     agreedIndemnity: false,
     paymentScreenshot: "",
@@ -303,6 +304,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const upiId = (formSettings.upiId as string) || "taleson2wheels@upi";
   const bankDetails = (formSettings.bankDetails as string) || "Contact admin for details";
   const hiddenFields = (formSettings.hiddenFields as string[]) || [];
+  const enableTshirtSize = Boolean(formSettings.enableTshirtSize);
 
   const [posterUploading, setPosterUploading] = useState(false);
 
@@ -407,6 +409,10 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     if (!regForm.agreedIndemnity || !regForm.agreedCancellationTerms || registering) return;
     if (!regForm.riderName || !regForm.address || !regForm.email || !regForm.phone || !regForm.foodPreference || !regForm.ridingType) {
       alert("Please fill in all required fields");
+      return;
+    }
+    if (enableTshirtSize && !regForm.tshirtSize) {
+      alert("Please select a T-Shirt size");
       return;
     }
     setRegistering(true);
@@ -1061,6 +1067,22 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                                 <input type="text" className="input-field !pl-10" placeholder="e.g. KA 01 AB 1234" value={regForm.vehicleRegNumber} onChange={(e) => setRegForm({ ...regForm, vehicleRegNumber: e.target.value })} />
                               </div>
                             </div>
+                          </div>
+                        )}
+
+                        {enableTshirtSize && (
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">T-Shirt Size <span className="text-red-400">*</span></label>
+                            <select required className="input-field cursor-pointer" value={regForm.tshirtSize} onChange={(e) => setRegForm({ ...regForm, tshirtSize: e.target.value as "XS" | "S" | "M" | "L" | "XL" | "XXL" | "XXXL" })}>
+                              <option value="">Select T-Shirt Size</option>
+                              <option value="XS">Extra Small (XS)</option>
+                              <option value="S">Small (S)</option>
+                              <option value="M">Medium (M)</option>
+                              <option value="L">Large (L)</option>
+                              <option value="XL">Extra Large (XL)</option>
+                              <option value="XXL">Extra Extra Large (XXL)</option>
+                              <option value="XXXL">Extra Extra Extra Large (XXXL)</option>
+                            </select>
                           </div>
                         )}
                       </div>

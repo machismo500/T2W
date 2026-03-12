@@ -151,6 +151,7 @@ export interface RideRegistration {
   ridingType: "solo" | "rider-with-pillion" | "pillion-rider" | "";
   vehicleModel: string;
   vehicleRegNumber: string;
+  tshirtSize: "XS" | "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "";
   agreedCancellationTerms: boolean;
   agreedIndemnity: boolean;
   paymentScreenshot: string;
