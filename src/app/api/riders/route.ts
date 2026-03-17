@@ -79,6 +79,8 @@ export async function GET(req: NextRequest) {
 
     const riders = profiles.map((p: typeof profiles[number]) => {
       const stats = computeRideRoleStats(p.name, allRides);
+      // Filter out dropped-out participations for stats
+      const activeParticipations = p.participations.filter((pp: typeof p.participations[number]) => !pp.droppedOut);
       return {
       id: p.id,
       name: p.name,
@@ -93,9 +95,9 @@ export async function GET(req: NextRequest) {
       ...stats,
       mergedIntoId: p.mergedIntoId,
       userRole: p.role !== "rider" ? p.role : (p.linkedUsers[0]?.role || null),
-      ridesCompleted: p.participations.length,
-      totalKm: p.participations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
-      totalPoints: p.participations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
+      ridesCompleted: activeParticipations.length,
+      totalKm: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
+      totalPoints: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
       ridesParticipated: p.participations.map((pp: typeof p.participations[number]) => ({
         rideId: pp.ride.id,
         rideNumber: pp.ride.rideNumber,
@@ -103,9 +105,10 @@ export async function GET(req: NextRequest) {
         rideDate: pp.ride.startDate.toISOString(),
         distanceKm: pp.ride.distanceKm,
         points: pp.points,
+        droppedOut: pp.droppedOut,
       })),
       participationMap: Object.fromEntries(
-        p.participations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
+        p.participations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.droppedOut ? "dropped" : pp.points])
       ),
     };
     });

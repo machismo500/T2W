@@ -1426,6 +1426,15 @@ export const api = {
       if (!res.ok) throw new Error("Failed to set points");
       return res.json();
     },
+    markDropout: async (riderId: string, rideId: string, droppedOut: boolean) => {
+      const res = await fetch("/api/riders/participation", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ riderProfileId: riderId, rideId, droppedOut }),
+      });
+      if (!res.ok) throw new Error("Failed to update drop-out status");
+      return res.json();
+    },
     bulkSave: async (changes: Array<{ riderProfileId: string; rideId: string; points: number }>) => {
       const res = await fetch("/api/riders/participation", {
         method: "POST",

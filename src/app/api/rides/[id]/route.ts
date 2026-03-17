@@ -68,6 +68,15 @@ export async function GET(
       rideStartTime: ride.rideStartTime,
       startingPoint: ride.startingPoint,
       riders: safeJsonParse(ride.riders, []),
+      regFormSettings: safeJsonParse(ride.regFormSettings, null),
+      participations: ride.participations.map((p) => ({
+        id: p.id,
+        riderProfileId: p.riderProfile.id,
+        riderName: p.riderProfile.name,
+        riderAvatar: p.riderProfile.avatarUrl,
+        droppedOut: p.droppedOut,
+        points: p.points,
+      })),
     };
 
     return NextResponse.json({ ride: result });
@@ -113,6 +122,14 @@ export async function PUT(
     if (data.route) updateData.route = JSON.stringify(data.route);
     if (data.highlights) updateData.highlights = JSON.stringify(data.highlights);
     if (data.riders !== undefined) updateData.riders = data.riders ? JSON.stringify(data.riders) : null;
+
+    // Per-ride form settings: only SuperAdmin can update after creation
+    if (data.regFormSettings !== undefined) {
+      if (user.role !== "superadmin") {
+        return NextResponse.json({ error: "Only SuperAdmin can edit registration form settings after ride is published" }, { status: 403 });
+      }
+      updateData.regFormSettings = data.regFormSettings ? JSON.stringify(data.regFormSettings) : null;
+    }
 
     const updated = await prisma.ride.update({
       where: { id },

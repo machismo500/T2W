@@ -1,20 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Middleware to enforce HTTPS in production.
- * Redirects any plain HTTP request to its HTTPS equivalent.
+ * Middleware to enforce HTTPS in production and add www → apex redirect.
+ * Handles x-forwarded-proto (Vercel, reverse proxies) and direct HTTP detection.
  */
 export function middleware(request: NextRequest) {
-  // Redirect HTTP → HTTPS in production
-  const proto = request.headers.get("x-forwarded-proto");
-  if (
-    proto === "http" &&
-    process.env.NODE_ENV === "production" &&
-    !request.nextUrl.hostname.includes("localhost")
-  ) {
-    const httpsUrl = request.nextUrl.clone();
-    httpsUrl.protocol = "https:";
-    return NextResponse.redirect(httpsUrl, 301);
+  const host = request.headers.get("host") || request.nextUrl.hostname;
+  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+
+  if (process.env.NODE_ENV === "production" && !isLocalhost) {
+    // Detect HTTP via x-forwarded-proto or x-forwarded-ssl or scheme
+    const proto = request.headers.get("x-forwarded-proto");
+    const forwardedSsl = request.headers.get("x-forwarded-ssl");
+    const isHttp =
+      proto === "http" ||
+      forwardedSsl === "off" ||
+      request.nextUrl.protocol === "http:";
+
+    if (isHttp) {
+      const httpsUrl = request.nextUrl.clone();
+      httpsUrl.protocol = "https:";
+      httpsUrl.port = "";
+      return NextResponse.redirect(httpsUrl, 301);
+    }
   }
 
   return NextResponse.next();

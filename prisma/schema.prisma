@@ -71,6 +71,7 @@ model RideParticipation {
   riderProfileId String
   rideId         String
   points         Float    @default(5)
+  droppedOut     Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   riderProfile RiderProfile @relation(fields: [riderProfileId], references: [id], onDelete: Cascade)
@@ -145,6 +146,7 @@ model Ride {
   rideStartTime    String?
   startingPoint    String?
   riders           String?  // JSON array of rider names
+  regFormSettings  String?  // JSON: per-ride registration form overrides
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

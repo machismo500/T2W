@@ -226,6 +226,15 @@ interface Ride {
   meetupTime?: string;
   rideStartTime?: string;
   startingPoint?: string;
+  regFormSettings?: Record<string, unknown> | null;
+  participations?: {
+    id: string;
+    riderProfileId: string;
+    riderName: string;
+    riderAvatar?: string;
+    droppedOut: boolean;
+    points: number;
+  }[];
 }
 
 export function RideDetailPage({ rideId }: { rideId: string }) {
@@ -273,22 +282,53 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const [postingTale, setPostingTale] = useState(false);
   const [taleSubmitted, setTaleSubmitted] = useState(false);
 
-  // Pre-fill registration form from user data
+  // Motorcycles from user profile
+  const [userMotorcycles, setUserMotorcycles] = useState<{ id: string; make: string; model: string; year: number; cc: number; color: string; nickname?: string }[]>([]);
+
+  // Pre-fill registration form from user data and previously saved registration data
   useEffect(() => {
     if (user) {
+      // Load previously saved registration data for this user
+      const savedKey = `t2w_reg_prefill_${user.id}`;
+      let saved: Record<string, string> = {};
+      try {
+        const raw = localStorage.getItem(savedKey);
+        if (raw) saved = JSON.parse(raw);
+      } catch { /* ignore */ }
+
       setRegForm((prev) => ({
         ...prev,
-        riderName: prev.riderName || user.name,
-        email: prev.email || user.email,
-        phone: prev.phone || user.phone || "",
+        riderName: prev.riderName || saved.riderName || user.name,
+        address: prev.address || saved.address || "",
+        email: prev.email || saved.email || user.email,
+        phone: prev.phone || saved.phone || user.phone || "",
+        emergencyContactName: prev.emergencyContactName || saved.emergencyContactName || "",
+        emergencyContactPhone: prev.emergencyContactPhone || saved.emergencyContactPhone || "",
+        bloodGroup: prev.bloodGroup || saved.bloodGroup || "",
+        referredBy: prev.referredBy || saved.referredBy || "",
+        vehicleModel: prev.vehicleModel || saved.vehicleModel || "",
+        vehicleRegNumber: prev.vehicleRegNumber || saved.vehicleRegNumber || "",
       }));
+
+      // Fetch user's motorcycles
+      api.motorcycles.list().then((data) => {
+        const motos = (data as { motorcycles: typeof userMotorcycles }).motorcycles || [];
+        setUserMotorcycles(motos);
+      }).catch(() => { /* ignore if not logged in */ });
     }
   }, [user]);
 
-  // Load admin-configured form settings
+  // Load form settings: per-ride settings take priority, then global settings as fallback
   useEffect(() => {
-    api.regFormSettings.get().then((s) => setFormSettings(s));
-  }, []);
+    api.regFormSettings.get().then((globalSettings) => {
+      if (ride?.regFormSettings && typeof ride.regFormSettings === "object") {
+        // Merge: per-ride overrides global
+        setFormSettings({ ...globalSettings, ...(ride.regFormSettings as Record<string, unknown>) });
+      } else {
+        setFormSettings(globalSettings);
+      }
+    });
+  }, [ride]);
 
   // Load rider name-to-id map and avatars for linking
   useEffect(() => {
@@ -461,6 +501,19 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
       })) as { registration: unknown; confirmationCode: string };
       setRegistered(true);
       setConfirmationCode(data.confirmationCode);
+      // Save form data for future pre-fill (exclude sensitive/one-time fields)
+      if (user) {
+        try {
+          localStorage.setItem(`t2w_reg_prefill_${user.id}`, JSON.stringify({
+            riderName: regForm.riderName, address: regForm.address,
+            email: regForm.email, phone: regForm.phone,
+            emergencyContactName: regForm.emergencyContactName,
+            emergencyContactPhone: regForm.emergencyContactPhone,
+            bloodGroup: regForm.bloodGroup, referredBy: regForm.referredBy,
+            vehicleModel: regForm.vehicleModel, vehicleRegNumber: regForm.vehicleRegNumber,
+          }));
+        } catch { /* ignore quota errors */ }
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Registration failed";
@@ -775,7 +828,15 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               <div className="card">
                 <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
                   <Users className="h-5 w-5 text-t2w-accent" />
-                  Riders ({ride.riders.length})
+                  Riders ({ride.riders.filter((rn) => {
+                    const p = ride.participations?.find((pp) => pp.riderName.toLowerCase() === rn.toLowerCase());
+                    return !p?.droppedOut;
+                  }).length || ride.riders.length})
+                  {ride.participations?.some((p) => p.droppedOut) && (
+                    <span className="text-xs font-normal text-t2w-muted ml-1">
+                      ({ride.participations.filter((p) => p.droppedOut).length} dropped out)
+                    </span>
+                  )}
                 </h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {ride.riders.map((riderName, index) => {
@@ -783,41 +844,76 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     const avatar = riderId ? riderIdToAvatar[riderId] : null;
                     const initials = riderName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
                     const link = riderId ? `/rider/${riderId}` : null;
+                    const participation = ride.participations?.find((p) => p.riderName.toLowerCase() === riderName.toLowerCase());
+                    const isDroppedOut = participation?.droppedOut || false;
                     const thumbEl = avatar ? (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full overflow-hidden bg-t2w-accent/10">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full overflow-hidden ${isDroppedOut ? "opacity-40 grayscale" : "bg-t2w-accent/10"}`}>
                         <img src={avatar} alt={riderName} className="h-full w-full object-cover" />
                       </div>
                     ) : (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-t2w-accent/10 text-[10px] font-bold text-t2w-accent">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${isDroppedOut ? "bg-red-400/10 text-red-400/50" : "bg-t2w-accent/10 text-t2w-accent"}`}>
                         {initials}
                       </div>
                     );
-                    return link ? (
-                      <Link
-                        key={`${riderName}-${index}`}
-                        href={link}
-                        className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3 transition-all hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30"
+                    const dropoutBadge = isDroppedOut ? (
+                      <span className="inline-flex shrink-0 items-center rounded-full bg-red-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">Drop-Out</span>
+                    ) : null;
+                    const dropoutToggle = canApproveContent && participation ? (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          api.participation.markDropout(participation.riderProfileId, ride.id, !isDroppedOut).then(() => {
+                            // Refresh ride data
+                            setRide((prev) => prev ? {
+                              ...prev,
+                              participations: prev.participations?.map((p) =>
+                                p.riderProfileId === participation.riderProfileId ? { ...p, droppedOut: !isDroppedOut } : p
+                              ),
+                            } : prev);
+                          }).catch(() => alert("Failed to update drop-out status"));
+                        }}
+                        className={`ml-auto shrink-0 rounded-lg px-2 py-1 text-[10px] font-medium transition-colors ${
+                          isDroppedOut
+                            ? "bg-green-400/10 text-green-400 hover:bg-green-400/20"
+                            : "bg-red-400/10 text-red-400 hover:bg-red-400/20"
+                        }`}
+                        title={isDroppedOut ? "Reinstate rider" : "Mark as dropped out"}
                       >
-                        {thumbEl}
-                        <span className="text-sm text-t2w-accent truncate hover:underline flex items-center gap-1.5">
-                          {riderName}
-                          {isCoreByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole) && (
-                            <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
-                          )}
-                        </span>
-                      </Link>
+                        {isDroppedOut ? "Reinstate" : "Drop-Out"}
+                      </button>
+                    ) : null;
+                    return link ? (
+                      <div
+                        key={`${riderName}-${index}`}
+                        className={`flex items-center gap-3 rounded-xl p-3 transition-all ${isDroppedOut ? "bg-red-400/5 border border-red-400/10" : "bg-t2w-surface-light hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30"}`}
+                      >
+                        <Link href={link} className="flex items-center gap-3 flex-1 min-w-0">
+                          {thumbEl}
+                          <span className={`text-sm truncate flex items-center gap-1.5 ${isDroppedOut ? "text-red-400/60 line-through" : "text-t2w-accent hover:underline"}`}>
+                            {riderName}
+                            {isCoreByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole) && (
+                              <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
+                            )}
+                            {dropoutBadge}
+                          </span>
+                        </Link>
+                        {dropoutToggle}
+                      </div>
                     ) : (
                       <div
                         key={`${riderName}-${index}`}
-                        className="flex items-center gap-3 rounded-xl bg-t2w-surface-light p-3"
+                        className={`flex items-center gap-3 rounded-xl p-3 ${isDroppedOut ? "bg-red-400/5 border border-red-400/10" : "bg-t2w-surface-light"}`}
                       >
                         {thumbEl}
-                        <span className="text-sm text-gray-300 truncate flex items-center gap-1.5">
+                        <span className={`text-sm truncate flex items-center gap-1.5 flex-1 min-w-0 ${isDroppedOut ? "text-red-400/60 line-through" : "text-gray-300"}`}>
                           {riderName}
                           {isCoreByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole) && (
                             <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
                           )}
+                          {dropoutBadge}
                         </span>
+                        {dropoutToggle}
                       </div>
                     );
                   })}
@@ -1107,19 +1203,47 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         )}
 
                         {!hiddenFields.includes("vehicle") && (
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div>
-                              <label className="mb-1.5 block text-sm font-medium text-gray-300">Vehicle Model</label>
-                              <div className="relative">
-                                <Bike className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                                <input type="text" className="input-field !pl-10" placeholder="e.g. Royal Enfield Himalayan 450" value={regForm.vehicleModel} onChange={(e) => setRegForm({ ...regForm, vehicleModel: e.target.value })} />
+                          <div className="space-y-3">
+                            {userMotorcycles.length > 0 && (
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-gray-300">Select from My Motorcycles</label>
+                                <select
+                                  className="input-field cursor-pointer"
+                                  value=""
+                                  onChange={(e) => {
+                                    const moto = userMotorcycles.find((m) => m.id === e.target.value);
+                                    if (moto) {
+                                      setRegForm((prev) => ({
+                                        ...prev,
+                                        vehicleModel: `${moto.make} ${moto.model} ${moto.cc}cc`,
+                                        vehicleRegNumber: prev.vehicleRegNumber,
+                                      }));
+                                    }
+                                  }}
+                                >
+                                  <option value="">-- Pick a motorcycle --</option>
+                                  {userMotorcycles.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.make} {m.model} {m.cc}cc {m.nickname ? `(${m.nickname})` : ""}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
-                            </div>
-                            <div>
-                              <label className="mb-1.5 block text-sm font-medium text-gray-300">Vehicle Reg. Number</label>
-                              <div className="relative">
-                                <Car className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
-                                <input type="text" className="input-field !pl-10" placeholder="e.g. KA 01 AB 1234" value={regForm.vehicleRegNumber} onChange={(e) => setRegForm({ ...regForm, vehicleRegNumber: e.target.value })} />
+                            )}
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-gray-300">Vehicle Model</label>
+                                <div className="relative">
+                                  <Bike className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                                  <input type="text" className="input-field !pl-10" placeholder="e.g. Royal Enfield Himalayan 450" value={regForm.vehicleModel} onChange={(e) => setRegForm({ ...regForm, vehicleModel: e.target.value })} />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="mb-1.5 block text-sm font-medium text-gray-300">Vehicle Reg. Number</label>
+                                <div className="relative">
+                                  <Car className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
+                                  <input type="text" className="input-field !pl-10" placeholder="e.g. KA 01 AB 1234" value={regForm.vehicleRegNumber} onChange={(e) => setRegForm({ ...regForm, vehicleRegNumber: e.target.value })} />
+                                </div>
                               </div>
                             </div>
                           </div>

@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
         rideStartTime: data.rideStartTime || null,
         startingPoint: data.startingPoint || null,
         riders: data.riders ? JSON.stringify(data.riders) : null,
+        regFormSettings: data.regFormSettings ? JSON.stringify(data.regFormSettings) : null,
       },
     });
 

@@ -57,6 +57,15 @@ export interface Ride {
   leadRider: string;
   sweepRider: string;
   riders?: string[];
+  regFormSettings?: Record<string, unknown> | null;
+  participations?: {
+    id: string;
+    riderProfileId: string;
+    riderName: string;
+    riderAvatar?: string;
+    droppedOut: boolean;
+    points: number;
+  }[];
   accountsBy?: string;
   organisedBy?: string;
   meetupTime?: string;

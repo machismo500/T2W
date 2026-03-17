@@ -89,6 +89,35 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// PATCH /api/riders/participation - mark a rider as dropped out (or reinstate)
+export async function PATCH(req: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "superadmin" && user.role !== "core_member")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { riderProfileId, rideId, droppedOut } = await req.json();
+
+    if (!riderProfileId || !rideId) {
+      return NextResponse.json({ error: "riderProfileId and rideId are required" }, { status: 400 });
+    }
+
+    await prisma.rideParticipation.update({
+      where: { riderProfileId_rideId: { riderProfileId, rideId } },
+      data: { droppedOut: Boolean(droppedOut) },
+    });
+
+    // Re-sync user stats (excluding dropped-out rides)
+    await syncUserStats(riderProfileId);
+
+    return NextResponse.json({ success: true, droppedOut: Boolean(droppedOut) });
+  } catch (error) {
+    console.error("[T2W] Drop-out error:", error);
+    return NextResponse.json({ error: "Failed to update drop-out status" }, { status: 500 });
+  }
+}
+
 async function syncUserStats(riderProfileId: string) {
   const linkedUsers = await prisma.user.findMany({
     where: { linkedRiderId: riderProfileId },
@@ -102,8 +131,10 @@ async function syncUserStats(riderProfileId: string) {
     include: { ride: { select: { distanceKm: true } } },
   });
 
-  const totalKm = participations.reduce((sum: number, p: typeof participations[number]) => sum + p.ride.distanceKm, 0);
-  const ridesCompleted = participations.length;
+  // Exclude dropped-out participations from stats
+  const active = participations.filter((p: typeof participations[number]) => !p.droppedOut);
+  const totalKm = active.reduce((sum: number, p: typeof participations[number]) => sum + p.ride.distanceKm, 0);
+  const ridesCompleted = active.length;
 
   for (const u of linkedUsers) {
     const updateData: Record<string, unknown> = { totalKm, ridesCompleted };

@@ -150,6 +150,8 @@ export function AdminPage() {
     startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "",
     distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "",
   });
+  const [rideFormUseCustomSettings, setRideFormUseCustomSettings] = useState(false);
+  const [rideFormCustomSettings, setRideFormCustomSettings] = useState<string[]>([]); // hidden fields for this ride
   const [publishingRide, setPublishingRide] = useState(false);
 
   // Edit ride state
@@ -168,6 +170,9 @@ export function AdminPage() {
   const [editRideRiders, setEditRideRiders] = useState<string[]>([]);
   const [newRiderName, setNewRiderName] = useState("");
   const [ridersLoaded, setRidersLoaded] = useState(false);
+  // Per-ride form settings for edit
+  const [editRideUseCustomSettings, setEditRideUseCustomSettings] = useState(false);
+  const [editRideFormCustomSettings, setEditRideFormCustomSettings] = useState<string[]>([]);
 
   // Delete confirmation modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -343,6 +348,10 @@ export function AdminPage() {
         highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).join("\n") : "",
       });
       setEditRideRiders(Array.isArray(r.riders) ? (r.riders as string[]) : []);
+      // Load per-ride form settings
+      const rideRegSettings = r.regFormSettings as Record<string, unknown> | null;
+      setEditRideFormCustomSettings(rideRegSettings ? ((rideRegSettings.hiddenFields as string[]) || []) : []);
+      setEditRideUseCustomSettings(!!rideRegSettings);
       setRidersLoaded(true);
       setNewRiderName("");
       setEditingRideId(id);
@@ -404,6 +413,7 @@ export function AdminPage() {
         accountsBy: editForm.accountsBy,
         route: [editForm.startLocation, editForm.endLocation],
         highlights: editForm.highlights.split("\n").map((h) => h.trim()).filter(Boolean),
+        regFormSettings: editRideUseCustomSettings ? { hiddenFields: editRideFormCustomSettings } : null,
       });
       // Refresh rides list
       const ridesData = await api.rides.list();
@@ -577,6 +587,7 @@ export function AdminPage() {
         description: rideForm.description,
         route: [rideForm.startLocation, rideForm.endLocation],
         highlights: [],
+        regFormSettings: rideFormUseCustomSettings ? { hiddenFields: rideFormCustomSettings } : null,
       });
       const newRide = (result as { ride: AdminRide }).ride;
       setRides((prev) => [newRide, ...prev]);
@@ -591,6 +602,8 @@ export function AdminPage() {
       });
       setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_created", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: newRide.id, targetName: rideForm.title, details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})` }, ...prev]);
       setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "" });
+      setRideFormUseCustomSettings(false);
+      setRideFormCustomSettings([]);
     } catch (err) {
       console.error("Failed to create ride:", err);
     } finally {
@@ -1036,6 +1049,42 @@ export function AdminPage() {
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee</label><input type="number" className="input-field" placeholder="0" value={rideForm.fee} onChange={(e) => setRideForm({ ...rideForm, fee: e.target.value })} /></div>
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulty</label><select className="input-field cursor-pointer" value={rideForm.difficulty} onChange={(e) => setRideForm({ ...rideForm, difficulty: e.target.value })}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="challenging">Challenging</option><option value="extreme">Extreme</option></select></div>
                   <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" placeholder="Describe the ride..." value={rideForm.description} onChange={(e) => setRideForm({ ...rideForm, description: e.target.value })} /></div>
+
+                  {/* Per-Ride Form Settings */}
+                  <div className="sm:col-span-2 rounded-xl border border-t2w-border bg-t2w-bg p-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" checked={rideFormUseCustomSettings} onChange={(e) => setRideFormUseCustomSettings(e.target.checked)} className="h-4 w-4 rounded accent-t2w-accent" />
+                      <span className="text-sm font-medium text-white">Customize registration form for this ride</span>
+                    </label>
+                    <p className="mt-1 ml-7 text-xs text-t2w-muted">Override global form settings. If unchecked, global settings from Form Settings tab will be used.</p>
+                    {rideFormUseCustomSettings && (
+                      <div className="mt-3 ml-7 space-y-2">
+                        <p className="text-xs text-t2w-accent font-medium mb-2">Hide these fields/sections for this ride:</p>
+                        {[
+                          { key: "address", label: "Address" },
+                          { key: "email", label: "Email" },
+                          { key: "phone", label: "Phone" },
+                          { key: "emergencyContact", label: "Emergency Contact" },
+                          { key: "bloodGroup", label: "Blood Group" },
+                          { key: "foodPreference", label: "Food Preference" },
+                          { key: "ridingType", label: "Riding Type" },
+                          { key: "referredBy", label: "Referred By" },
+                          { key: "vehicle", label: "Vehicle Details" },
+                          { key: "cancellationTerms", label: "Cancellation Terms" },
+                          { key: "paymentSection", label: "Payment Section" },
+                          { key: "indemnity", label: "Indemnity" },
+                        ].map((f) => (
+                          <label key={f.key} className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={rideFormCustomSettings.includes(f.key)} onChange={(e) => {
+                              setRideFormCustomSettings((prev) => e.target.checked ? [...prev, f.key] : prev.filter((k) => k !== f.key));
+                            }} className="h-3.5 w-3.5 rounded accent-t2w-accent" />
+                            <span className="text-xs text-gray-300">{f.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="sm:col-span-2 flex gap-3">
                     <button type="button" className="btn-primary flex items-center gap-2" onClick={publishRide} disabled={publishingRide || !rideForm.title || !rideForm.startDate}>
                       {publishingRide ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -1169,6 +1218,42 @@ export function AdminPage() {
                               </div>
                             ) : (
                               <p className="text-sm text-t2w-muted py-3 text-center">No riders added yet.</p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Per-Ride Registration Form Settings (SuperAdmin only) */}
+                        {isSuperAdmin && (
+                          <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-t2w-border bg-t2w-bg p-4">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input type="checkbox" checked={editRideUseCustomSettings} onChange={(e) => setEditRideUseCustomSettings(e.target.checked)} className="h-4 w-4 rounded accent-t2w-accent" />
+                              <span className="text-sm font-medium text-white">Custom registration form for this ride</span>
+                            </label>
+                            <p className="mt-1 ml-7 text-xs text-t2w-muted">Override global form settings for this ride only.</p>
+                            {editRideUseCustomSettings && (
+                              <div className="mt-3 ml-7 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                                {[
+                                  { key: "address", label: "Address" },
+                                  { key: "email", label: "Email" },
+                                  { key: "phone", label: "Phone" },
+                                  { key: "emergencyContact", label: "Emergency Contact" },
+                                  { key: "bloodGroup", label: "Blood Group" },
+                                  { key: "foodPreference", label: "Food Preference" },
+                                  { key: "ridingType", label: "Riding Type" },
+                                  { key: "referredBy", label: "Referred By" },
+                                  { key: "vehicle", label: "Vehicle Details" },
+                                  { key: "cancellationTerms", label: "Cancellation Terms" },
+                                  { key: "paymentSection", label: "Payment Section" },
+                                  { key: "indemnity", label: "Indemnity" },
+                                ].map((f) => (
+                                  <label key={f.key} className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={editRideFormCustomSettings.includes(f.key)} onChange={(e) => {
+                                      setEditRideFormCustomSettings((prev) => e.target.checked ? [...prev, f.key] : prev.filter((k) => k !== f.key));
+                                    }} className="h-3.5 w-3.5 rounded accent-t2w-accent" />
+                                    <span className="text-xs text-gray-300">Hide {f.label}</span>
+                                  </label>
+                                ))}
+                              </div>
                             )}
                           </div>
                         )}
