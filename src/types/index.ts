@@ -155,6 +155,7 @@ export interface RideRegistration {
   agreedCancellationTerms: boolean;
   agreedIndemnity: boolean;
   paymentScreenshot: string;
+  upiTransactionId: string;
   registeredAt: string;
   confirmationCode: string;
 }

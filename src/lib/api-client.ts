@@ -835,6 +835,7 @@ export const api = {
         agreedCancellationTerms: Boolean(data?.agreedCancellationTerms),
         agreedIndemnity: Boolean(data?.agreedIndemnity),
         paymentScreenshot: String(data?.paymentScreenshot || ""),
+        upiTransactionId: String(data?.upiTransactionId || ""),
         registeredAt: new Date().toISOString(),
         confirmationCode: code,
       };
@@ -887,7 +888,7 @@ export const api = {
       "Rider Name", "Email", "Phone", "Address", "Emergency Contact Name",
       "Emergency Contact Phone", "Blood Group", "Food Preference", "Riding Type",
       "Vehicle Model", "Vehicle Reg Number", "T-Shirt Size", "Referred By",
-      "Payment Screenshot", "Registered At", "Confirmation Code",
+      "Payment Screenshot", "UPI Transaction ID", "Registered At", "Confirmation Code",
     ];
 
     const escapeCsv = (val: string) => {
@@ -902,7 +903,7 @@ export const api = {
       r.riderName, r.email, r.phone, r.address, r.emergencyContactName,
       r.emergencyContactPhone, r.bloodGroup, r.foodPreference, r.ridingType,
       r.vehicleModel, r.vehicleRegNumber, r.tshirtSize || "", r.referredBy,
-      r.paymentScreenshot ? "Yes" : "No", r.registeredAt, r.confirmationCode,
+      r.paymentScreenshot ? "Yes" : "No", r.upiTransactionId || "", r.registeredAt, r.confirmationCode,
     ].map(escapeCsv).join(","));
 
     const csv = [headers.join(","), ...rows].join("\n");
