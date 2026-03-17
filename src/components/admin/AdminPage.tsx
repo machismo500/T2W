@@ -186,10 +186,14 @@ export function AdminPage() {
   const [savingFormSettings, setSavingFormSettings] = useState(false);
   const [formSettings, setFormSettings] = useState({
     cancellationText: "Post registration, if you cancel\n1. Partial Refund: If the stay owner waives the booking charge or if a replacement rider is found, a cancellation fee of \u20B9500 will be deducted and the remaining amount will be refunded to you.\n2. No Refund: If a replacement rider is not available and the stay owner charges for your reserved slot, we will be unable to offer a refund.",
+    upiIds: [{ label: "", id: "taleson2wheels@upi" }] as { label: string; id: string }[],
+    bankAccounts: [{ label: "", details: "Contact admin for details" }] as { label: string; details: string }[],
+    // Keep legacy fields for backward compat reading
     upiId: "taleson2wheels@upi",
     bankDetails: "Contact admin for details",
     hiddenFields: [] as string[],
     enableTshirtSize: false,
+    paymentMode: "screenshot" as "screenshot" | "transaction_id" | "both",
   });
 
   useEffect(() => {
@@ -222,10 +226,20 @@ export function AdminPage() {
       });
     }
 
-    // Load form settings
+    // Load form settings (with migration from legacy single UPI/bank to arrays)
     api.regFormSettings.get().then((s) => {
       if (s && Object.keys(s).length > 0) {
-        setFormSettings((prev) => ({ ...prev, ...s } as typeof prev));
+        const merged = { ...s } as Record<string, unknown>;
+        // Migrate legacy single upiId to upiIds array
+        if (!merged.upiIds && merged.upiId) {
+          merged.upiIds = [{ label: "", id: merged.upiId as string }];
+        }
+        // Migrate legacy single bankDetails to bankAccounts array
+        if (!merged.bankAccounts && merged.bankDetails) {
+          merged.bankAccounts = [{ label: "", details: merged.bankDetails as string }];
+        }
+        if (!merged.paymentMode) merged.paymentMode = "screenshot";
+        setFormSettings((prev) => ({ ...prev, ...merged } as typeof prev));
       }
       setFormSettingsLoaded(true);
     });
@@ -1323,12 +1337,18 @@ export function AdminPage() {
                 <div className="card">
                   <h4 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
                     <Edit3 className="h-5 w-5 text-t2w-accent" />
-                    Toggle Form Fields
+                    Toggle Registration Form Fields
                   </h4>
-                  <p className="mb-4 text-sm text-t2w-muted">Show or hide optional fields on the registration form. Required fields (name, email, phone, blood group, food, riding type) cannot be hidden.</p>
+                  <p className="mb-4 text-sm text-t2w-muted">Enable or disable any field on the registration form. Rider Name is always required.</p>
                   <div className="space-y-3">
                     {[
                       { key: "address", label: "Address", desc: "Full address field" },
+                      { key: "email", label: "Email", desc: "Rider email address" },
+                      { key: "phone", label: "Phone / WhatsApp", desc: "Contact phone number" },
+                      { key: "emergencyContact", label: "Emergency Contact", desc: "Emergency contact name, relation & phone" },
+                      { key: "bloodGroup", label: "Blood Group", desc: "Blood group selection" },
+                      { key: "foodPreference", label: "Food Preference", desc: "Vegetarian / Non-vegetarian selection" },
+                      { key: "ridingType", label: "Riding Type", desc: "Solo / Rider with Pillion / Pillion Rider" },
                       { key: "referredBy", label: "Referred By", desc: "Who referred the rider to T2W" },
                       { key: "vehicle", label: "Vehicle Details", desc: "Vehicle model and registration number" },
                     ].map((field) => (
@@ -1348,7 +1368,33 @@ export function AdminPage() {
                     ))}
                   </div>
 
-                  {/* T-Shirt Size Toggle (opt-in, disabled by default) */}
+                  {/* Sections toggles */}
+                  <div className="mt-4 pt-4 border-t border-t2w-border">
+                    <p className="mb-3 text-sm font-medium text-t2w-accent">Form Sections</p>
+                    <div className="space-y-3">
+                      {[
+                        { key: "cancellationTerms", label: "Cancellation & Refund Terms", desc: "Show cancellation policy and agreement checkbox" },
+                        { key: "paymentSection", label: "Payment Section", desc: "Show payment details, UPI, bank info, and screenshot/transaction input" },
+                        { key: "indemnity", label: "Acknowledgement & Indemnity", desc: "Show risk acknowledgement and indemnity agreement" },
+                      ].map((field) => (
+                        <div key={field.key} className="flex items-center justify-between rounded-xl border border-t2w-border bg-t2w-bg px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-white">{field.label}</p>
+                            <p className="text-xs text-t2w-muted">{field.desc}</p>
+                          </div>
+                          <button onClick={() => toggleHiddenField(field.key)} className="text-t2w-accent">
+                            {formSettings.hiddenFields.includes(field.key) ? (
+                              <ToggleLeft className="h-8 w-8 text-t2w-muted" />
+                            ) : (
+                              <ToggleRight className="h-8 w-8 text-t2w-accent" />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Optional Add-ons */}
                   <div className="mt-4 pt-4 border-t border-t2w-border">
                     <p className="mb-3 text-sm font-medium text-t2w-accent">Optional Add-ons</p>
                     <div className="flex items-center justify-between rounded-xl border border-t2w-border bg-t2w-bg px-4 py-3">
@@ -1392,25 +1438,128 @@ export function AdminPage() {
                     Payment Details
                   </h4>
                   <div className="space-y-4">
+                    {/* Payment Verification Mode */}
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-300">UPI ID</label>
-                      <input
-                        type="text"
-                        className="input-field"
-                        placeholder="e.g. taleson2wheels@upi"
-                        value={formSettings.upiId}
-                        onChange={(e) => setFormSettings({ ...formSettings, upiId: e.target.value })}
-                      />
+                      <label className="mb-1.5 block text-sm font-medium text-gray-300">Payment Verification Mode</label>
+                      <p className="mb-2 text-xs text-t2w-muted">How should riders verify their payment?</p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {([
+                          { value: "screenshot", label: "Screenshot Upload", desc: "Upload payment screenshot" },
+                          { value: "transaction_id", label: "Transaction ID", desc: "Enter UPI transaction number" },
+                          { value: "both", label: "Both Options", desc: "Screenshot or transaction ID" },
+                        ] as const).map((mode) => (
+                          <button
+                            key={mode.value}
+                            onClick={() => setFormSettings({ ...formSettings, paymentMode: mode.value })}
+                            className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                              formSettings.paymentMode === mode.value
+                                ? "border-t2w-accent bg-t2w-accent/10"
+                                : "border-t2w-border bg-t2w-bg hover:border-t2w-accent/30"
+                            }`}
+                          >
+                            <p className={`text-sm font-medium ${formSettings.paymentMode === mode.value ? "text-t2w-accent" : "text-white"}`}>{mode.label}</p>
+                            <p className="text-xs text-t2w-muted">{mode.desc}</p>
+                          </button>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* Multiple UPI IDs */}
                     <div>
-                      <label className="mb-1.5 block text-sm font-medium text-gray-300">Bank Transfer Details</label>
-                      <textarea
-                        rows={3}
-                        className="input-field text-sm"
-                        placeholder="Account Name, Account No, IFSC, etc."
-                        value={formSettings.bankDetails}
-                        onChange={(e) => setFormSettings({ ...formSettings, bankDetails: e.target.value })}
-                      />
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-300">UPI IDs</label>
+                        <button
+                          onClick={() => setFormSettings({ ...formSettings, upiIds: [...formSettings.upiIds, { label: "", id: "" }] })}
+                          className="flex items-center gap-1 rounded-lg bg-t2w-accent/10 px-2.5 py-1.5 text-xs font-medium text-t2w-accent transition-colors hover:bg-t2w-accent/20"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add UPI ID
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {formSettings.upiIds.map((upi, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              className="input-field flex-1"
+                              placeholder="Label (e.g. GPay, PhonePe)"
+                              value={upi.label}
+                              onChange={(e) => {
+                                const updated = [...formSettings.upiIds];
+                                updated[idx] = { ...updated[idx], label: e.target.value };
+                                setFormSettings({ ...formSettings, upiIds: updated });
+                              }}
+                            />
+                            <input
+                              type="text"
+                              className="input-field flex-[2]"
+                              placeholder="e.g. taleson2wheels@upi"
+                              value={upi.id}
+                              onChange={(e) => {
+                                const updated = [...formSettings.upiIds];
+                                updated[idx] = { ...updated[idx], id: e.target.value };
+                                setFormSettings({ ...formSettings, upiIds: updated });
+                              }}
+                            />
+                            {formSettings.upiIds.length > 1 && (
+                              <button
+                                onClick={() => setFormSettings({ ...formSettings, upiIds: formSettings.upiIds.filter((_, i) => i !== idx) })}
+                                className="rounded-lg p-2 text-red-400 transition-colors hover:bg-red-400/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Multiple Bank Accounts */}
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-300">Bank Transfer Details</label>
+                        <button
+                          onClick={() => setFormSettings({ ...formSettings, bankAccounts: [...formSettings.bankAccounts, { label: "", details: "" }] })}
+                          className="flex items-center gap-1 rounded-lg bg-t2w-accent/10 px-2.5 py-1.5 text-xs font-medium text-t2w-accent transition-colors hover:bg-t2w-accent/20"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add Bank Account
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {formSettings.bankAccounts.map((bank, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <input
+                              type="text"
+                              className="input-field w-40 shrink-0"
+                              placeholder="Label (e.g. SBI, HDFC)"
+                              value={bank.label}
+                              onChange={(e) => {
+                                const updated = [...formSettings.bankAccounts];
+                                updated[idx] = { ...updated[idx], label: e.target.value };
+                                setFormSettings({ ...formSettings, bankAccounts: updated });
+                              }}
+                            />
+                            <textarea
+                              rows={2}
+                              className="input-field flex-1 text-sm"
+                              placeholder="Account Name, Account No, IFSC, etc."
+                              value={bank.details}
+                              onChange={(e) => {
+                                const updated = [...formSettings.bankAccounts];
+                                updated[idx] = { ...updated[idx], details: e.target.value };
+                                setFormSettings({ ...formSettings, bankAccounts: updated });
+                              }}
+                            />
+                            {formSettings.bankAccounts.length > 1 && (
+                              <button
+                                onClick={() => setFormSettings({ ...formSettings, bankAccounts: formSettings.bankAccounts.filter((_, i) => i !== idx) })}
+                                className="mt-2 rounded-lg p-2 text-red-400 transition-colors hover:bg-red-400/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
