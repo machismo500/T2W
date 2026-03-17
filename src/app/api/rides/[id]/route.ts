@@ -30,13 +30,29 @@ export async function GET(
           },
         },
         registrations: {
-          select: { id: true, userId: true },
+          select: { id: true, userId: true, confirmationCode: true },
         },
       },
     });
 
     if (!ride) {
       return NextResponse.json({ error: "Ride not found" }, { status: 404 });
+    }
+
+    // Check if current user is registered
+    let currentUserRegistered = false;
+    let currentUserConfirmationCode: string | null = null;
+    try {
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        const userReg = ride.registrations.find((r) => r.userId === currentUser.id);
+        if (userReg) {
+          currentUserRegistered = true;
+          currentUserConfirmationCode = userReg.confirmationCode || null;
+        }
+      }
+    } catch {
+      // Auth check is best-effort for GET
     }
 
     const result = {
@@ -77,6 +93,8 @@ export async function GET(
         droppedOut: p.droppedOut,
         points: p.points,
       })),
+      currentUserRegistered,
+      currentUserConfirmationCode,
     };
 
     return NextResponse.json({ ride: result });

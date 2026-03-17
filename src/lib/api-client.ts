@@ -764,16 +764,7 @@ export const api = {
     get: async (id: string) => {
       const res = await fetch(`/api/rides/${id}`);
       if (!res.ok) throw new Error("Ride not found");
-      const data = await res.json();
-      const ride = data.ride;
-      // Enrich with registration data from localStorage (until registrations are fully in DB)
-      const regs = getRideRegistrations();
-      return {
-        ride: {
-          ...ride,
-          registrations: regs[id] || [],
-        },
-      };
+      return res.json();
     },
     create: async (data: Record<string, unknown>) => {
       const res = await fetch("/api/rides", {
@@ -799,50 +790,16 @@ export const api = {
       return res.json();
     },
     register: async (id: string, data?: Record<string, unknown>) => {
-      await delay(400);
-      const regs = getRideRegistrations();
-      const userId =
-        getStorage<string | null>(AUTH_KEY, null) || "anonymous";
-      if (!regs[id]) regs[id] = [];
-
-      // Check if already registered
-      const existingReg = regs[id].find(
-        (r: RideRegistration) => r.userId === userId
-      );
-      if (existingReg) {
-        throw new Error("You are already registered for this ride");
+      const res = await fetch(`/api/rides/${id}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Registration failed" }));
+        throw new Error(err.error || "Registration failed");
       }
-
-      const code = `T2W-${id.toUpperCase().slice(0, 10)}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-
-      const registration: RideRegistration = {
-        id: `reg-${Date.now()}`,
-        rideId: id,
-        userId,
-        riderName: String(data?.riderName || ""),
-        address: String(data?.address || ""),
-        email: String(data?.email || ""),
-        phone: String(data?.phone || ""),
-        emergencyContactName: String(data?.emergencyContactName || ""),
-        emergencyContactPhone: String(data?.emergencyContactPhone || ""),
-        bloodGroup: String(data?.bloodGroup || ""),
-        referredBy: String(data?.referredBy || ""),
-        foodPreference: String(data?.foodPreference || "") as RideRegistration["foodPreference"],
-        ridingType: String(data?.ridingType || "") as RideRegistration["ridingType"],
-        vehicleModel: String(data?.vehicleModel || ""),
-        vehicleRegNumber: String(data?.vehicleRegNumber || ""),
-        tshirtSize: String(data?.tshirtSize || "") as RideRegistration["tshirtSize"],
-        agreedCancellationTerms: Boolean(data?.agreedCancellationTerms),
-        agreedIndemnity: Boolean(data?.agreedIndemnity),
-        paymentScreenshot: String(data?.paymentScreenshot || ""),
-        upiTransactionId: String(data?.upiTransactionId || ""),
-        registeredAt: new Date().toISOString(),
-        confirmationCode: code,
-      };
-
-      regs[id].push(registration as unknown as RideRegistration);
-      setStorage(RIDE_REG_KEY, regs);
-      return { registration, confirmationCode: code };
+      return res.json();
     },
     unregister: async (id: string) => {
       await delay(200);
@@ -876,9 +833,17 @@ export const api = {
     },
   },
 
-  exportRideRegistrations: (rideId: string, rideTitle: string) => {
-    const regs = getRideRegistrations();
-    const entries = regs[rideId] || [];
+  exportRideRegistrations: async (rideId: string, rideTitle: string) => {
+    let entries: RideRegistration[] = [];
+    try {
+      const res = await fetch(`/api/rides/${rideId}/registrations`);
+      if (!res.ok) { alert("Failed to fetch registrations"); return; }
+      const data = await res.json();
+      entries = data.registrations || [];
+    } catch {
+      alert("Failed to fetch registrations");
+      return;
+    }
     if (entries.length === 0) {
       alert("No registrations found for this ride");
       return;

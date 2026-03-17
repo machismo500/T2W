@@ -421,6 +421,12 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           r.highlights = JSON.parse(r.highlights);
         }
         setRide(r);
+        // Check if current user is already registered (from DB)
+        const fullResult = rideData as { ride: Ride & { currentUserRegistered?: boolean; currentUserConfirmationCode?: string | null } };
+        if (fullResult.ride?.currentUserRegistered) {
+          setRegistered(true);
+          setConfirmationCode(fullResult.ride.currentUserConfirmationCode || null);
+        }
         setRidePosts((postsData as { posts: RidePost[] }).posts);
         // Load saved poster from localStorage
         const savedPoster = localStorage.getItem(`t2w_poster_${rideId}`);

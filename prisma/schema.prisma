@@ -156,12 +156,28 @@ model Ride {
 }
 
 model RideRegistration {
-  id             String   @id @default(cuid())
-  userId         String
-  rideId         String
-  agreedIndemnity Boolean @default(false)
-  registeredAt   DateTime @default(now())
-  confirmationCode String?
+  id                    String   @id @default(cuid())
+  userId                String
+  rideId                String
+  riderName             String
+  address               String   @default("")
+  email                 String
+  phone                 String
+  emergencyContactName  String   @default("")
+  emergencyContactPhone String   @default("")
+  bloodGroup            String   @default("")
+  referredBy            String   @default("")
+  foodPreference        String   @default("")
+  ridingType            String   @default("")
+  vehicleModel          String   @default("")
+  vehicleRegNumber      String   @default("")
+  tshirtSize            String   @default("")
+  agreedCancellationTerms Boolean @default(false)
+  agreedIndemnity       Boolean  @default(false)
+  paymentScreenshot     String   @default("") @db.Text
+  upiTransactionId      String   @default("")
+  registeredAt          DateTime @default(now())
+  confirmationCode      String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
