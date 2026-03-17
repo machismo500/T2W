@@ -144,6 +144,42 @@ export interface Guideline {
 }
 
 // Ride registration data (based on registration form)
+// ── Live Ride Tracking ──
+export interface LiveRideSession {
+  id: string;
+  rideId: string;
+  status: "waiting" | "live" | "paused" | "ended";
+  startedAt?: string;
+  endedAt?: string;
+  leadRiderId?: string;
+  sweepRiderId?: string;
+  plannedRoute?: { lat: number; lng: number }[];
+}
+
+export interface LiveRiderLocation {
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  lat: number;
+  lng: number;
+  speed?: number;
+  heading?: number;
+  isDeviated: boolean;
+  isLead: boolean;
+  isSweep: boolean;
+  recordedAt: string;
+}
+
+export interface LiveRideMetrics {
+  elapsedMinutes: number;
+  distanceKm: number;
+  avgSpeedKmh: number;
+  maxSpeedKmh: number;
+  breakCount: number;
+  breakMinutes: number;
+  riderCount: number;
+}
+
 export interface RideRegistration {
   id: string;
   rideId: string;

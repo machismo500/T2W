@@ -152,6 +152,7 @@ model Ride {
 
   registrations    RideRegistration[]
   participations   RideParticipation[]
+  liveSession      LiveRideSession?
 }
 
 model RideRegistration {
@@ -220,6 +221,52 @@ model Guideline {
   content  String
   category String // group | general | safety | maintenance
   icon     String
+}
+
+model LiveRideSession {
+  id            String    @id @default(cuid())
+  rideId        String    @unique
+  status        String    @default("waiting") // waiting | live | paused | ended
+  startedAt     DateTime?
+  endedAt       DateTime?
+  startedBy     String    // userId who started the session
+  leadRiderId   String?   // userId of lead rider
+  sweepRiderId  String?   // userId of sweep rider
+  plannedRoute  String?   // JSON: [{lat,lng},...] for deviation detection
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  ride      Ride               @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  locations LiveRideLocation[]
+  breaks    LiveRideBreak[]
+}
+
+model LiveRideLocation {
+  id         String   @id @default(cuid())
+  sessionId  String
+  userId     String
+  lat        Float
+  lng        Float
+  speed      Float?   // km/h
+  heading    Float?   // degrees
+  accuracy   Float?   // meters
+  isDeviated Boolean  @default(false)
+  recordedAt DateTime @default(now())
+
+  session LiveRideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, userId])
+  @@index([sessionId, recordedAt])
+}
+
+model LiveRideBreak {
+  id        String    @id @default(cuid())
+  sessionId String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  reason    String?
+
+  session LiveRideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Content {

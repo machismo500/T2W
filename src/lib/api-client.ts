@@ -1474,6 +1474,55 @@ export const api = {
     },
   },
 
+  // ── Live Ride Session ──
+  liveSession: {
+    get: async (rideId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live`);
+      if (!res.ok) throw new Error("Failed to fetch live session");
+      return res.json();
+    },
+    control: async (rideId: string, action: "start" | "pause" | "resume" | "end") => {
+      const res = await fetch(`/api/rides/${rideId}/live`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) throw new Error("Failed to control session");
+      return res.json();
+    },
+    submitLocation: async (rideId: string, coords: { lat: number; lng: number; speed?: number; heading?: number; accuracy?: number }) => {
+      const res = await fetch(`/api/rides/${rideId}/live/location`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(coords),
+      });
+      if (!res.ok) throw new Error("Failed to submit location");
+      return res.json();
+    },
+    join: async (rideId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to join session");
+      return res.json();
+    },
+    breakControl: async (rideId: string, action: "start" | "end", reason?: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/break`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason }),
+      });
+      if (!res.ok) throw new Error("Failed to control break");
+      return res.json();
+    },
+    metrics: async (rideId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/metrics`);
+      if (!res.ok) throw new Error("Failed to fetch metrics");
+      return res.json();
+    },
+  },
+
   seed: async () => {
     await delay(100);
     return { success: true, message: "Using database-backed data" };

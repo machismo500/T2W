@@ -624,6 +624,21 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
             {ride.title}
           </h1>
           <p className="mt-4 text-lg text-t2w-muted">{ride.description}</p>
+
+          {/* Live Tracking Button */}
+          {(ride.status === "ongoing" || ride.status === "completed") && (
+            <Link
+              href={`/ride/${ride.id}/live`}
+              className={`mt-4 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                ride.status === "ongoing"
+                  ? "bg-green-600 hover:bg-green-700 text-white animate-pulse"
+                  : "bg-gray-600 hover:bg-gray-700 text-white"
+              }`}
+            >
+              <MapPin className="h-4 w-4" />
+              {ride.status === "ongoing" ? "Live Tracking" : "View Ride Map"}
+            </Link>
+          )}
         </div>
 
         {/* Ride Poster */}
