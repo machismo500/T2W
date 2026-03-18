@@ -64,23 +64,11 @@ function setStorage(key: string, value: unknown) {
 }
 
 // ── Storage keys ──
-const AUTH_KEY = "t2w_auth";
 const USERS_KEY = "t2w_users";
-const PASSWORDS_KEY = "t2w_passwords"; // email -> password overrides
 const ROLE_OVERRIDES_KEY = "t2w_role_overrides"; // userId -> role
-const RIDE_REG_KEY = "t2w_ride_registrations";
 const NOTIF_KEY = "t2w_notif_read";
-const RIDE_POSTS_KEY = "t2w_ride_posts";
-const RIDES_KEY = "t2w_custom_rides";
 const DELETED_USERS_KEY = "t2w_deleted_users";
-const REG_FORM_SETTINGS_KEY = "t2w_reg_form_settings";
-const ACTIVITY_LOG_KEY = "t2w_activity_log";
-const ABOUT_CONTENT_KEY = "t2w_about_content"; // editable About T2W content
-const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (shared across users)
-const EMAIL_OTP_KEY = "t2w_email_otp"; // email -> { code, expiresAt }
-const RESET_OTP_KEY = "t2w_reset_otp"; // email -> { code, expiresAt }
-const RESET_VERIFIED_KEY = "t2w_reset_verified"; // email -> expiresAt (verified session)
-// Participation is now managed by the database via /api/riders
+const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (client-side cache)
 
 // ── Activity Log ──
 export type ActivityAction =
@@ -111,23 +99,6 @@ export type ActivityLogEntry = {
   rollbackData?: unknown;
 };
 
-function getActivityLog(): ActivityLogEntry[] {
-  return getStorage<ActivityLogEntry[]>(ACTIVITY_LOG_KEY, []);
-}
-
-function addActivityLog(
-  entry: Omit<ActivityLogEntry, "id" | "timestamp">
-) {
-  const log = getActivityLog();
-  log.unshift({
-    ...entry,
-    id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    timestamp: new Date().toISOString(),
-  });
-  // Keep last 200 entries
-  if (log.length > 200) log.length = 200;
-  setStorage(ACTIVITY_LOG_KEY, log);
-}
 
 // ── Registered user type (stored in localStorage) ──
 interface StoredUser {
@@ -143,19 +114,6 @@ interface StoredUser {
   joinDate: string;
   isApproved: boolean;
   linkedRiderId?: string;
-}
-
-// ── Find rider profile by email match (uses cached /api/riders data) ──
-async function findRiderByEmail(email: string): Promise<RiderProfile | undefined> {
-  const riders = await getCachedRiders();
-  const lower = email.toLowerCase().trim();
-  return riders.find((r) => r.email.toLowerCase().trim() === lower);
-}
-
-// ── Determine role based on rider participation ──
-function determineRoleForRider(rider: RiderProfile | undefined): UserRole {
-  if (rider && rider.ridesCompleted > 0) return "t2w_rider";
-  return "rider";
 }
 
 // ── Built-in seed users (super admins only) ──
@@ -223,58 +181,6 @@ async function saveCustomUsers(users: StoredUser[]): Promise<void> {
   setStorage(USERS_KEY, toSave);
 }
 
-async function buildUserData(dbUser: StoredUser): Promise<{
-  user: Record<string, unknown>;
-}> {
-  // Find linked rider profile from /api/riders cache
-  const riders = await getCachedRiders();
-  const linkedRider = dbUser.linkedRiderId
-    ? riders.find((r) => r.id === dbUser.linkedRiderId)
-    : await findRiderByEmail(dbUser.email);
-
-  const ridesCompleted = linkedRider?.ridesCompleted || 0;
-  const totalKm = linkedRider?.totalKm || 0;
-
-  return {
-    user: {
-      id: dbUser.id,
-      name: dbUser.name,
-      email: dbUser.email,
-      phone: dbUser.phone,
-      role: dbUser.role,
-      joinDate: dbUser.joinDate,
-      isApproved: dbUser.isApproved,
-      city: dbUser.city,
-      ridingExperience: dbUser.ridingExperience,
-      totalKm,
-      ridesCompleted,
-      linkedRiderId: linkedRider?.id || dbUser.linkedRiderId || null,
-      motorcycles:
-        dbUser.role === "superadmin" || dbUser.role === "core_member"
-          ? []
-          : [],
-      earnedBadges:
-        dbUser.role === "superadmin"
-          ? [
-              {
-                id: "ub-conqueror",
-                earnedDate: dbUser.joinDate,
-                badge: {
-                  id: "b-conqueror",
-                  tier: "CONQUEROR",
-                  name: "Conqueror",
-                  description: "Founding member and ride organiser",
-                  minKm: 20000,
-                  icon: "crown",
-                  color: "#FF6B35",
-                },
-              },
-            ]
-          : [],
-    },
-  };
-}
-
 // ── Blogs (DB-backed via /api/blogs) ──
 async function fetchBlogs(): Promise<BlogPost[]> {
   try {
@@ -287,15 +193,6 @@ async function fetchBlogs(): Promise<BlogPost[]> {
   return [];
 }
 
-// ── Ride posts with localStorage persistence ──
-function getRidePosts(): RidePost[] {
-  return getStorage<RidePost[]>(RIDE_POSTS_KEY, []);
-}
-
-// ── Ride registrations ──
-function getRideRegistrations(): Record<string, RideRegistration[]> {
-  return getStorage(RIDE_REG_KEY, {});
-}
 
 // ── Notification state ──
 function getReadNotifs(): string[] {
@@ -314,198 +211,9 @@ function addDeletedUserIds(ids: string[]) {
 }
 
 // ── API object ──
+// Note: Authentication is handled by AuthContext via /api/auth/* server routes.
+// The api.auth.* methods have been removed as they were dead localStorage-based code.
 export const api = {
-  auth: {
-    login: async (email: string, password: string) => {
-      await delay(300);
-      const users = await getRegisteredUsers();
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      const emailLower = email.toLowerCase().trim();
-      const found = users.find((u) => {
-        if (u.email.toLowerCase() !== emailLower) return false;
-        // Accept either the override password (from forgot password) or the original
-        const override = overrides[emailLower];
-        if (override && password === override) return true;
-        return u.password === password;
-      });
-      if (!found) throw new Error("Invalid email or password");
-      setStorage(AUTH_KEY, found.id);
-      return await buildUserData(found);
-    },
-
-    // Step 1: Send a 6-digit OTP to the user's registered email
-    sendResetOtp: async (email: string) => {
-      await delay(400);
-      const users = await getRegisteredUsers();
-      const emailLower = email.toLowerCase().trim();
-      const found = users.find((u) => u.email.toLowerCase() === emailLower);
-      if (!found) throw new Error("No account found with this email");
-      // Generate 6-digit OTP with 10-minute expiry
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = Date.now() + 10 * 60 * 1000;
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
-      otps[emailLower] = { code, expiresAt };
-      setStorage(RESET_OTP_KEY, otps);
-      // Attempt to send OTP via server-side API route (fire-and-forget)
-      fetch("/api/auth/send-reset-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
-      }).catch(() => {
-        // Email sending is best-effort; OTP is stored in localStorage regardless
-      });
-      return { success: true, emailSent: true };
-    },
-
-    // Step 2: Verify the OTP code the user received via email
-    verifyResetOtp: async (email: string, code: string) => {
-      await delay(200);
-      const emailLower = email.toLowerCase().trim();
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
-      const stored = otps[emailLower];
-      if (!stored) throw new Error("No reset code found. Please request a new one.");
-      if (Date.now() > stored.expiresAt) {
-        delete otps[emailLower];
-        setStorage(RESET_OTP_KEY, otps);
-        throw new Error("Reset code has expired. Please request a new one.");
-      }
-      if (stored.code !== code.trim()) throw new Error("Invalid code. Please try again.");
-      // OTP verified – remove it and create a short-lived verified session (5 min)
-      delete otps[emailLower];
-      setStorage(RESET_OTP_KEY, otps);
-      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
-      verified[emailLower] = Date.now() + 5 * 60 * 1000;
-      setStorage(RESET_VERIFIED_KEY, verified);
-      return { success: true };
-    },
-
-    // Step 3: Set new password (only after OTP verified)
-    resetPassword: async (email: string, newPassword: string) => {
-      await delay(200);
-      const emailLower = email.toLowerCase().trim();
-      // Check verified session
-      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
-      const expiresAt = verified[emailLower];
-      if (!expiresAt || Date.now() > expiresAt) {
-        delete verified[emailLower];
-        setStorage(RESET_VERIFIED_KEY, verified);
-        throw new Error("Reset session expired. Please start over.");
-      }
-      if (!newPassword || newPassword.length < 6) {
-        throw new Error("Password must be at least 6 characters");
-      }
-      // Set the new password as override
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      overrides[emailLower] = newPassword;
-      setStorage(PASSWORDS_KEY, overrides);
-      // Clear verified session
-      delete verified[emailLower];
-      setStorage(RESET_VERIFIED_KEY, verified);
-      return { success: true };
-    },
-
-    // Change password (after login, voluntarily)
-    changePassword: async (email: string, newPassword: string) => {
-      await delay(200);
-      const emailLower = email.toLowerCase().trim();
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      overrides[emailLower] = newPassword;
-      setStorage(PASSWORDS_KEY, overrides);
-      return { success: true };
-    },
-
-    // Send OTP to email for verification (simulated)
-    sendOtp: async (email: string) => {
-      await delay(300);
-      const emailLower = email.toLowerCase().trim();
-      if (!emailLower || !emailLower.includes("@")) {
-        throw new Error("Please enter a valid email address");
-      }
-      // Check if email already registered
-      const users = await getRegisteredUsers();
-      if (users.find((u) => u.email.toLowerCase() === emailLower)) {
-        throw new Error("An account with this email already exists");
-      }
-      // Generate 6-digit OTP
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
-      otps[emailLower] = { code, expiresAt };
-      setStorage(EMAIL_OTP_KEY, otps);
-      // In production, this would send a real email
-      console.info(`[T2W] OTP for ${email}: ${code}`);
-      return { success: true, message: `Verification code sent to ${email}` };
-    },
-
-    // Verify OTP code
-    verifyOtp: async (email: string, code: string) => {
-      await delay(200);
-      const emailLower = email.toLowerCase().trim();
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
-      const stored = otps[emailLower];
-      if (!stored) throw new Error("No verification code found. Please request a new one.");
-      if (Date.now() > stored.expiresAt) {
-        delete otps[emailLower];
-        setStorage(EMAIL_OTP_KEY, otps);
-        throw new Error("Verification code has expired. Please request a new one.");
-      }
-      if (stored.code !== code.trim()) throw new Error("Invalid verification code. Please try again.");
-      // Mark as verified by removing from pending
-      delete otps[emailLower];
-      setStorage(EMAIL_OTP_KEY, otps);
-      return { success: true, verified: true };
-    },
-
-    register: async (data: Record<string, unknown>) => {
-      await delay(400);
-      const users = await getRegisteredUsers();
-      const email = String(data.email || "").toLowerCase().trim();
-      if (users.find((u) => u.email.toLowerCase() === email)) {
-        throw new Error("An account with this email already exists");
-      }
-
-      // Check if this email matches an existing rider in the database
-      const matchedRider = await findRiderByEmail(email);
-      const role = determineRoleForRider(matchedRider);
-
-      // If email matches a grid rider, merge: use grid data as base, user-provided data as override
-      const newUser: StoredUser = {
-        id: matchedRider ? matchedRider.id : `user-${Date.now()}`,
-        name: String(data.name || matchedRider?.name || ""),
-        email: String(data.email || ""),
-        password: String(data.password || ""),
-        phone: String(data.phone || matchedRider?.phone || ""),
-        city: String(data.city || ""),
-        ridingExperience: String(data.ridingExperience || (matchedRider && matchedRider.ridesCompleted > 10 ? "veteran" : matchedRider && matchedRider.ridesCompleted > 3 ? "experienced" : "")),
-        motorcycle: String(data.motorcycle || ""),
-        role,
-        joinDate: matchedRider?.joinDate || new Date().toISOString().split("T")[0],
-        isApproved: role === "t2w_rider", // T2W riders auto-approved; regular riders need approval
-        linkedRiderId: matchedRider?.id,
-      };
-      const allUsers = [...users, newUser];
-      await saveCustomUsers(allUsers);
-      setStorage(AUTH_KEY, newUser.id);
-      return buildUserData(newUser);
-    },
-
-    me: async () => {
-      await delay(100);
-      const userId = getStorage<string | null>(AUTH_KEY, null);
-      if (!userId) throw new Error("Not authenticated");
-      const users = await getRegisteredUsers();
-      const found = users.find((u) => u.id === userId);
-      if (!found) throw new Error("User not found");
-      return buildUserData(found);
-    },
-
-    logout: async () => {
-      await delay(50);
-      if (typeof window !== "undefined") localStorage.removeItem(AUTH_KEY);
-      return { success: true };
-    },
-  },
-
   users: {
     list: async (params?: string) => {
       await delay(150);
@@ -676,39 +384,20 @@ export const api = {
     },
     // Change role (SuperAdmin only) – persisted to DB + localStorage
     changeRole: async (id: string, newRole: UserRole) => {
-      // Find the user's email for DB lookup (the id may be a frontend-only ID)
-      const allKnown = await getRegisteredUsers();
-      const knownUser = allKnown.find((u) => u.id === id);
-      const staticUser = mockAllUsers.find((u) => u.id === id);
+      // Find the user's email for DB lookup
       const allRidersForRole = await getRiderProfiles();
       const riderProfile = allRidersForRole.find((r) => r.id === id);
-      const email = knownUser?.email || staticUser?.email || riderProfile?.email || undefined;
+      const email = riderProfile?.email || undefined;
 
-      // Always persist to localStorage immediately for instant UI feedback
-      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
-      roleOverrides[id] = newRole;
-      setStorage(ROLE_OVERRIDES_KEY, roleOverrides);
-
-      // Also persist to DB (RiderProfile.role + User.role)
-      try {
-        const res = await fetch("/api/users/role", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ userId: id, email, newRole }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          console.log("[T2W] Role persisted to DB:", data);
-          return { success: true, id: data.userId || id, role: newRole };
-        }
-        console.warn("[T2W] DB role change returned", res.status, data.error || "");
-      } catch (e) {
-        console.warn("[T2W] DB role change network error:", e);
-      }
-
-      // DB failed — localStorage is already updated above, return success
-      return { success: true, id, role: newRole };
+      const res = await fetch("/api/users/role", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ userId: id, email, newRole }),
+      });
+      if (!res.ok) throw new Error("Failed to change role");
+      const data = await res.json();
+      return { success: true, id: data.userId || id, role: newRole };
     },
     // Get crew members (superadmin + core_member roles) for "The Crew" section
     getCrew: async () => {
@@ -883,12 +572,22 @@ export const api = {
 
   regFormSettings: {
     get: async () => {
-      await delay(50);
-      return getStorage<Record<string, unknown>>(REG_FORM_SETTINGS_KEY, {});
+      try {
+        const res = await fetch("/api/site-settings?key=reg_form_settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.value) return data.value;
+        }
+      } catch { /* fall through */ }
+      return {};
     },
     save: async (settings: Record<string, unknown>) => {
-      await delay(100);
-      setStorage(REG_FORM_SETTINGS_KEY, settings);
+      const res = await fetch("/api/site-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "reg_form_settings", value: settings }),
+      });
+      if (!res.ok) throw new Error("Failed to save settings");
       return { success: true };
     },
   },
@@ -1019,63 +718,44 @@ export const api = {
 
   ridePosts: {
     list: async (rideId: string) => {
-      await delay(100);
-      const posts = getRidePosts();
-      return { posts: posts.filter((p) => p.rideId === rideId) };
+      const res = await fetch(`/api/ride-posts?rideId=${rideId}`);
+      if (!res.ok) return { posts: [] };
+      return res.json();
     },
     listApproved: async (rideId: string) => {
-      await delay(100);
-      const posts = getRidePosts();
-      return {
-        posts: posts.filter(
-          (p) => p.rideId === rideId && p.approvalStatus === "approved"
-        ),
-      };
+      const res = await fetch(`/api/ride-posts?rideId=${rideId}&status=approved`);
+      if (!res.ok) return { posts: [] };
+      return res.json();
     },
     listPending: async () => {
-      await delay(100);
-      const posts = getRidePosts();
-      return { posts: posts.filter((p) => p.approvalStatus === "pending") };
+      const res = await fetch(`/api/ride-posts?status=pending`);
+      if (!res.ok) return { posts: [] };
+      return res.json();
     },
     create: async (data: Record<string, unknown>) => {
-      await delay(300);
-      const newPost: RidePost = {
-        id: `ridepost-${Date.now()}`,
-        rideId: String(data.rideId || ""),
-        authorId: String(data.authorId || ""),
-        authorName: String(data.authorName || ""),
-        content: String(data.content || ""),
-        images: (data.images as string[]) || [],
-        createdAt: new Date().toISOString(),
-        approvalStatus: (data.approvalStatus as BlogApprovalStatus) || "pending",
-        approvedBy: data.approvedBy as string | undefined,
-      };
-      const posts = getRidePosts();
-      posts.push(newPost);
-      setStorage(RIDE_POSTS_KEY, posts);
-      return { post: newPost };
+      const res = await fetch("/api/ride-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create ride post");
+      return res.json();
     },
-    approve: async (id: string, approvedBy: string) => {
-      await delay(200);
-      const posts = getRidePosts();
-      const post = posts.find((p) => p.id === id);
-      if (post) {
-        post.approvalStatus = "approved";
-        post.approvedBy = approvedBy;
-        setStorage(RIDE_POSTS_KEY, posts);
-      }
-      return { success: true, id };
+    approve: async (id: string, _approvedBy: string) => {
+      const res = await fetch(`/api/ride-posts/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalStatus: "approved" }),
+      });
+      return { success: res.ok, id };
     },
-    reject: async (id: string, rejectedBy: string) => {
-      await delay(200);
-      const posts = getRidePosts();
-      const post = posts.find((p) => p.id === id);
-      if (post) {
-        post.approvalStatus = "rejected";
-        post.approvedBy = rejectedBy;
-        setStorage(RIDE_POSTS_KEY, posts);
-      }
-      return { success: true, id };
+    reject: async (id: string, _rejectedBy: string) => {
+      const res = await fetch(`/api/ride-posts/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalStatus: "rejected" }),
+      });
+      return { success: res.ok, id };
     },
   },
 
@@ -1176,9 +856,15 @@ export const api = {
       const pendingBlogs = allBlogs.filter(
         (b) => b.approvalStatus === "pending"
       );
-      const pendingPosts = getRidePosts().filter(
-        (p) => p.approvalStatus === "pending"
-      );
+      // Fetch pending ride posts from DB
+      let pendingPostsCount = 0;
+      try {
+        const postsRes = await fetch("/api/ride-posts?status=pending");
+        if (postsRes.ok) {
+          const postsData = await postsRes.json();
+          pendingPostsCount = (postsData.posts || []).length;
+        }
+      } catch { /* ignore */ }
       return {
         stats: {
           totalUsers: new Set([
@@ -1190,7 +876,7 @@ export const api = {
           activeRides: allRides.filter((r) => r.status === "upcoming").length,
           totalContent: mockContentItems.length,
           pendingBlogs: pendingBlogs.length,
-          pendingPosts: pendingPosts.length,
+          pendingPosts: pendingPostsCount,
         },
       };
     },
@@ -1216,16 +902,27 @@ export const api = {
 
   activityLog: {
     list: async () => {
-      await delay(50);
-      return { entries: getActivityLog() };
+      try {
+        const res = await fetch("/api/activity-log");
+        if (res.ok) return res.json();
+      } catch { /* fall through */ }
+      return { entries: [] };
     },
-    add: (entry: Omit<ActivityLogEntry, "id" | "timestamp">) => {
-      addActivityLog(entry);
+    add: async (entry: Omit<ActivityLogEntry, "id" | "timestamp">) => {
+      try {
+        await fetch("/api/activity-log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entry),
+        });
+      } catch {
+        // Best-effort logging
+      }
     },
     rollback: async (entryId: string) => {
-      await delay(100);
-      const log = getActivityLog();
-      const entry = log.find((e) => e.id === entryId);
+      // Fetch the entry to get rollback data
+      const { entries } = await api.activityLog.list();
+      const entry = entries.find((e: ActivityLogEntry) => e.id === entryId);
       if (!entry || !entry.rollbackData) {
         throw new Error("Cannot rollback this action");
       }
@@ -1234,39 +931,16 @@ export const api = {
 
       switch (entry.action) {
         case "ride_deleted": {
-          // Re-create the deleted ride via API
-          fetch("/api/rides", {
+          await fetch("/api/rides", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
           }).catch(() => {});
           break;
         }
-        case "user_deleted": {
-          // Re-add the deleted user
-          const users = await getRegisteredUsers();
-          users.push(data as unknown as StoredUser);
-          await saveCustomUsers(users);
-          // Remove from deleted IDs
-          const deletedIds = getStorage<string[]>(DELETED_USERS_KEY, []);
-          setStorage(DELETED_USERS_KEY, deletedIds.filter((id) => id !== entry.targetId));
-          break;
-        }
-        case "user_bulk_deleted": {
-          // Re-add all deleted users
-          const bulkUsers = data.users as unknown as StoredUser[];
-          const currentUsers = await getRegisteredUsers();
-          currentUsers.push(...bulkUsers);
-          await saveCustomUsers(currentUsers);
-          const deletedBulkIds = getStorage<string[]>(DELETED_USERS_KEY, []);
-          const restoredIds = new Set(bulkUsers.map((u) => u.id));
-          setStorage(DELETED_USERS_KEY, deletedBulkIds.filter((id) => !restoredIds.has(id)));
-          break;
-        }
         case "ride_edited": {
-          // Restore original ride data via API
           if (entry.targetId) {
-            fetch(`/api/rides/${entry.targetId}`, {
+            await fetch(`/api/rides/${entry.targetId}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(data),
@@ -1275,12 +949,8 @@ export const api = {
           break;
         }
         case "user_role_changed": {
-          // Restore original role
-          const roleUsers = await getRegisteredUsers();
-          const roleUser = roleUsers.find((u) => u.id === entry.targetId);
-          if (roleUser) {
-            roleUser.role = data.previousRole as UserRole;
-            await saveCustomUsers(roleUsers);
+          if (entry.targetId && data.previousRole) {
+            await api.users.changeRole(entry.targetId, data.previousRole as UserRole);
           }
           break;
         }
@@ -1288,13 +958,15 @@ export const api = {
           throw new Error("Rollback not supported for this action type");
       }
 
-      // Mark as rolled back in the log
-      const updatedLog = getActivityLog();
-      const idx = updatedLog.findIndex((e) => e.id === entryId);
-      if (idx !== -1) {
-        updatedLog[idx] = { ...updatedLog[idx], rollbackData: undefined, details: (updatedLog[idx].details || "") + " [ROLLED BACK]" };
-        setStorage(ACTIVITY_LOG_KEY, updatedLog);
-      }
+      // Mark as rolled back by updating the entry details
+      await api.activityLog.add({
+        action: "ride_edited" as ActivityAction,
+        performedBy: entry.performedBy,
+        performedByName: entry.performedByName,
+        targetId: entry.targetId,
+        targetName: entry.targetName,
+        details: `Rolled back: ${entry.action}`,
+      });
 
       return { success: true };
     },
@@ -1303,11 +975,22 @@ export const api = {
   // About T2W content (editable by Super Admin)
   aboutContent: {
     get: async () => {
-      const saved = getStorage<Record<string, string> | null>(ABOUT_CONTENT_KEY, null);
-      return { content: saved };
+      try {
+        const res = await fetch("/api/site-settings?key=about_content");
+        if (res.ok) {
+          const data = await res.json();
+          return { content: data.value || null };
+        }
+      } catch { /* fall through */ }
+      return { content: null };
     },
     save: async (content: Record<string, string>) => {
-      setStorage(ABOUT_CONTENT_KEY, content);
+      const res = await fetch("/api/site-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "about_content", value: content }),
+      });
+      if (!res.ok) throw new Error("Failed to save about content");
       return { success: true };
     },
   },

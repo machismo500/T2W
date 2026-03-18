@@ -153,6 +153,7 @@ model Ride {
   registrations    RideRegistration[]
   participations   RideParticipation[]
   liveSession      LiveRideSession?
+  ridePosts        RidePost[]
 }
 
 model RideRegistration {
@@ -293,4 +294,43 @@ model Content {
   lastUpdated DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model RidePost {
+  id             String   @id @default(cuid())
+  rideId         String
+  authorId       String?
+  authorName     String
+  content        String   @db.Text
+  images         String?  // JSON array of image URLs
+  approvalStatus String   @default("pending") // pending | approved | rejected
+  approvedBy     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([rideId])
+  @@index([approvalStatus])
+}
+
+model ActivityLog {
+  id              String   @id @default(cuid())
+  action          String   // ride_created | user_deleted | role_changed | etc.
+  performedBy     String
+  performedByName String
+  targetId        String
+  targetName      String
+  details         String?
+  rollbackData    String?  @db.Text // JSON for undo
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model SiteSettings {
+  id    String @id @default(cuid())
+  key   String @unique  // e.g. "reg_form_settings", "about_content"
+  value String @db.Text // JSON value
+  updatedAt DateTime @updatedAt
 }
