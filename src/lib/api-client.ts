@@ -64,16 +64,11 @@ function setStorage(key: string, value: unknown) {
 }
 
 // ── Storage keys ──
-const AUTH_KEY = "t2w_auth";
 const USERS_KEY = "t2w_users";
-const PASSWORDS_KEY = "t2w_passwords"; // email -> password overrides
 const ROLE_OVERRIDES_KEY = "t2w_role_overrides"; // userId -> role
 const NOTIF_KEY = "t2w_notif_read";
 const DELETED_USERS_KEY = "t2w_deleted_users";
 const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (client-side cache)
-const EMAIL_OTP_KEY = "t2w_email_otp";
-const RESET_OTP_KEY = "t2w_reset_otp";
-const RESET_VERIFIED_KEY = "t2w_reset_verified";
 
 // ── Activity Log ──
 export type ActivityAction =
@@ -119,19 +114,6 @@ interface StoredUser {
   joinDate: string;
   isApproved: boolean;
   linkedRiderId?: string;
-}
-
-// ── Find rider profile by email match (uses cached /api/riders data) ──
-async function findRiderByEmail(email: string): Promise<RiderProfile | undefined> {
-  const riders = await getCachedRiders();
-  const lower = email.toLowerCase().trim();
-  return riders.find((r) => r.email.toLowerCase().trim() === lower);
-}
-
-// ── Determine role based on rider participation ──
-function determineRoleForRider(rider: RiderProfile | undefined): UserRole {
-  if (rider && rider.ridesCompleted > 0) return "t2w_rider";
-  return "rider";
 }
 
 // ── Built-in seed users (super admins only) ──
@@ -199,58 +181,6 @@ async function saveCustomUsers(users: StoredUser[]): Promise<void> {
   setStorage(USERS_KEY, toSave);
 }
 
-async function buildUserData(dbUser: StoredUser): Promise<{
-  user: Record<string, unknown>;
-}> {
-  // Find linked rider profile from /api/riders cache
-  const riders = await getCachedRiders();
-  const linkedRider = dbUser.linkedRiderId
-    ? riders.find((r) => r.id === dbUser.linkedRiderId)
-    : await findRiderByEmail(dbUser.email);
-
-  const ridesCompleted = linkedRider?.ridesCompleted || 0;
-  const totalKm = linkedRider?.totalKm || 0;
-
-  return {
-    user: {
-      id: dbUser.id,
-      name: dbUser.name,
-      email: dbUser.email,
-      phone: dbUser.phone,
-      role: dbUser.role,
-      joinDate: dbUser.joinDate,
-      isApproved: dbUser.isApproved,
-      city: dbUser.city,
-      ridingExperience: dbUser.ridingExperience,
-      totalKm,
-      ridesCompleted,
-      linkedRiderId: linkedRider?.id || dbUser.linkedRiderId || null,
-      motorcycles:
-        dbUser.role === "superadmin" || dbUser.role === "core_member"
-          ? []
-          : [],
-      earnedBadges:
-        dbUser.role === "superadmin"
-          ? [
-              {
-                id: "ub-conqueror",
-                earnedDate: dbUser.joinDate,
-                badge: {
-                  id: "b-conqueror",
-                  tier: "CONQUEROR",
-                  name: "Conqueror",
-                  description: "Founding member and ride organiser",
-                  minKm: 20000,
-                  icon: "crown",
-                  color: "#FF6B35",
-                },
-              },
-            ]
-          : [],
-    },
-  };
-}
-
 // ── Blogs (DB-backed via /api/blogs) ──
 async function fetchBlogs(): Promise<BlogPost[]> {
   try {
@@ -281,198 +211,9 @@ function addDeletedUserIds(ids: string[]) {
 }
 
 // ── API object ──
+// Note: Authentication is handled by AuthContext via /api/auth/* server routes.
+// The api.auth.* methods have been removed as they were dead localStorage-based code.
 export const api = {
-  auth: {
-    login: async (email: string, password: string) => {
-      await delay(300);
-      const users = await getRegisteredUsers();
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      const emailLower = email.toLowerCase().trim();
-      const found = users.find((u) => {
-        if (u.email.toLowerCase() !== emailLower) return false;
-        // Accept either the override password (from forgot password) or the original
-        const override = overrides[emailLower];
-        if (override && password === override) return true;
-        return u.password === password;
-      });
-      if (!found) throw new Error("Invalid email or password");
-      setStorage(AUTH_KEY, found.id);
-      return await buildUserData(found);
-    },
-
-    // Step 1: Send a 6-digit OTP to the user's registered email
-    sendResetOtp: async (email: string) => {
-      await delay(400);
-      const users = await getRegisteredUsers();
-      const emailLower = email.toLowerCase().trim();
-      const found = users.find((u) => u.email.toLowerCase() === emailLower);
-      if (!found) throw new Error("No account found with this email");
-      // Generate 6-digit OTP with 10-minute expiry
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = Date.now() + 10 * 60 * 1000;
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
-      otps[emailLower] = { code, expiresAt };
-      setStorage(RESET_OTP_KEY, otps);
-      // Attempt to send OTP via server-side API route (fire-and-forget)
-      fetch("/api/auth/send-reset-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailLower, name: found.name, otpCode: code }),
-      }).catch(() => {
-        // Email sending is best-effort; OTP is stored in localStorage regardless
-      });
-      return { success: true, emailSent: true };
-    },
-
-    // Step 2: Verify the OTP code the user received via email
-    verifyResetOtp: async (email: string, code: string) => {
-      await delay(200);
-      const emailLower = email.toLowerCase().trim();
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(RESET_OTP_KEY, {});
-      const stored = otps[emailLower];
-      if (!stored) throw new Error("No reset code found. Please request a new one.");
-      if (Date.now() > stored.expiresAt) {
-        delete otps[emailLower];
-        setStorage(RESET_OTP_KEY, otps);
-        throw new Error("Reset code has expired. Please request a new one.");
-      }
-      if (stored.code !== code.trim()) throw new Error("Invalid code. Please try again.");
-      // OTP verified – remove it and create a short-lived verified session (5 min)
-      delete otps[emailLower];
-      setStorage(RESET_OTP_KEY, otps);
-      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
-      verified[emailLower] = Date.now() + 5 * 60 * 1000;
-      setStorage(RESET_VERIFIED_KEY, verified);
-      return { success: true };
-    },
-
-    // Step 3: Set new password (only after OTP verified)
-    resetPassword: async (email: string, newPassword: string) => {
-      await delay(200);
-      const emailLower = email.toLowerCase().trim();
-      // Check verified session
-      const verified = getStorage<Record<string, number>>(RESET_VERIFIED_KEY, {});
-      const expiresAt = verified[emailLower];
-      if (!expiresAt || Date.now() > expiresAt) {
-        delete verified[emailLower];
-        setStorage(RESET_VERIFIED_KEY, verified);
-        throw new Error("Reset session expired. Please start over.");
-      }
-      if (!newPassword || newPassword.length < 6) {
-        throw new Error("Password must be at least 6 characters");
-      }
-      // Set the new password as override
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      overrides[emailLower] = newPassword;
-      setStorage(PASSWORDS_KEY, overrides);
-      // Clear verified session
-      delete verified[emailLower];
-      setStorage(RESET_VERIFIED_KEY, verified);
-      return { success: true };
-    },
-
-    // Change password (after login, voluntarily)
-    changePassword: async (email: string, newPassword: string) => {
-      await delay(200);
-      const emailLower = email.toLowerCase().trim();
-      const overrides = getStorage<Record<string, string>>(PASSWORDS_KEY, {});
-      overrides[emailLower] = newPassword;
-      setStorage(PASSWORDS_KEY, overrides);
-      return { success: true };
-    },
-
-    // Send OTP to email for verification (simulated)
-    sendOtp: async (email: string) => {
-      await delay(300);
-      const emailLower = email.toLowerCase().trim();
-      if (!emailLower || !emailLower.includes("@")) {
-        throw new Error("Please enter a valid email address");
-      }
-      // Check if email already registered
-      const users = await getRegisteredUsers();
-      if (users.find((u) => u.email.toLowerCase() === emailLower)) {
-        throw new Error("An account with this email already exists");
-      }
-      // Generate 6-digit OTP
-      const code = String(Math.floor(100000 + Math.random() * 900000));
-      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
-      otps[emailLower] = { code, expiresAt };
-      setStorage(EMAIL_OTP_KEY, otps);
-      // In production, this would send a real email
-      console.info(`[T2W] OTP for ${email}: ${code}`);
-      return { success: true, message: `Verification code sent to ${email}` };
-    },
-
-    // Verify OTP code
-    verifyOtp: async (email: string, code: string) => {
-      await delay(200);
-      const emailLower = email.toLowerCase().trim();
-      const otps = getStorage<Record<string, { code: string; expiresAt: number }>>(EMAIL_OTP_KEY, {});
-      const stored = otps[emailLower];
-      if (!stored) throw new Error("No verification code found. Please request a new one.");
-      if (Date.now() > stored.expiresAt) {
-        delete otps[emailLower];
-        setStorage(EMAIL_OTP_KEY, otps);
-        throw new Error("Verification code has expired. Please request a new one.");
-      }
-      if (stored.code !== code.trim()) throw new Error("Invalid verification code. Please try again.");
-      // Mark as verified by removing from pending
-      delete otps[emailLower];
-      setStorage(EMAIL_OTP_KEY, otps);
-      return { success: true, verified: true };
-    },
-
-    register: async (data: Record<string, unknown>) => {
-      await delay(400);
-      const users = await getRegisteredUsers();
-      const email = String(data.email || "").toLowerCase().trim();
-      if (users.find((u) => u.email.toLowerCase() === email)) {
-        throw new Error("An account with this email already exists");
-      }
-
-      // Check if this email matches an existing rider in the database
-      const matchedRider = await findRiderByEmail(email);
-      const role = determineRoleForRider(matchedRider);
-
-      // If email matches a grid rider, merge: use grid data as base, user-provided data as override
-      const newUser: StoredUser = {
-        id: matchedRider ? matchedRider.id : `user-${Date.now()}`,
-        name: String(data.name || matchedRider?.name || ""),
-        email: String(data.email || ""),
-        password: String(data.password || ""),
-        phone: String(data.phone || matchedRider?.phone || ""),
-        city: String(data.city || ""),
-        ridingExperience: String(data.ridingExperience || (matchedRider && matchedRider.ridesCompleted > 10 ? "veteran" : matchedRider && matchedRider.ridesCompleted > 3 ? "experienced" : "")),
-        motorcycle: String(data.motorcycle || ""),
-        role,
-        joinDate: matchedRider?.joinDate || new Date().toISOString().split("T")[0],
-        isApproved: role === "t2w_rider", // T2W riders auto-approved; regular riders need approval
-        linkedRiderId: matchedRider?.id,
-      };
-      const allUsers = [...users, newUser];
-      await saveCustomUsers(allUsers);
-      setStorage(AUTH_KEY, newUser.id);
-      return buildUserData(newUser);
-    },
-
-    me: async () => {
-      await delay(100);
-      const userId = getStorage<string | null>(AUTH_KEY, null);
-      if (!userId) throw new Error("Not authenticated");
-      const users = await getRegisteredUsers();
-      const found = users.find((u) => u.id === userId);
-      if (!found) throw new Error("User not found");
-      return buildUserData(found);
-    },
-
-    logout: async () => {
-      await delay(50);
-      if (typeof window !== "undefined") localStorage.removeItem(AUTH_KEY);
-      return { success: true };
-    },
-  },
-
   users: {
     list: async (params?: string) => {
       await delay(150);
