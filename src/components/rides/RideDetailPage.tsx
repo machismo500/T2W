@@ -353,7 +353,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
 
   const [posterUploading, setPosterUploading] = useState(false);
 
-  const handlePosterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePosterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -365,40 +365,16 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
       return;
     }
     setPosterUploading(true);
-
-    // Compress image via canvas to avoid localStorage quota issues
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const canvas = document.createElement("canvas");
-      const MAX_WIDTH = 1200;
-      let width = img.width;
-      let height = img.height;
-      if (width > MAX_WIDTH) {
-        height = Math.round((height * MAX_WIDTH) / width);
-        width = MAX_WIDTH;
-      }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { setPosterUploading(false); return; }
-      ctx.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
-      try {
-        localStorage.setItem(`t2w_poster_${rideId}`, dataUrl);
-        setPosterUrl(dataUrl);
-      } catch {
-        alert("Image too large to save. Please use a smaller image.");
-      }
-      setPosterUploading(false);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      alert("Failed to load image. Please try another file.");
-      setPosterUploading(false);
-    };
-    img.src = objectUrl;
+    try {
+      // Upload file to server
+      const url = await api.upload(file, "poster", rideId);
+      // Save poster URL to ride record
+      await api.rides.update(rideId, { posterUrl: url });
+      setPosterUrl(url);
+    } catch {
+      alert("Failed to upload poster. Please try again.");
+    }
+    setPosterUploading(false);
   };
 
   useEffect(() => {
@@ -428,9 +404,6 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           setConfirmationCode(fullResult.ride.currentUserConfirmationCode || null);
         }
         setRidePosts((postsData as { posts: RidePost[] }).posts);
-        // Load saved poster from localStorage
-        const savedPoster = localStorage.getItem(`t2w_poster_${rideId}`);
-        if (savedPoster) setPosterUrl(savedPoster);
       })
       .catch((err) => {
         if (cancelled) return;

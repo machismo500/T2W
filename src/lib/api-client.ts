@@ -1,45 +1,11 @@
 import {
   mockNotifications,
-  mockPendingUsers,
-  mockAllUsers,
   mockContentItems,
 } from "@/data/mock";
 import {
   type RiderProfile,
 } from "@/data/rider-profiles";
-import type { Ride, BlogPost, User, UserRole, RidePost, BlogApprovalStatus, RideRegistration } from "@/types";
-
-// ── Rider cache (fetched from /api/riders, replaces grid-store dependency) ──
-let _riderCache: RiderProfile[] | null = null;
-let _riderCacheTime = 0;
-const CACHE_TTL = 30000; // 30 seconds
-
-async function getCachedRiders(): Promise<RiderProfile[]> {
-  if (_riderCache && Date.now() - _riderCacheTime < CACHE_TTL) return _riderCache;
-  try {
-    const res = await fetch("/api/riders");
-    if (res.ok) {
-      const data = await res.json();
-      _riderCache = data.riders || [];
-      _riderCacheTime = Date.now();
-      return _riderCache!;
-    }
-  } catch { /* fall back to stale cache */ }
-  return _riderCache || [];
-}
-
-async function getRiderProfiles(): Promise<RiderProfile[]> {
-  return getCachedRiders();
-}
-
-async function getRiderNameToIdMap(): Promise<Record<string, string>> {
-  const riders = await getCachedRiders();
-  const map: Record<string, string> = {};
-  for (const r of riders) {
-    map[r.name.toLowerCase().trim()] = r.id;
-  }
-  return map;
-}
+import type { Ride, BlogPost, UserRole, RidePost, RideRegistration } from "@/types";
 
 // ── Helpers ──
 function delay(ms = 100) {
@@ -63,11 +29,8 @@ function setStorage(key: string, value: unknown) {
   window.dispatchEvent(new CustomEvent("t2w-storage-update", { detail: { key } }));
 }
 
-// ── Storage keys ──
-const USERS_KEY = "t2w_users";
-const ROLE_OVERRIDES_KEY = "t2w_role_overrides"; // userId -> role
+// ── Storage keys (client-side cache only) ──
 const NOTIF_KEY = "t2w_notif_read";
-const DELETED_USERS_KEY = "t2w_deleted_users";
 const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (client-side cache)
 
 // ── Activity Log ──
@@ -100,87 +63,6 @@ export type ActivityLogEntry = {
 };
 
 
-// ── Registered user type (stored in localStorage) ──
-interface StoredUser {
-  id: string;
-  name: string;
-  email: string;
-  password: string;
-  phone: string;
-  city: string;
-  ridingExperience: string;
-  motorcycle: string;
-  role: UserRole;
-  joinDate: string;
-  isApproved: boolean;
-  linkedRiderId?: string;
-}
-
-// ── Built-in seed users (super admins only) ──
-async function getBuiltinUsers(): Promise<StoredUser[]> {
-  const riders = await getCachedRiders();
-  return [
-    {
-      id: "admin-1",
-      name: "Roshan Manuel",
-      email: "roshan.manuel@gmail.com",
-      password: "PingPong!2345",
-      phone: "+91 9880141543",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "superadmin",
-      joinDate: "2024-03-16",
-      isApproved: true,
-      linkedRiderId: riders.find((r) => r.email.toLowerCase() === "roshan.manuel@gmail.com")?.id,
-    },
-    {
-      id: "admin-6",
-      name: "T2W Official",
-      email: "taleson2wheels.official@gmail.com",
-      password: "admin123",
-      phone: "",
-      city: "Bangalore",
-      ridingExperience: "veteran",
-      motorcycle: "",
-      role: "superadmin",
-      joinDate: "2024-03-16",
-      isApproved: true,
-    },
-  ];
-}
-
-
-async function getRegisteredUsers(): Promise<StoredUser[]> {
-  const stored = getStorage<StoredUser[]>(USERS_KEY, []);
-  // Merge: built-in users take precedence for their emails
-  const builtinUsers = await getBuiltinUsers();
-  const builtinEmails = new Set(builtinUsers.map((u) => u.email.toLowerCase()));
-  const customUsers = stored.filter(
-    (u) => !builtinEmails.has(u.email.toLowerCase())
-  );
-  // Apply role overrides (persisted by SuperAdmin role changes)
-  const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
-  const allUsers = [...builtinUsers, ...customUsers];
-  for (const user of allUsers) {
-    if (roleOverrides[user.id]) {
-      user.role = roleOverrides[user.id];
-    }
-  }
-  return allUsers;
-}
-
-async function saveCustomUsers(users: StoredUser[]): Promise<void> {
-  const builtinUsers = await getBuiltinUsers();
-  const builtinEmails = new Set(
-    builtinUsers.map((u) => u.email.toLowerCase())
-  );
-  const toSave = users.filter(
-    (u) => !builtinEmails.has(u.email.toLowerCase())
-  );
-  setStorage(USERS_KEY, toSave);
-}
-
 // ── Blogs (DB-backed via /api/blogs) ──
 async function fetchBlogs(): Promise<BlogPost[]> {
   try {
@@ -199,201 +81,63 @@ function getReadNotifs(): string[] {
   return getStorage(NOTIF_KEY, []);
 }
 
-// ── Deleted users tracking ──
-function getDeletedUserIds(): Set<string> {
-  return new Set(getStorage<string[]>(DELETED_USERS_KEY, []));
-}
-
-function addDeletedUserIds(ids: string[]) {
-  const current = getStorage<string[]>(DELETED_USERS_KEY, []);
-  const updated = [...new Set([...current, ...ids])];
-  setStorage(DELETED_USERS_KEY, updated);
-}
-
 // ── API object ──
 // Note: Authentication is handled by AuthContext via /api/auth/* server routes.
 // The api.auth.* methods have been removed as they were dead localStorage-based code.
 export const api = {
   users: {
     list: async (params?: string) => {
-      await delay(150);
-      if (params?.includes("pending")) {
-        return { users: mockPendingUsers };
-      }
-
-      // Fetch DB roles from /api/riders (includes userRole from RiderProfile.role)
-      let dbRoles: Record<string, string> = {}; // email -> role
-      let dbRolesById: Record<string, string> = {}; // id -> role
-      try {
-        const res = await fetch("/api/riders");
-        if (res.ok) {
-          const data = await res.json();
-          for (const r of (data.riders || []) as Array<{ id: string; email: string; userRole?: string | null }>) {
-            if (r.userRole && r.userRole !== "rider") {
-              dbRoles[r.email.toLowerCase().trim()] = r.userRole;
-              dbRolesById[r.id] = r.userRole;
-            }
-          }
-        }
-      } catch { /* ignore - will fall back to localStorage roles */ }
-
-      // Role overrides from localStorage (immediate UI update before DB propagates)
-      const roleOverrides = getStorage<Record<string, UserRole>>(ROLE_OVERRIDES_KEY, {});
-
-      // Helper: resolve role for a user/rider, preferring DB > localStorage override > default
-      function resolveRole(id: string, email: string, defaultRole: string): string {
-        const emailKey = email.toLowerCase().trim();
-        return dbRoles[emailKey] || dbRolesById[id] || roleOverrides[id] || defaultRole;
-      }
-
-      // Start with registered users (built-in + localStorage signups)
-      const registeredUsers = await getRegisteredUsers();
-      const combined: Array<{
-        id: string;
-        name: string;
-        email: string;
-        role: string;
-        isApproved: boolean;
-        joinDate: string;
-      }> = [];
-
-      // 1. Add all mockAllUsers, merging role from DB/overrides/registeredUsers
-      const addedEmails = new Set<string>();
-      mockAllUsers.forEach((u) => {
-        const reg = registeredUsers.find(
-          (r) => r.email.toLowerCase() === u.email.toLowerCase()
-        );
-        const baseRole = reg ? reg.role : u.role;
-        combined.push({ ...u, role: resolveRole(u.id, u.email, baseRole) });
-        addedEmails.add(u.email.toLowerCase());
-      });
-
-      // 2. Add registered users not already in the list
-      registeredUsers
-        .filter((r) => !addedEmails.has(r.email.toLowerCase()))
-        .forEach((r) => {
-          combined.push({
-            id: r.id,
-            name: r.name,
-            email: r.email,
-            role: resolveRole(r.id, r.email, r.role),
-            isApproved: r.isApproved,
-            joinDate: r.joinDate,
-          });
-          addedEmails.add(r.email.toLowerCase());
-        });
-
-      // 3. Add all rider profiles from DB
-      const riderProfiles = await getRiderProfiles();
-      riderProfiles.forEach((rider) => {
-        if (addedEmails.has(rider.email.toLowerCase())) return;
-        const defaultRole = rider.ridesCompleted > 0 ? "t2w_rider" : "rider";
-        combined.push({
-          id: rider.id,
-          name: rider.name,
-          email: rider.email,
-          role: resolveRole(rider.id, rider.email, defaultRole),
-          isApproved: true,
-          joinDate: rider.joinDate || "2024-03-16",
-        });
-        addedEmails.add(rider.email.toLowerCase());
-      });
-
-      // Filter out deleted users
-      const deletedIds = getDeletedUserIds();
-      return { users: combined.filter((u) => !deletedIds.has(u.id)) };
+      const status = params?.includes("pending") ? "pending" : "";
+      const url = status ? `/api/users?status=${status}` : "/api/users";
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to load users");
+      return res.json();
     },
     get: async (id: string) => {
-      await delay(100);
-      const u = mockAllUsers.find((u) => u.id === id);
-      return { user: u || null };
+      const res = await fetch(`/api/users/${id}`);
+      if (!res.ok) return { user: null };
+      return res.json();
     },
     update: async (id: string, data: Record<string, unknown>) => {
-      await delay(200);
-      const users = await getRegisteredUsers();
-      const user = users.find((u) => u.id === id);
-      if (user) {
-        // Update all provided fields
-        if (data.role) user.role = data.role as UserRole;
-        if (data.name !== undefined) user.name = String(data.name);
-        if (data.email !== undefined) user.email = String(data.email);
-        if (data.phone !== undefined) user.phone = String(data.phone);
-        await saveCustomUsers(users);
-      } else {
-        // User may exist only in DB riders or mockAllUsers.
-        // Create a custom record so changes persist.
-        const staticUser = mockAllUsers.find((u) => u.id === id);
-        const allRiders = await getRiderProfiles();
-        const riderProfile = allRiders.find((r) => r.id === id);
-        const source = staticUser || riderProfile;
-        if (source) {
-          const newUser: StoredUser = {
-            id: source.id,
-            name: data.name !== undefined ? String(data.name) : source.name,
-            email: data.email !== undefined ? String(data.email) : source.email,
-            password: "",
-            phone: data.phone !== undefined ? String(data.phone) : ("phone" in source ? String(source.phone) : ""),
-            city: "",
-            ridingExperience: "",
-            motorcycle: "",
-            role: (data.role as UserRole) || ("role" in source ? (source.role as UserRole) : "rider"),
-            joinDate: "joinDate" in source ? String(source.joinDate) : new Date().toISOString().split("T")[0],
-            isApproved: "isApproved" in source ? Boolean(source.isApproved) : true,
-          };
-          const allUsers = [...users, newUser];
-          await saveCustomUsers(allUsers);
-        }
-      }
-      return { user: { id, ...data } };
+      const res = await fetch(`/api/users/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update user");
+      return res.json();
     },
     delete: async (id: string) => {
-      await delay(200);
-      // Remove from custom users in localStorage
-      const builtinUsers = await getBuiltinUsers();
-      const builtinIds = new Set(builtinUsers.map((b) => b.id));
-      const custom = (await getRegisteredUsers()).filter((u) => !builtinIds.has(u.id));
-      await saveCustomUsers(custom.filter((u) => u.id !== id));
-      // Track deletion so static/mock users don't reappear
-      addDeletedUserIds([id]);
-      return { success: true, id };
+      const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete user");
+      return res.json();
     },
     bulkDelete: async (ids: string[]) => {
-      await delay(300);
-      const builtinUsers = await getBuiltinUsers();
-      const builtinIds = new Set(builtinUsers.map((b) => b.id));
-      const custom = (await getRegisteredUsers()).filter((u) => !builtinIds.has(u.id));
-      const idsSet = new Set(ids);
-      await saveCustomUsers(custom.filter((u) => !idsSet.has(u.id)));
-      // Track deletion so static/mock users don't reappear
-      addDeletedUserIds(ids);
-      return { success: true, deletedCount: ids.length };
+      const res = await fetch("/api/users/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error("Failed to delete users");
+      return res.json();
     },
     approve: async (id: string) => {
-      await delay(200);
-      const users = await getRegisteredUsers();
-      const user = users.find((u) => u.id === id);
-      if (user) {
-        user.isApproved = true;
-        await saveCustomUsers(users);
-      }
-      return { success: true, id };
+      const res = await fetch(`/api/users/${id}/approve`, { method: "PUT" });
+      if (!res.ok) throw new Error("Failed to approve user");
+      return res.json();
     },
     reject: async (id: string) => {
-      await delay(200);
-      return { success: true, id };
+      const res = await fetch(`/api/users/${id}/reject`, { method: "PUT" });
+      if (!res.ok) throw new Error("Failed to reject user");
+      return res.json();
     },
-    // Change role (SuperAdmin only) – persisted to DB + localStorage
+    // Change role (SuperAdmin only) – persisted to DB
     changeRole: async (id: string, newRole: UserRole) => {
-      // Find the user's email for DB lookup
-      const allRidersForRole = await getRiderProfiles();
-      const riderProfile = allRidersForRole.find((r) => r.id === id);
-      const email = riderProfile?.email || undefined;
-
       const res = await fetch("/api/users/role", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ userId: id, email, newRole }),
+        body: JSON.stringify({ userId: id, newRole }),
       });
       if (!res.ok) throw new Error("Failed to change role");
       const data = await res.json();
@@ -401,46 +145,17 @@ export const api = {
     },
     // Get crew members (superadmin + core_member roles) for "The Crew" section
     getCrew: async () => {
-      // Fetch crew from DB API (superadmin + core_member users with avatar URLs)
-      try {
-        const res = await fetch("/api/crew");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.crew && data.crew.length > 0) {
-            // Enrich with localStorage avatars as fallback
-            for (const m of data.crew) {
-              if (!m.avatarUrl && m.linkedRiderId) {
-                const localAvatar = api.avatars.get(m.linkedRiderId);
-                const legacyAvatar = typeof window !== "undefined"
-                  ? localStorage.getItem(`t2w_avatar_${m.linkedRiderId}`)
-                  : null;
-                m.avatarUrl = localAvatar || legacyAvatar || null;
-              }
-            }
-            return data;
-          }
+      const res = await fetch("/api/crew");
+      if (!res.ok) return { crew: [] };
+      const data = await res.json();
+      // Enrich with local avatar cache as fallback
+      for (const m of (data.crew || [])) {
+        if (!m.avatarUrl && m.linkedRiderId) {
+          const localAvatar = api.avatars.get(m.linkedRiderId);
+          if (localAvatar) m.avatarUrl = localAvatar;
         }
-      } catch { /* fall through to localStorage fallback */ }
-
-      // Fallback: use localStorage-based users if DB is unavailable
-      const users = await getRegisteredUsers();
-      const allRidersForCrew = await getRiderProfiles();
-      const crewRoles = new Set(["superadmin", "core_member"]);
-      const crew = users
-        .filter((u) => crewRoles.has(u.role))
-        .filter((u) => !u.email.toLowerCase().includes("taleson2wheels.official"))
-        .map((u) => {
-          const riderId = u.linkedRiderId || allRidersForCrew.find((r) => r.email.toLowerCase().trim() === u.email.toLowerCase().trim())?.id;
-          const localAvatar = riderId ? api.avatars.get(riderId) : null;
-          return {
-            id: u.id,
-            name: u.name,
-            role: u.role,
-            linkedRiderId: riderId,
-            avatarUrl: localAvatar || null,
-          };
-        });
-      return { crew };
+      }
+      return data;
     },
   },
 
@@ -849,30 +564,32 @@ export const api = {
 
   admin: {
     stats: async () => {
-      const ridesRes = await fetch("/api/rides");
+      // Fetch all stats from DB APIs in parallel
+      const [ridesRes, blogsData, postsRes, usersRes] = await Promise.all([
+        fetch("/api/rides"),
+        fetchBlogs(),
+        fetch("/api/ride-posts?status=pending").catch(() => null),
+        fetch("/api/users").catch(() => null),
+      ]);
       const ridesData = ridesRes.ok ? await ridesRes.json() : { rides: [] };
       const allRides = (ridesData.rides || []) as Ride[];
-      const allBlogs = await fetchBlogs();
-      const pendingBlogs = allBlogs.filter(
-        (b) => b.approvalStatus === "pending"
-      );
-      // Fetch pending ride posts from DB
+      const pendingBlogs = blogsData.filter((b) => b.approvalStatus === "pending");
       let pendingPostsCount = 0;
-      try {
-        const postsRes = await fetch("/api/ride-posts?status=pending");
-        if (postsRes.ok) {
-          const postsData = await postsRes.json();
-          pendingPostsCount = (postsData.posts || []).length;
-        }
-      } catch { /* ignore */ }
+      if (postsRes?.ok) {
+        const pd = await postsRes.json();
+        pendingPostsCount = (pd.posts || []).length;
+      }
+      let totalUsers = 0;
+      let pendingUsers = 0;
+      if (usersRes?.ok) {
+        const ud = await usersRes.json();
+        totalUsers = ud.totalUsers || 0;
+        pendingUsers = ud.pendingUsers || 0;
+      }
       return {
         stats: {
-          totalUsers: new Set([
-            ...mockAllUsers.map((u) => u.email.toLowerCase()),
-            ...(await getRegisteredUsers()).map((u) => u.email.toLowerCase()),
-            ...(await getRiderProfiles()).map((r) => r.email.toLowerCase()),
-          ]).size,
-          pendingUsers: mockPendingUsers.length,
+          totalUsers,
+          pendingUsers,
           activeRides: allRides.filter((r) => r.status === "upcoming").length,
           totalContent: mockContentItems.length,
           pendingBlogs: pendingBlogs.length,
