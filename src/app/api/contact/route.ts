@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 import nodemailer from "nodemailer";
 
 // Rate-limit: track submissions by IP (in-memory, resets on deploy)
@@ -55,10 +56,20 @@ export async function POST(req: NextRequest) {
       socketTimeout: 15000,
     });
 
-    // Send the contact message to the T2W team
+    // Dynamically fetch all Super Admin email addresses for CC
+    const superAdmins = await prisma.user.findMany({
+      where: { role: "superadmin", isApproved: true },
+      select: { email: true },
+    });
+    const ccList = superAdmins
+      .map((u) => u.email)
+      .filter((e) => e && e !== smtpUser); // exclude the TO address to avoid duplicates
+
+    // Send the contact message to the T2W team, CC all super admins
     await transporter.sendMail({
       from: `"${smtpFromName}" <${smtpUser}>`,
-      to: smtpUser, // Send to the configured SMTP user (T2W admin inbox)
+      to: smtpUser,
+      cc: ccList.length > 0 ? ccList.join(", ") : undefined,
       replyTo: `"${name.trim()}" <${email.trim()}>`,
       subject: `[T2W Contact] ${subject.trim()}`,
       html: `
