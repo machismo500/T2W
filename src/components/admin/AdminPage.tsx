@@ -226,11 +226,13 @@ export function AdminPage() {
       })
       .finally(() => setLoading(false));
 
-    // Load activity log
+    // Load activity log + auto-sync roles/dropouts for superadmin
     if (isSuperAdmin) {
       api.activityLog.list().then((data) => {
         setActivityLog(data.entries);
       });
+      // Auto-clear dropouts and sync roles on admin page load
+      api.participation.syncRoles().catch(() => {});
     }
 
     // Load form settings (with migration from legacy single UPI/bank to arrays)
