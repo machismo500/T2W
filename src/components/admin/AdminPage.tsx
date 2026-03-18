@@ -837,10 +837,34 @@ export function AdminPage() {
           <div className="space-y-8">
             {pendingUsers.length > 0 && (
               <div className="card">
-                <h3 className="mb-6 flex items-center gap-2 font-display text-xl font-bold text-white">
-                  <UserPlus className="h-5 w-5 text-yellow-400" />
-                  Pending Registrations ({pendingUsers.length})
-                </h3>
+                <div className="mb-6 flex items-center justify-between">
+                  <h3 className="flex items-center gap-2 font-display text-xl font-bold text-white">
+                    <UserPlus className="h-5 w-5 text-yellow-400" />
+                    Pending Registrations ({pendingUsers.length})
+                  </h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Approve all ${pendingUsers.length} pending users?`)) return;
+                        for (const u of pendingUsers) { await approveUser(u.id); }
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg bg-green-400/10 px-3 py-2 text-xs font-medium text-green-400 transition-colors hover:bg-green-400/20"
+                    >
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      Approve All
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Reject all ${pendingUsers.length} pending users? This will delete their accounts.`)) return;
+                        for (const u of pendingUsers) { await rejectUser(u.id); }
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg bg-red-400/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-400/20"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      Reject All
+                    </button>
+                  </div>
+                </div>
                 <div className="space-y-4">
                   {pendingUsers.map((u) => (
                     <div key={u.id} className="rounded-xl border border-yellow-400/20 bg-yellow-400/5 p-5">

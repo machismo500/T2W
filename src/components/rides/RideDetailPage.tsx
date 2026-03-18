@@ -238,7 +238,7 @@ interface Ride {
 }
 
 export function RideDetailPage({ rideId }: { rideId: string }) {
-  const { user, canEditRide, canApproveContent, isT2WRiderOrAbove, isLoggedIn } = useAuth();
+  const { user, canEditRide, canApproveContent, isSuperAdmin, isT2WRiderOrAbove, isLoggedIn } = useAuth();
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -826,14 +826,19 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     const p = ride.participations?.find((pp) => pp.riderName.toLowerCase() === rn.toLowerCase());
                     return !p?.droppedOut;
                   }).length || ride.riders.length})
-                  {ride.participations?.some((p) => p.droppedOut) && (
+                  {isSuperAdmin && ride.participations?.some((p) => p.droppedOut) && (
                     <span className="text-xs font-normal text-t2w-muted ml-1">
                       ({ride.participations.filter((p) => p.droppedOut).length} dropped out)
                     </span>
                   )}
                 </h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {ride.riders.map((riderName, index) => {
+                  {ride.riders.filter((rn) => {
+                    // Non-super-admins don't see dropped-out riders at all
+                    if (isSuperAdmin) return true;
+                    const p = ride.participations?.find((pp) => pp.riderName.toLowerCase() === rn.toLowerCase());
+                    return !p?.droppedOut;
+                  }).map((riderName, index) => {
                     const riderId = getRiderId(riderName, riderNameToId);
                     const avatar = riderId ? riderIdToAvatar[riderId] : null;
                     const initials = riderName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -852,7 +857,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     const dropoutBadge = isDroppedOut ? (
                       <span className="inline-flex shrink-0 items-center rounded-full bg-red-400/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">Drop-Out</span>
                     ) : null;
-                    const dropoutToggle = canApproveContent && participation ? (
+                    const dropoutToggle = isSuperAdmin && participation ? (
                       <button
                         onClick={(e) => {
                           e.preventDefault();

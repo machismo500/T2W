@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, hashPassword } from "@/lib/auth";
 
 // GET /api/users - list all users (admin only)
 // ?status=pending - filter to unapproved users
@@ -92,5 +92,44 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("[T2W] Users list error:", error);
     return NextResponse.json({ error: "Failed to list users" }, { status: 500 });
+  }
+}
+
+// POST /api/users - create/restore a user (superadmin only, used by rollback)
+export async function POST(req: NextRequest) {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || currentUser.role !== "superadmin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const data = await req.json();
+    const email = String(data.email || "").toLowerCase().trim();
+    const name = String(data.name || "").trim();
+    if (!email || !name) {
+      return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
+    }
+
+    // Check if user already exists
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return NextResponse.json({ error: "User already exists" }, { status: 409 });
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: await hashPassword("t2w-restored-" + Date.now()),
+        role: String(data.role || "rider"),
+        isApproved: data.isApproved !== false,
+        phone: data.phone || null,
+      },
+    });
+
+    return NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } });
+  } catch (error) {
+    console.error("[T2W] User create error:", error);
+    return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
   }
 }

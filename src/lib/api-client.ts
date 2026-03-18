@@ -671,18 +671,39 @@ export const api = {
           }
           break;
         }
+        case "user_deleted": {
+          // Re-create the deleted user via registration (without password for now)
+          if (data && (data as Record<string, unknown>).email) {
+            const userData = data as Record<string, unknown>;
+            await fetch("/api/users", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: userData.name,
+                email: userData.email,
+                role: userData.role || "rider",
+                isApproved: userData.isApproved ?? true,
+              }),
+            }).catch(() => {});
+          }
+          break;
+        }
+        case "user_bulk_deleted": {
+          // Re-approve is not feasible for bulk deletes - log a note
+          break;
+        }
         default:
           throw new Error("Rollback not supported for this action type");
       }
 
-      // Mark as rolled back by updating the entry details
+      // Mark as rolled back
       await api.activityLog.add({
-        action: "ride_edited" as ActivityAction,
+        action: entry.action as ActivityAction,
         performedBy: entry.performedBy,
         performedByName: entry.performedByName,
         targetId: entry.targetId,
         targetName: entry.targetName,
-        details: `Rolled back: ${entry.action}`,
+        details: `[ROLLED BACK] ${entry.details || entry.action}`,
       });
 
       return { success: true };
