@@ -4,7 +4,7 @@
   "description": "This is a repo for T2W Website",
   "scripts": {
     "dev": "next dev",
-    "build": "npx prisma generate && npx prisma db push && npx tsx scripts/seed-admins.ts && npx tsx scripts/seed-rider-profiles.ts && npx tsx scripts/seed-badges.ts && next build",
+    "build": "npx prisma generate && next build",
     "start": "next start",
     "db:push": "npx prisma db push",
     "lint": "next lint",
