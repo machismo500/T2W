@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
 // POST /api/upload - upload an image file (avatar, poster, etc.)
-// Always stores as base64 data URL in the database for cross-device persistence.
+// Stores as base64 data URL in the database for cross-device persistence.
+// Images should be compressed on the client side before uploading.
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -15,39 +16,59 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File | null;
     const type = formData.get("type") as string | null; // "avatar" | "poster" | "motorcycle"
     const targetId = formData.get("targetId") as string | null; // riderId or rideId
+    // Accept pre-compressed base64 data URL from client (preferred for avatars)
+    const dataUrl = formData.get("dataUrl") as string | null;
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    // Either a file or a pre-compressed dataUrl must be provided
+    if (!file && !dataUrl) {
+      return NextResponse.json({ error: "No file or dataUrl provided" }, { status: 400 });
     }
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Only image files are allowed" }, { status: 400 });
+    let url: string;
+
+    if (dataUrl) {
+      // Client already compressed and sent as data URL
+      url = dataUrl;
+    } else if (file) {
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        return NextResponse.json({ error: "Only image files are allowed" }, { status: 400 });
+      }
+
+      // Validate file size (5MB max raw, but should be pre-compressed)
+      if (file.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: "File must be under 5MB" }, { status: 400 });
+      }
+
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const base64 = buffer.toString("base64");
+      url = `data:${file.type};base64,${base64}`;
+    } else {
+      return NextResponse.json({ error: "No image data" }, { status: 400 });
     }
 
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: "File must be under 5MB" }, { status: 400 });
-    }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const base64 = buffer.toString("base64");
-    const url = `data:${file.type};base64,${base64}`;
-
-    // If this is an avatar upload, persist URL directly in RiderProfile
+    // For avatar uploads, MUST persist to DB — fail loudly if we can't
     if (type === "avatar" && targetId) {
       const canEdit =
         user.role === "superadmin" ||
+        user.role === "core_member" ||
         user.linkedRiderId === targetId ||
         user.id === targetId;
 
-      if (canEdit) {
-        await prisma.riderProfile.update({
-          where: { id: targetId },
-          data: { avatarUrl: url },
-        });
+      if (!canEdit) {
+        return NextResponse.json(
+          { error: "You don't have permission to update this profile picture" },
+          { status: 403 }
+        );
       }
+
+      await prisma.riderProfile.update({
+        where: { id: targetId },
+        data: { avatarUrl: url },
+      });
+
+      return NextResponse.json({ url, persisted: true });
     }
 
     return NextResponse.json({ url });

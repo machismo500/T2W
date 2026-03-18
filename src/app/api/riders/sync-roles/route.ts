@@ -81,6 +81,25 @@ export async function POST() {
       }
     }
 
+    // 2b. Propagate superadmin and core_member roles from User → RiderProfile
+    // These privileged roles should always be reflected on the rider profile
+    const privilegedUsers = await prisma.user.findMany({
+      where: {
+        role: { in: ["superadmin", "core_member"] },
+        linkedRiderId: { not: null },
+      },
+      select: { role: true, linkedRiderId: true },
+    });
+    let privilegedSynced = 0;
+    for (const u of privilegedUsers) {
+      if (!u.linkedRiderId) continue;
+      const updated = await prisma.riderProfile.updateMany({
+        where: { id: u.linkedRiderId, role: { not: u.role } },
+        data: { role: u.role },
+      });
+      privilegedSynced += updated.count;
+    }
+
     // 3. Upgrade users with "rider" role who have participations → "t2w_rider"
     const ridersToUpgrade = await prisma.user.findMany({
       where: {
@@ -220,6 +239,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       clearedDropouts: clearedDropouts.count,
+      privilegedRolesSynced: privilegedSynced,
       createdMissingParticipations: createdParticipations,
       upgradedToT2WRider: upgradedCount,
       downgradedToRider: downgradedCount,

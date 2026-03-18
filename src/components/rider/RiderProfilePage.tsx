@@ -246,6 +246,35 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     }
   };
 
+  // Compress image client-side to a small JPEG data URL (max 256x256, ~30-80KB)
+  // This prevents storing multi-MB base64 strings in the DB which break Vercel response limits
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX = 256;
+        let w = img.width;
+        let h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas not supported")); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+        resolve(dataUrl);
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Failed to load image")); };
+      img.src = objectUrl;
+    });
+  };
+
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -253,32 +282,35 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       alert("Please select an image file");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image must be under 5MB");
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image must be under 10MB");
       return;
     }
     try {
-      // Upload to server and persist URL in RiderProfile.avatarUrl
-      const url = await api.avatars.upload(riderId, file);
-      setAvatarUrl(url);
-      if (rider) setRider({ ...rider, avatarUrl: url });
-      // Also cache locally
-      api.avatars.save(riderId, url);
+      // Step 1: Compress the image client-side (256x256 JPEG, ~30-80KB)
+      const compressedDataUrl = await compressImage(file);
+
+      // Step 2: Upload the compressed data URL to the server
+      // The server will persist it directly in the DB
+      const formData = new FormData();
+      formData.append("dataUrl", compressedDataUrl);
+      formData.append("type", "avatar");
+      formData.append("targetId", riderId);
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      // Step 3: Update local state and cache
+      setAvatarUrl(data.url);
+      if (rider) setRider({ ...rider, avatarUrl: data.url });
+      api.avatars.save(riderId, data.url);
     } catch (err) {
       console.error("Avatar upload failed:", err);
-      // Fallback: convert to base64 and persist to DB via avatar-sync
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        setAvatarUrl(dataUrl);
-        api.avatars.save(riderId, dataUrl);
-        fetch("/api/upload/avatar-sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ riderId, avatarDataUrl: dataUrl }),
-        }).catch(() => {});
-      };
-      reader.readAsDataURL(file);
+      alert(err instanceof Error ? err.message : "Failed to upload profile picture. Please try again.");
     }
     // Reset file input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";

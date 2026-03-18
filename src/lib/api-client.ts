@@ -765,15 +765,30 @@ export const api = {
       avatars[riderId] = dataUrl;
       setStorage(AVATARS_KEY, avatars);
     },
-    // Upload file to server and persist URL in RiderProfile.avatarUrl
+    // Upload a pre-compressed data URL to server and persist in RiderProfile.avatarUrl
+    uploadDataUrl: async (riderId: string, dataUrl: string): Promise<string> => {
+      const formData = new FormData();
+      formData.append("dataUrl", dataUrl);
+      formData.append("type", "avatar");
+      formData.append("targetId", riderId);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload avatar");
+      // Cache the URL locally too
+      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
+      avatars[riderId] = data.url;
+      setStorage(AVATARS_KEY, avatars);
+      return data.url as string;
+    },
+    // Upload raw file to server (legacy — prefer uploadDataUrl with pre-compressed images)
     upload: async (riderId: string, file: File): Promise<string> => {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("type", "avatar");
       formData.append("targetId", riderId);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!res.ok) throw new Error("Failed to upload avatar");
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload avatar");
       // Cache the URL locally too
       const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
       avatars[riderId] = data.url;
