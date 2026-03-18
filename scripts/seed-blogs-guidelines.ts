@@ -19,8 +19,25 @@ if (!process.env.DATABASE_URL) {
 }
 
 neonConfig.webSocketConstructor = ws;
-const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter } as never);
+
+function cleanConnectionString(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("channel_binding");
+    u.searchParams.delete("sslmode");
+    return u.toString();
+  } catch {
+    return url
+      .replace(/[?&]channel_binding=[^&]*/g, "")
+      .replace(/[?&]sslmode=[^&]*/g, "")
+      .replace(/\?&/, "?")
+      .replace(/\?$/, "");
+  }
+}
+
+const connectionString = cleanConnectionString(process.env.DATABASE_URL);
+const adapter = new PrismaNeon({ connectionString });
+const prisma = new PrismaClient({ adapter });
 
 const blogs = [
   {
@@ -122,7 +139,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error("[seed] Error:", e);
-    process.exit(1);
+    console.error("[seed] Blogs/guidelines seed failed (non-fatal):", e instanceof Error ? e.message : e);
+    process.exit(0);
   })
   .finally(() => prisma.$disconnect());

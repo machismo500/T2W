@@ -12,7 +12,7 @@
     "db:seed": "npx tsx scripts/seed-admins.ts && npx tsx scripts/seed-rider-profiles.ts && npx tsx scripts/seed-badges.ts",
     "db:reset": "npx prisma migrate reset --force",
     "db:studio": "npx prisma studio",
-    "postinstall": "npx prisma generate && npx prisma db push --accept-data-loss && npx tsx scripts/seed-admins.ts && npx tsx scripts/seed-badges.ts"
+    "postinstall": "npx prisma generate && npx prisma db push --accept-data-loss && npx tsx scripts/seed-admins.ts && npx tsx scripts/seed-rider-profiles.ts && npx tsx scripts/seed-badges.ts && npx tsx scripts/seed-blogs-guidelines.ts"
   },
   "repository": {
     "type": "git",
