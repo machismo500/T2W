@@ -444,11 +444,20 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 <h1 className="font-display text-3xl font-bold text-white">
                   {rider.name}
                 </h1>
-                {rider.userRole && (rider.userRole === "core_member" || rider.userRole === "superadmin") && (
-                  <span className="rounded-lg bg-t2w-accent/20 px-3 py-1 text-xs font-semibold text-t2w-accent">
-                    Core
-                  </span>
-                )}
+                {rider.userRole && (() => {
+                  const roleConfig: Record<string, { label: string; bg: string; text: string }> = {
+                    superadmin: { label: "Super Admin", bg: "bg-red-500/20", text: "text-red-400" },
+                    core_member: { label: "Core", bg: "bg-t2w-accent/20", text: "text-t2w-accent" },
+                    t2w_rider: { label: "T2W Rider", bg: "bg-blue-500/20", text: "text-blue-400" },
+                    rider: { label: "Rider", bg: "bg-gray-500/20", text: "text-gray-400" },
+                  };
+                  const cfg = roleConfig[rider.userRole];
+                  return cfg ? (
+                    <span className={`rounded-lg ${cfg.bg} px-3 py-1 text-xs font-semibold ${cfg.text}`}>
+                      {cfg.label}
+                    </span>
+                  ) : null;
+                })()}
                 <span
                   className={`rounded-lg px-3 py-1 text-xs font-semibold ${badge.color} ${badge.bg}`}
                 >

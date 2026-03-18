@@ -387,9 +387,16 @@ export function ParticipationMatrix({ isSuperAdmin }: Props) {
                   <td className="sticky left-0 z-10 bg-inherit px-4 py-2 font-medium text-white whitespace-nowrap">
                     <span title={`${rider.email}\n${rider.phone}`} className="inline-flex items-center gap-1.5">
                       {rider.name}
-                      {(rider.userRole === "core_member" || rider.userRole === "superadmin") && (
-                        <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
-                      )}
+                      {rider.userRole && (() => {
+                        const rc: Record<string, { label: string; bg: string; text: string }> = {
+                          superadmin: { label: "Super Admin", bg: "bg-red-500/20", text: "text-red-400" },
+                          core_member: { label: "Core", bg: "bg-t2w-accent/20", text: "text-t2w-accent" },
+                          t2w_rider: { label: "T2W Rider", bg: "bg-blue-500/20", text: "text-blue-400" },
+                          rider: { label: "Rider", bg: "bg-gray-500/20", text: "text-gray-400" },
+                        };
+                        const c = rc[rider.userRole];
+                        return c ? <span className={`inline-flex shrink-0 items-center rounded-full ${c.bg} px-1.5 py-0.5 text-[10px] font-semibold ${c.text}`}>{c.label}</span> : null;
+                      })()}
                     </span>
                   </td>
                   <td className="sticky z-10 bg-inherit px-2 py-2 text-center font-bold text-t2w-accent">

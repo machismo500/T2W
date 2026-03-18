@@ -38,7 +38,7 @@ type RiderLookupCache = {
   nameToId: Record<string, string>;
   idToAvatar: Record<string, string>;
   idToRole: Record<string, string>;
-  nameToRole: Record<string, string>; // normalized name -> role for direct Core tag lookup
+  nameToRole: Record<string, string>; // normalized name -> role for role tag lookup
 };
 let _riderCache: RiderLookupCache | null = null;
 let _riderCacheTime = 0;
@@ -117,8 +117,8 @@ async function loadRiderCache(): Promise<RiderLookupCache> {
       if (avatar) {
         idToAvatar[r.id] = avatar;
       }
-      // Track user role for "Core" tagging (by ID and by name)
-      if (r.userRole && r.userRole !== "rider") {
+      // Track user role for tagging (by ID and by name)
+      if (r.userRole) {
         idToRole[r.id] = r.userRole;
         // Index by all name forms so crew name matching works
         nameToRole[r.name.toLowerCase().trim()] = r.userRole;
@@ -164,31 +164,51 @@ function getRiderId(name: string, nameToId: Record<string, string>): string | nu
   return null;
 }
 
-// Helper: check if a rider is a core member by name or ID
-function isCoreByNameOrId(
+// Role tag configuration
+const ROLE_TAG_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  superadmin: { label: "Super Admin", bg: "bg-red-500/20", text: "text-red-400" },
+  core_member: { label: "Core", bg: "bg-t2w-accent/20", text: "text-t2w-accent" },
+  t2w_rider: { label: "T2W Rider", bg: "bg-blue-500/20", text: "text-blue-400" },
+  rider: { label: "Rider", bg: "bg-gray-500/20", text: "text-gray-400" },
+};
+
+// Helper: get the role for a rider by name or ID
+function getRoleByNameOrId(
   name: string,
   riderId: string | null,
   idToRole: Record<string, string>,
   nameToRoleMap: Record<string, string>
-): boolean {
+): string | null {
   // Check by ID first
   if (riderId) {
     const r = idToRole[riderId];
-    if (r === "core_member" || r === "superadmin") return true;
+    if (r) return r;
   }
   // Check by name (multiple forms)
   if (name) {
     const key = name.toLowerCase().trim();
     const nr = nameToRoleMap[key];
-    if (nr === "core_member" || nr === "superadmin") return true;
+    if (nr) return nr;
     const norm = normalizeName(name);
     const nr2 = nameToRoleMap[norm];
-    if (nr2 === "core_member" || nr2 === "superadmin") return true;
+    if (nr2) return nr2;
     const fn = firstName(name);
     const nr3 = nameToRoleMap[fn];
-    if (nr3 === "core_member" || nr3 === "superadmin") return true;
+    if (nr3) return nr3;
   }
-  return false;
+  return null;
+}
+
+// Helper: render a role tag badge
+function RoleTag({ role }: { role: string | null }) {
+  if (!role) return null;
+  const config = ROLE_TAG_CONFIG[role];
+  if (!config) return null;
+  return (
+    <span className={`inline-flex shrink-0 items-center rounded-full ${config.bg} px-1.5 py-0.5 text-[10px] font-semibold ${config.text}`}>
+      {config.label}
+    </span>
+  );
 }
 
 // Helper: build a Google Maps search URL for a location
@@ -797,9 +817,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         <p className="text-xs text-t2w-muted">{crew.label}</p>
                         <p className={`font-semibold ${link ? "text-t2w-accent" : "text-white"} flex items-center gap-1.5`}>
                           {crew.name}
-                          {isCoreByNameOrId(crew.name, crewRiderId, riderIdToRole, riderNameToRole) && (
-                            <span className="inline-flex items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
-                          )}
+                          <RoleTag role={getRoleByNameOrId(crew.name, crewRiderId, riderIdToRole, riderNameToRole)} />
                         </p>
                       </div>
                     </>
@@ -848,9 +866,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                           {thumbEl}
                           <span className="text-sm truncate flex items-center gap-1.5 text-t2w-accent hover:underline">
                             {riderName}
-                            {isCoreByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole) && (
-                              <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
-                            )}
+                            <RoleTag role={getRoleByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole)} />
                           </span>
                         </Link>
                       </div>
@@ -862,9 +878,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         {thumbEl}
                         <span className="text-sm truncate flex items-center gap-1.5 flex-1 min-w-0 text-gray-300">
                           {riderName}
-                          {isCoreByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole) && (
-                            <span className="inline-flex shrink-0 items-center rounded-full bg-t2w-accent/20 px-1.5 py-0.5 text-[10px] font-semibold text-t2w-accent">Core</span>
-                          )}
+                          <RoleTag role={getRoleByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole)} />
                         </span>
                       </div>
                     );
