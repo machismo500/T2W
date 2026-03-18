@@ -1,8 +1,4 @@
 import {
-  mockNotifications,
-  mockContentItems,
-} from "@/data/mock";
-import {
   type RiderProfile,
 } from "@/data/rider-profiles";
 import type { Ride, BlogPost, UserRole, RidePost, RideRegistration } from "@/types";
@@ -30,7 +26,6 @@ function setStorage(key: string, value: unknown) {
 }
 
 // ── Storage keys (client-side cache only) ──
-const NOTIF_KEY = "t2w_notif_read";
 const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (client-side cache)
 
 // ── Activity Log ──
@@ -75,11 +70,6 @@ async function fetchBlogs(): Promise<BlogPost[]> {
   return [];
 }
 
-
-// ── Notification state ──
-function getReadNotifs(): string[] {
-  return getStorage(NOTIF_KEY, []);
-}
 
 // ── API object ──
 // Note: Authentication is handled by AuthContext via /api/auth/* server routes.
@@ -516,22 +506,22 @@ export const api = {
 
   notifications: {
     list: async () => {
-      await delay(100);
-      const readIds = getReadNotifs();
-      const notifications = mockNotifications.map((n) => ({
-        ...n,
-        isRead: n.isRead || readIds.includes(n.id),
-      }));
-      return { notifications };
+      try {
+        const res = await fetch("/api/notifications");
+        if (res.ok) return res.json();
+      } catch { /* fall through */ }
+      return { notifications: [] };
     },
     markRead: async (id: string) => {
-      await delay(50);
-      const readIds = getReadNotifs();
-      if (!readIds.includes(id)) {
-        readIds.push(id);
-        setStorage(NOTIF_KEY, readIds);
-      }
-      return { success: true };
+      try {
+        const res = await fetch("/api/notifications", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        if (res.ok) return res.json();
+      } catch { /* fall through */ }
+      return { success: false };
     },
   },
 
@@ -574,11 +564,12 @@ export const api = {
   admin: {
     stats: async () => {
       // Fetch all stats from DB APIs in parallel
-      const [ridesRes, blogsData, postsRes, usersRes] = await Promise.all([
+      const [ridesRes, blogsData, postsRes, usersRes, contentRes] = await Promise.all([
         fetch("/api/rides"),
         fetchBlogs(),
         fetch("/api/ride-posts?status=pending").catch(() => null),
         fetch("/api/users").catch(() => null),
+        fetch("/api/content").catch(() => null),
       ]);
       const ridesData = ridesRes.ok ? await ridesRes.json() : { rides: [] };
       const allRides = (ridesData.rides || []) as Ride[];
@@ -595,12 +586,17 @@ export const api = {
         totalUsers = ud.totalUsers || 0;
         pendingUsers = ud.pendingUsers || 0;
       }
+      let totalContent = 0;
+      if (contentRes?.ok) {
+        const cd = await contentRes.json();
+        totalContent = (cd.content || []).length;
+      }
       return {
         stats: {
           totalUsers,
           pendingUsers,
           activeRides: allRides.filter((r) => r.status === "upcoming").length,
-          totalContent: mockContentItems.length,
+          totalContent,
           pendingBlogs: pendingBlogs.length,
           pendingPosts: pendingPostsCount,
         },
@@ -608,19 +604,33 @@ export const api = {
     },
     content: {
       list: async () => {
-        await delay(150);
-        return { content: mockContentItems };
+        try {
+          const res = await fetch("/api/content");
+          if (res.ok) return res.json();
+        } catch { /* fall through */ }
+        return { content: [] };
       },
       create: async (data: Record<string, unknown>) => {
-        await delay(300);
-        return { content: { id: `content-${Date.now()}`, ...data } };
+        const res = await fetch("/api/content", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error("Failed to create content");
+        return res.json();
       },
       update: async (id: string, data: Record<string, unknown>) => {
-        await delay(200);
-        return { content: { id, ...data } };
+        const res = await fetch(`/api/content/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error("Failed to update content");
+        return res.json();
       },
       delete: async (id: string) => {
-        await delay(200);
+        const res = await fetch(`/api/content/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete content");
         return { success: true, id };
       },
     },
