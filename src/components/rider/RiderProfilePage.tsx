@@ -265,12 +265,18 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       if (rider) setRider({ ...rider, avatarUrl: url });
     } catch (err) {
       console.error("Avatar upload failed:", err);
-      // Fallback: store as base64 in localStorage
+      // Fallback: convert to base64 and persist to DB via avatar-sync
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
         setAvatarUrl(dataUrl);
         api.avatars.save(riderId, dataUrl);
+        // Also persist to DB so other devices can see it
+        fetch("/api/upload/avatar-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ riderId, avatarDataUrl: dataUrl }),
+        }).catch(() => {});
       };
       reader.readAsDataURL(file);
     }
