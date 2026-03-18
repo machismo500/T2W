@@ -113,6 +113,21 @@ const guidelines = [
   { id: "guide-8", title: "Fuel Management", content: "Always start a ride with a full tank. Know your bike's range and plan fuel stops accordingly. The ride leader will announce fuel stops. If you notice your fuel is running low, signal the group to stop. Carry a 1-liter emergency fuel reserve on long rides.", category: "general", icon: "fuel" },
 ];
 
+const notifications = [
+  { id: "notif-1", title: "Ride #028 - Anniversary Ride Announced!", message: "T2W Anniversary Ride on March 21-22, 2026! Meet at Parle-G Toll at 05:30. Organised by Jay Trivedi.", type: "ride", date: new Date("2026-02-28") },
+  { id: "notif-2", title: "Ride #027 - Kavvayi Island Completed!", message: "20 riders completed the 800 km ride to Kavvayi Island. Check out the ride details and photos!", type: "success", date: new Date("2026-02-22") },
+  { id: "notif-3", title: "Ride #026 - Ride to Coast 10 Completed!", message: "1,200 km to Mangalore and back! 28 riders made the journey. View ride details now.", type: "success", date: new Date("2026-01-26"), isRead: true },
+  { id: "notif-4", title: "T2W Completes 27 Rides!", message: "From The Beginning (#001) to Kavvayi Island (#027) - 152 riders and counting. What a journey!", type: "info", date: new Date("2026-02-23") },
+  { id: "notif-5", title: "Rider Profiles Now Live!", message: "View your ride history, total kilometres, and achievements on your rider profile page.", type: "info", date: new Date("2026-02-27") },
+];
+
+const contentItems = [
+  { id: "content-1", title: "T2W Brand Guidelines", type: "Brand", status: "published", lastUpdated: new Date("2026-01-15") },
+  { id: "content-2", title: "Ride Photography Collection 2025", type: "Media", status: "published", lastUpdated: new Date("2026-02-01") },
+  { id: "content-3", title: "Indemnity Form Template", type: "Document", status: "published", lastUpdated: new Date("2025-12-20") },
+  { id: "content-4", title: "Social Media Content Calendar", type: "Document", status: "draft", lastUpdated: new Date("2026-02-20") },
+];
+
 async function main() {
   console.log("[seed] Seeding blogs...");
   for (const blog of blogs) {
@@ -132,6 +147,26 @@ async function main() {
       create: guide,
     });
     console.log(`  ✓ Guideline: ${guide.title}`);
+  }
+
+  console.log("\n[seed] Seeding notifications...");
+  for (const notif of notifications) {
+    await prisma.notification.upsert({
+      where: { id: notif.id },
+      update: { title: notif.title, message: notif.message, type: notif.type, date: notif.date },
+      create: notif,
+    });
+    console.log(`  ✓ Notification: ${notif.title}`);
+  }
+
+  console.log("\n[seed] Seeding content items...");
+  for (const item of contentItems) {
+    await prisma.content.upsert({
+      where: { id: item.id },
+      update: { title: item.title, type: item.type, status: item.status, lastUpdated: item.lastUpdated },
+      create: item,
+    });
+    console.log(`  ✓ Content: ${item.title}`);
   }
 
   console.log("\n[seed] Done!");
