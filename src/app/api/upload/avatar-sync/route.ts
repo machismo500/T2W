@@ -23,14 +23,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Check if rider already has an avatarUrl in DB
+    // Check if rider already has a working avatarUrl in DB
     const profile = await prisma.riderProfile.findUnique({
       where: { id: riderId },
       select: { avatarUrl: true },
     });
 
-    if (profile?.avatarUrl) {
-      // Already has an avatar in DB, skip
+    // Skip only if the existing DB avatar is a valid data URL (base64).
+    // Overwrite if it's a filesystem path (/uploads/...) since those don't persist on serverless.
+    if (profile?.avatarUrl && profile.avatarUrl.startsWith("data:")) {
       return NextResponse.json({ url: profile.avatarUrl, skipped: true });
     }
 

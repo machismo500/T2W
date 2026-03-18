@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, access } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 
-// POST /api/upload - upload an image file (avatar, motorcycle photo, etc.)
+// Detect if we're on a serverless platform with ephemeral filesystem
+const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.RAILWAY_ENVIRONMENT;
+
+// POST /api/upload - upload an image file (avatar, poster, etc.)
 // Returns a public URL path that can be stored in the database
 export async function POST(req: NextRequest) {
   try {
@@ -16,8 +19,8 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const type = formData.get("type") as string | null; // "avatar" | "motorcycle"
-    const targetId = formData.get("targetId") as string | null; // riderId or motorcycleId
+    const type = formData.get("type") as string | null; // "avatar" | "poster" | "motorcycle"
+    const targetId = formData.get("targetId") as string | null; // riderId or rideId
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -37,19 +40,27 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(bytes);
     let url: string;
 
-    // Try file-system storage first (works locally), fall back to base64 in DB (works on Vercel)
-    try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const hash = crypto.randomBytes(8).toString("hex");
-      const filename = `${type || "img"}-${hash}.${ext}`;
-      const uploadDir = path.join(process.cwd(), "public", "uploads");
-      await mkdir(uploadDir, { recursive: true });
-      await writeFile(path.join(uploadDir, filename), buffer);
-      url = `/uploads/${filename}`;
-    } catch {
-      // File system is read-only (e.g. Vercel) — store as base64 data URL in DB directly
+    if (isServerless) {
+      // Serverless: always use base64 in DB — filesystem is ephemeral and won't persist
       const base64 = buffer.toString("base64");
       url = `data:${file.type};base64,${base64}`;
+    } else {
+      // Local dev: use file-system storage, fall back to base64
+      try {
+        const ext = file.name.split(".").pop() || "jpg";
+        const hash = crypto.randomBytes(8).toString("hex");
+        const filename = `${type || "img"}-${hash}.${ext}`;
+        const uploadDir = path.join(process.cwd(), "public", "uploads");
+        await mkdir(uploadDir, { recursive: true });
+        const filePath = path.join(uploadDir, filename);
+        await writeFile(filePath, buffer);
+        // Verify the file was actually written and is accessible
+        await access(filePath);
+        url = `/uploads/${filename}`;
+      } catch {
+        const base64 = buffer.toString("base64");
+        url = `data:${file.type};base64,${base64}`;
+      }
     }
 
     // If this is an avatar upload, update the RiderProfile in the database
