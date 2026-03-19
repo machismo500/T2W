@@ -410,6 +410,33 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
 
   const [posterUploading, setPosterUploading] = useState(false);
 
+  const compressPoster = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX = 1600; // max dimension for posters
+        let w = img.width;
+        let h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas not supported")); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        resolve(dataUrl);
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Failed to load image")); };
+      img.src = objectUrl;
+    });
+  };
+
   const handlePosterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -423,8 +450,17 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     }
     setPosterUploading(true);
     try {
-      // Upload file to server
-      const url = await api.upload(file, "poster", rideId);
+      // Compress client-side to stay within Vercel's 4.5MB body limit
+      const compressedDataUrl = await compressPoster(file);
+      // Upload compressed data URL to server
+      const formData = new FormData();
+      formData.append("dataUrl", compressedDataUrl);
+      formData.append("type", "poster");
+      formData.append("targetId", rideId);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      const url = data.url as string;
       // Save poster URL to ride record
       await api.rides.update(rideId, { posterUrl: url });
       setPosterUrl(url);
