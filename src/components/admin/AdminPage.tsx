@@ -99,7 +99,7 @@ type AdminStats = {
 type PendingBlog = {
   id: string;
   title: string;
-  author: string;
+  authorName: string;
   publishDate: string;
   approvalStatus: string;
 };
@@ -1699,7 +1699,7 @@ export function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-white truncate">{blog.title}</h4>
                         <p className="text-xs text-t2w-muted mt-1">
-                          By {blog.author} &middot;{" "}
+                          By {blog.authorName} &middot;{" "}
                           {new Date(blog.publishDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                         </p>
                       </div>

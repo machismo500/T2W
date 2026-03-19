@@ -83,7 +83,7 @@ export interface BlogPost {
   title: string;
   excerpt: string;
   content: string;
-  author: string;
+  authorName: string;
   authorId?: string;
   authorAvatar?: string;
   publishDate: string;

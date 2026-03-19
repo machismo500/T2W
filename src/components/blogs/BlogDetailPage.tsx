@@ -20,7 +20,7 @@ type BlogPost = {
   title: string;
   excerpt: string;
   content: string;
-  author: string;
+  authorName: string;
   publishDate: string;
   tags: string[];
   type: string;
@@ -120,13 +120,13 @@ export function BlogDetailPage({ blogId }: { blogId: string }) {
           <div className="mt-6 flex flex-wrap items-center gap-4 border-b border-t2w-border pb-6">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
-                {blog.author
+                {(blog.authorName || "")
                   .split(" ")
                   .map((n) => n[0])
                   .join("")}
               </div>
               <span className="text-sm font-medium text-white">
-                {blog.author}
+                {blog.authorName}
               </span>
             </div>
             <span className="flex items-center gap-1.5 text-sm text-t2w-muted">
