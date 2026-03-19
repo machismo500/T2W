@@ -233,6 +233,7 @@ interface Ride {
   distanceKm: number;
   maxRiders: number;
   registeredRiders: number;
+  confirmedRiderNames?: string[];
   difficulty: string;
   description: string;
   fee: number;
@@ -535,6 +536,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
       })) as { registration: unknown; confirmationCode: string };
       setRegistered(true);
       setConfirmationCode(data.confirmationCode);
+      setShowRegistration(false);
       // Save form data for future pre-fill (exclude sensitive/one-time fields)
       if (user) {
         try {
@@ -869,6 +871,38 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 })}
               </div>
             </div>
+
+            {/* Confirmed Riders - for upcoming rides */}
+            {ride.status === "upcoming" && ride.confirmedRiderNames && ride.confirmedRiderNames.length > 0 && (
+              <div className="card">
+                <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
+                  <Users className="h-5 w-5 text-green-400" />
+                  Confirmed Riders ({ride.confirmedRiderNames.length})
+                </h3>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {ride.confirmedRiderNames.map((name, index) => {
+                    const riderId = getRiderId(name, riderNameToId);
+                    const avatar = riderId ? riderIdToAvatar[riderId] : null;
+                    const initials = name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+                    const thumbEl = avatar ? (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full overflow-hidden bg-green-400/10">
+                        <img src={avatar} alt={name} className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold bg-green-400/10 text-green-400">
+                        {initials}
+                      </div>
+                    );
+                    return (
+                      <div key={index} className="flex items-center gap-3 rounded-lg bg-t2w-surface-light p-2.5">
+                        {thumbEl}
+                        <span className="text-sm text-white truncate">{name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Riders List - for completed rides with rider data */}
             {ride.status === "completed" && ride.riders && ride.riders.length > 0 && (
@@ -1483,21 +1517,24 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               </div>
             )}
 
-            {/* Registration Confirmation */}
+            {/* Registration Thank You */}
             {registered && (
               <div className="card border-green-400/30 bg-green-400/5">
                 <div className="text-center">
                   <CheckCircle className="mx-auto h-12 w-12 text-green-400" />
                   <h3 className="mt-3 font-display text-lg font-bold text-white">
-                    Registration Confirmed!
+                    Thank You for Registering!
                   </h3>
                   <p className="mt-2 text-sm text-t2w-muted">
-                    You are registered for {ride.title}. Check your email for
-                    ride details and meeting point information.
+                    Your registration for <span className="text-white font-medium">{ride.title}</span> has been submitted successfully.
+                    A confirmation email has been sent to your registered email address.
                   </p>
                   <div className="mt-4 rounded-xl bg-t2w-surface p-3 font-mono text-sm text-t2w-accent">
                     Confirmation #{confirmationCode}
                   </div>
+                  <p className="mt-3 text-xs text-yellow-400">
+                    Your registration is pending confirmation by the T2W team. You will appear on the ride page once confirmed.
+                  </p>
                 </div>
               </div>
             )}

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
           select: { riderProfileId: true },
         },
         registrations: {
-          select: { id: true },
+          select: { id: true, approvalStatus: true },
         },
       },
       orderBy: { startDate: "desc" },
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       route: safeJsonParse(r.route, []),
       distanceKm: r.distanceKm,
       maxRiders: r.maxRiders,
-      registeredRiders: r.registrations.length,
+      registeredRiders: r.registrations.filter((reg) => reg.approvalStatus === "confirmed").length,
       difficulty: r.difficulty,
       description: r.description,
       highlights: safeJsonParse(r.highlights, []),

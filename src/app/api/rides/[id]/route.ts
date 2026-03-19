@@ -30,7 +30,7 @@ export async function GET(
           },
         },
         registrations: {
-          select: { id: true, userId: true, confirmationCode: true },
+          select: { id: true, userId: true, confirmationCode: true, approvalStatus: true, riderName: true },
         },
       },
     });
@@ -70,7 +70,10 @@ export async function GET(
       route: safeJsonParse(ride.route, []),
       distanceKm: ride.distanceKm,
       maxRiders: ride.maxRiders,
-      registeredRiders: ride.registrations.length,
+      registeredRiders: ride.registrations.filter((r) => r.approvalStatus === "confirmed").length,
+      confirmedRiderNames: ride.registrations
+        .filter((r) => r.approvalStatus === "confirmed")
+        .map((r) => r.riderName),
       difficulty: ride.difficulty,
       description: ride.description,
       highlights: safeJsonParse(ride.highlights, []),

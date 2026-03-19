@@ -43,6 +43,7 @@ export async function GET(
         paymentScreenshot: true,
         registeredAt: true,
         confirmationCode: true,
+        approvalStatus: true,
       },
     });
 

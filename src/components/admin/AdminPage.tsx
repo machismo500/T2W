@@ -37,6 +37,7 @@ import {
   Activity,
   Grid3X3,
   Merge,
+  ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
@@ -177,6 +178,18 @@ export function AdminPage() {
   const [editRideUseCustomSettings, setEditRideUseCustomSettings] = useState(false);
   const [editRideFormCustomSettings, setEditRideFormCustomSettings] = useState<string[]>([]);
   const [editRideRegSchedule, setEditRideRegSchedule] = useState({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
+
+  // Registration management state
+  const [managingRegsRideId, setManagingRegsRideId] = useState<string | null>(null);
+  const [rideRegistrations, setRideRegistrations] = useState<Array<{
+    id: string; userId: string; riderName: string; email: string; phone: string;
+    registeredAt: string; confirmationCode: string; approvalStatus: string;
+    address: string; emergencyContactName: string; emergencyContactPhone: string;
+    bloodGroup: string; referredBy: string; foodPreference: string; ridingType: string;
+    vehicleModel: string; vehicleRegNumber: string; tshirtSize: string;
+  }>>([]);
+  const [loadingRegs, setLoadingRegs] = useState(false);
+  const [updatingRegId, setUpdatingRegId] = useState<string | null>(null);
 
   // Delete confirmation modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -456,6 +469,45 @@ export function AdminPage() {
       console.error("Failed to update ride:", err);
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const loadRegistrations = async (rideId: string) => {
+    if (managingRegsRideId === rideId) {
+      setManagingRegsRideId(null);
+      return;
+    }
+    setLoadingRegs(true);
+    setManagingRegsRideId(rideId);
+    try {
+      const res = await fetch(`/api/rides/${rideId}/registrations`);
+      if (!res.ok) throw new Error("Failed to load");
+      const data = await res.json();
+      setRideRegistrations(data.registrations || []);
+    } catch {
+      setRideRegistrations([]);
+    } finally {
+      setLoadingRegs(false);
+    }
+  };
+
+  const updateRegStatus = async (rideId: string, regId: string, status: "confirmed" | "rejected") => {
+    setUpdatingRegId(regId);
+    try {
+      const res = await fetch(`/api/rides/${rideId}/registrations/${regId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalStatus: status }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      setRideRegistrations((prev) => prev.map((r) => r.id === regId ? { ...r, approvalStatus: status } : r));
+      // Refresh ride list to update count
+      const ridesData = await api.rides.list();
+      setRides((ridesData as { rides: AdminRide[] }).rides);
+    } catch {
+      alert("Failed to update registration status");
+    } finally {
+      setUpdatingRegId(null);
     }
   };
 
@@ -1262,6 +1314,11 @@ export function AdminPage() {
                         <Eye className="h-3.5 w-3.5" />View
                       </Link>
                       {isCoreOrAbove && (
+                        <button onClick={() => loadRegistrations(ride.id)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition-colors ${managingRegsRideId === ride.id ? "bg-blue-400/20 text-blue-400" : "bg-blue-400/10 text-blue-400 hover:bg-blue-400/20"}`}>
+                          <ClipboardList className="h-3.5 w-3.5" />{managingRegsRideId === ride.id ? "Close" : "Manage"}
+                        </button>
+                      )}
+                      {isCoreOrAbove && (
                         <button onClick={() => api.exportRideRegistrations(ride.id, ride.title)} className="flex items-center gap-1.5 rounded-lg bg-green-400/10 px-3 py-2 text-xs text-green-400 transition-colors hover:bg-green-400/20">
                           <Download className="h-3.5 w-3.5" />Export
                         </button>
@@ -1278,6 +1335,69 @@ export function AdminPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Registrations Management Panel */}
+                  {managingRegsRideId === ride.id && (
+                    <div className="card mt-2 border-blue-400/30">
+                      <h4 className="mb-4 flex items-center gap-2 font-semibold text-white">
+                        <ClipboardList className="h-4 w-4 text-blue-400" />
+                        Registrations ({rideRegistrations.length})
+                      </h4>
+                      {loadingRegs ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-5 w-5 animate-spin text-t2w-muted" />
+                        </div>
+                      ) : rideRegistrations.length === 0 ? (
+                        <p className="text-sm text-t2w-muted py-4 text-center">No registrations yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {rideRegistrations.map((reg) => (
+                            <div key={reg.id} className={`flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl p-3 border ${
+                              reg.approvalStatus === "confirmed" ? "border-green-400/20 bg-green-400/5" :
+                              reg.approvalStatus === "rejected" ? "border-red-400/20 bg-red-400/5" :
+                              "border-yellow-400/20 bg-yellow-400/5"
+                            }`}>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-white text-sm truncate">{reg.riderName}</span>
+                                  <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-medium uppercase ${
+                                    reg.approvalStatus === "confirmed" ? "bg-green-400/10 text-green-400" :
+                                    reg.approvalStatus === "rejected" ? "bg-red-400/10 text-red-400" :
+                                    "bg-yellow-400/10 text-yellow-400"
+                                  }`}>{reg.approvalStatus}</span>
+                                </div>
+                                <p className="text-xs text-t2w-muted mt-0.5">
+                                  {reg.email} &middot; {reg.phone || "No phone"} &middot; {new Date(reg.registeredAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                {reg.approvalStatus !== "confirmed" && (
+                                  <button
+                                    onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
+                                    disabled={updatingRegId === reg.id}
+                                    className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
+                                  >
+                                    {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                                    Confirm
+                                  </button>
+                                )}
+                                {reg.approvalStatus !== "rejected" && (
+                                  <button
+                                    onClick={() => updateRegStatus(ride.id, reg.id, "rejected")}
+                                    disabled={updatingRegId === reg.id}
+                                    className="flex items-center gap-1 rounded-lg bg-red-400/10 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/20 disabled:opacity-50"
+                                  >
+                                    {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                                    Reject
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Inline Edit Form */}
                   {editingRideId === ride.id && (

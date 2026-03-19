@@ -182,6 +182,7 @@ model RideRegistration {
   upiTransactionId      String   @default("")
   registeredAt          DateTime @default(now())
   confirmationCode      String?
+  approvalStatus        String   @default("pending") // pending | confirmed | rejected
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
