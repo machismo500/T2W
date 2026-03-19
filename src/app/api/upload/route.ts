@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-import crypto from "crypto";
 
-// POST /api/upload - upload an image file (avatar, motorcycle photo, etc.)
-// Returns a public URL path that can be stored in the database
+// POST /api/upload - upload an image file (avatar, poster, etc.)
+// Stores as base64 data URL in the database for cross-device persistence.
+// Images should be compressed on the client side before uploading.
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -16,56 +14,61 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const type = formData.get("type") as string | null; // "avatar" | "motorcycle"
-    const targetId = formData.get("targetId") as string | null; // riderId or motorcycleId
+    const type = formData.get("type") as string | null; // "avatar" | "poster" | "motorcycle"
+    const targetId = formData.get("targetId") as string | null; // riderId or rideId
+    // Accept pre-compressed base64 data URL from client (preferred for avatars)
+    const dataUrl = formData.get("dataUrl") as string | null;
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    // Either a file or a pre-compressed dataUrl must be provided
+    if (!file && !dataUrl) {
+      return NextResponse.json({ error: "No file or dataUrl provided" }, { status: 400 });
     }
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Only image files are allowed" }, { status: 400 });
-    }
-
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: "File must be under 5MB" }, { status: 400 });
-    }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
     let url: string;
 
-    // Try file-system storage first (works locally), fall back to base64 in DB (works on Vercel)
-    try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const hash = crypto.randomBytes(8).toString("hex");
-      const filename = `${type || "img"}-${hash}.${ext}`;
-      const uploadDir = path.join(process.cwd(), "public", "uploads");
-      await mkdir(uploadDir, { recursive: true });
-      await writeFile(path.join(uploadDir, filename), buffer);
-      url = `/uploads/${filename}`;
-    } catch {
-      // File system is read-only (e.g. Vercel) — store as base64 data URL in DB directly
+    if (dataUrl) {
+      // Client already compressed and sent as data URL
+      url = dataUrl;
+    } else if (file) {
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        return NextResponse.json({ error: "Only image files are allowed" }, { status: 400 });
+      }
+
+      // Validate file size (5MB max raw, but should be pre-compressed)
+      if (file.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: "File must be under 5MB" }, { status: 400 });
+      }
+
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
       const base64 = buffer.toString("base64");
       url = `data:${file.type};base64,${base64}`;
+    } else {
+      return NextResponse.json({ error: "No image data" }, { status: 400 });
     }
 
-    // If this is an avatar upload, update the RiderProfile in the database
+    // For avatar uploads, MUST persist to DB — fail loudly if we can't
     if (type === "avatar" && targetId) {
-      // Verify permission: superadmin or own profile
       const canEdit =
         user.role === "superadmin" ||
+        user.role === "core_member" ||
         user.linkedRiderId === targetId ||
         user.id === targetId;
 
-      if (canEdit) {
-        await prisma.riderProfile.update({
-          where: { id: targetId },
-          data: { avatarUrl: url },
-        });
+      if (!canEdit) {
+        return NextResponse.json(
+          { error: "You don't have permission to update this profile picture" },
+          { status: 403 }
+        );
       }
+
+      await prisma.riderProfile.update({
+        where: { id: targetId },
+        data: { avatarUrl: url },
+      });
+
+      return NextResponse.json({ url, persisted: true });
     }
 
     return NextResponse.json({ url });

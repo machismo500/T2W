@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
-import { mockBlogs } from "@/data/mock";
+import { prisma } from "@/lib/db";
 import { BlogDetailPage } from "@/components/blogs/BlogDetailPage";
 
-export function generateStaticParams() {
-  return mockBlogs.map((blog) => ({
-    id: blog.id,
-  }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -14,7 +10,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const blog = mockBlogs.find((b) => b.id === id);
+  const blog = await prisma.blogPost.findUnique({ where: { id } });
 
   if (!blog) {
     return {
@@ -23,6 +19,7 @@ export async function generateMetadata({
     };
   }
 
+  const tags: string[] = blog.tags ? JSON.parse(blog.tags) : [];
   const title = `${blog.title} | Tales on 2 Wheels Blog`;
   const description =
     blog.excerpt.length > 160
@@ -34,7 +31,7 @@ export async function generateMetadata({
     title,
     description,
     keywords: [
-      ...blog.tags.map((t) => `${t} motorcycle`),
+      ...tags.map((t) => `${t} motorcycle`),
       "motorcycle blog India",
       "riding story",
       "Tales on 2 Wheels blog",
@@ -46,9 +43,9 @@ export async function generateMetadata({
       title: blog.title,
       description,
       url,
-      publishedTime: blog.publishDate,
-      authors: [blog.author],
-      tags: blog.tags,
+      publishedTime: blog.publishDate.toISOString(),
+      authors: [blog.authorName],
+      tags,
       images: [
         {
           url: "/og-image.jpg",
@@ -70,9 +67,11 @@ export async function generateMetadata({
   };
 }
 
-function BlogArticleSchema({ blogId }: { blogId: string }) {
-  const blog = mockBlogs.find((b) => b.id === blogId);
+async function BlogArticleSchema({ blogId }: { blogId: string }) {
+  const blog = await prisma.blogPost.findUnique({ where: { id: blogId } });
   if (!blog) return null;
+
+  const tags: string[] = blog.tags ? JSON.parse(blog.tags) : [];
 
   const schema = {
     "@context": "https://schema.org",
@@ -80,11 +79,11 @@ function BlogArticleSchema({ blogId }: { blogId: string }) {
     headline: blog.title,
     description: blog.excerpt,
     articleBody: blog.content,
-    datePublished: blog.publishDate,
-    dateModified: blog.publishDate,
+    datePublished: blog.publishDate.toISOString(),
+    dateModified: blog.publishDate.toISOString(),
     author: {
       "@type": "Person",
-      name: blog.author,
+      name: blog.authorName,
     },
     publisher: {
       "@type": "Organization",
@@ -100,7 +99,7 @@ function BlogArticleSchema({ blogId }: { blogId: string }) {
       "@id": `https://taleson2wheels.com/blog/${blog.id}`,
     },
     image: "https://taleson2wheels.com/og-image.jpg",
-    keywords: blog.tags.join(", "),
+    keywords: tags.join(", "),
     wordCount: blog.content.split(/\s+/).length,
     timeRequired: `PT${blog.readTime}M`,
     inLanguage: "en-IN",

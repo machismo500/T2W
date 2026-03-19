@@ -1,0 +1,93 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+
+// PATCH /api/rides/[id]/registrations/[regId] - approve or reject a registration
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; regId: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+    if (
+      !user ||
+      (user.role !== "superadmin" && user.role !== "core_member")
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id: rideId, regId } = await params;
+    const { approvalStatus } = await req.json();
+
+    if (!["confirmed", "rejected", "dropout"].includes(approvalStatus)) {
+      return NextResponse.json(
+        { error: "Invalid status. Must be 'confirmed', 'rejected', or 'dropout'." },
+        { status: 400 }
+      );
+    }
+
+    const registration = await prisma.rideRegistration.findFirst({
+      where: { id: regId, rideId },
+    });
+
+    if (!registration) {
+      return NextResponse.json(
+        { error: "Registration not found" },
+        { status: 404 }
+      );
+    }
+
+    const updated = await prisma.rideRegistration.update({
+      where: { id: regId },
+      data: { approvalStatus },
+    });
+
+    // Find the rider's linked RiderProfile for participation updates
+    const regUser = await prisma.user.findUnique({
+      where: { id: registration.userId },
+      select: { linkedRiderId: true },
+    });
+
+    // When confirmed, auto-create a RideParticipation with 5 points (if not already present)
+    if (approvalStatus === "confirmed" && regUser?.linkedRiderId) {
+      await prisma.rideParticipation.upsert({
+        where: {
+          riderProfileId_rideId: {
+            riderProfileId: regUser.linkedRiderId,
+            rideId,
+          },
+        },
+        update: { droppedOut: false }, // Restore if previously dropped out
+        create: {
+          riderProfileId: regUser.linkedRiderId,
+          rideId,
+          points: 5,
+        },
+      });
+    }
+
+    // When marked as dropout, set droppedOut flag on the participation
+    if (approvalStatus === "dropout" && regUser?.linkedRiderId) {
+      await prisma.rideParticipation.updateMany({
+        where: {
+          riderProfileId: regUser.linkedRiderId,
+          rideId,
+        },
+        data: { droppedOut: true },
+      });
+    }
+
+    return NextResponse.json({
+      registration: {
+        id: updated.id,
+        approvalStatus: updated.approvalStatus,
+      },
+    });
+  } catch (error) {
+    console.error("[T2W] Registration approval error:", error);
+    return NextResponse.json(
+      { error: "Failed to update registration" },
+      { status: 500 }
+    );
+  }
+}

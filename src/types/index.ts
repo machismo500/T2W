@@ -42,7 +42,9 @@ export interface Ride {
   startDate: string;
   endDate: string;
   startLocation: string;
+  startLocationUrl?: string;
   endLocation: string;
+  endLocationUrl?: string;
   route: string[];
   distanceKm: number;
   maxRiders: number;
@@ -55,6 +57,18 @@ export interface Ride {
   leadRider: string;
   sweepRider: string;
   riders?: string[];
+  regFormSettings?: Record<string, unknown> | null;
+  regOpenCore?: string | null;
+  regOpenT2w?: string | null;
+  regOpenRider?: string | null;
+  participations?: {
+    id: string;
+    riderProfileId: string;
+    riderName: string;
+    riderAvatar?: string;
+    droppedOut: boolean;
+    points: number;
+  }[];
   accountsBy?: string;
   organisedBy?: string;
   meetupTime?: string;
@@ -133,6 +147,42 @@ export interface Guideline {
 }
 
 // Ride registration data (based on registration form)
+// ── Live Ride Tracking ──
+export interface LiveRideSession {
+  id: string;
+  rideId: string;
+  status: "waiting" | "live" | "paused" | "ended";
+  startedAt?: string;
+  endedAt?: string;
+  leadRiderId?: string;
+  sweepRiderId?: string;
+  plannedRoute?: { lat: number; lng: number }[];
+}
+
+export interface LiveRiderLocation {
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  lat: number;
+  lng: number;
+  speed?: number;
+  heading?: number;
+  isDeviated: boolean;
+  isLead: boolean;
+  isSweep: boolean;
+  recordedAt: string;
+}
+
+export interface LiveRideMetrics {
+  elapsedMinutes: number;
+  distanceKm: number;
+  avgSpeedKmh: number;
+  maxSpeedKmh: number;
+  breakCount: number;
+  breakMinutes: number;
+  riderCount: number;
+}
+
 export interface RideRegistration {
   id: string;
   rideId: string;
@@ -149,9 +199,11 @@ export interface RideRegistration {
   ridingType: "solo" | "rider-with-pillion" | "pillion-rider" | "";
   vehicleModel: string;
   vehicleRegNumber: string;
+  tshirtSize: "XS" | "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "";
   agreedCancellationTerms: boolean;
   agreedIndemnity: boolean;
   paymentScreenshot: string;
+  upiTransactionId: string;
   registeredAt: string;
   confirmationCode: string;
 }

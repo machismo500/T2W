@@ -12,19 +12,32 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
-const stats = [
-  { label: "Active Riders", value: "140", icon: Users },
-  { label: "Rides Completed", value: "27", icon: MapPin },
-  { label: "KMs Covered", value: "20,575", icon: Bike },
-  { label: "Countries Ridden", value: "3", icon: Trophy },
-];
+interface HeroStats {
+  activeRiders: number;
+  ridesCompleted: number;
+  kmsCovered: number;
+  countriesRidden: number;
+}
 
 export function HeroSection() {
   const [mounted, setMounted] = useState(false);
   const [nextRide, setNextRide] = useState<{ title: string; date: string } | null>(null);
+  const [stats, setStats] = useState<HeroStats>({
+    activeRiders: 0,
+    ridesCompleted: 0,
+    kmsCovered: 0,
+    countriesRidden: 0,
+  });
 
   useEffect(() => {
     setMounted(true);
+
+    // Fetch dynamic stats
+    fetch("/api/stats")
+      .then((res) => res.json())
+      .then((data: HeroStats) => setStats(data))
+      .catch(() => {});
+
     // Fetch rides and find the next upcoming ride based on actual date
     api.rides.list().then((data: unknown) => {
       const { rides } = data as { rides: Array<{ title: string; startDate: string; status: string }> };
@@ -146,7 +159,12 @@ export function HeroSection() {
                 : "translate-y-8 opacity-0"
             }`}
           >
-            {stats.map(({ label, value, icon: Icon }) => (
+            {[
+              { label: "Active Riders", value: stats.activeRiders, icon: Users },
+              { label: "Rides Completed", value: stats.ridesCompleted, icon: MapPin },
+              { label: "KMs Covered", value: stats.kmsCovered, icon: Bike },
+              { label: "Countries Ridden", value: stats.countriesRidden, icon: Trophy },
+            ].map(({ label, value, icon: Icon }) => (
               <div key={label} className="group">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-t2w-surface-light text-t2w-accent transition-colors group-hover:bg-t2w-accent/10">
@@ -154,7 +172,7 @@ export function HeroSection() {
                   </div>
                   <div>
                     <div className="font-display text-2xl font-bold text-white">
-                      {value}
+                      {value.toLocaleString()}
                     </div>
                     <div className="text-xs text-t2w-muted">{label}</div>
                   </div>

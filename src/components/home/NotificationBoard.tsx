@@ -12,7 +12,6 @@ import {
   X,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { mockBlogs } from "@/data/mock";
 
 type Notification = {
   id: string;
@@ -21,6 +20,14 @@ type Notification = {
   type: "info" | "warning" | "success" | "ride";
   date: string;
   isRead: boolean;
+};
+
+type BlogHighlight = {
+  title: string;
+  author: string;
+  date: string;
+  tag: string;
+  readTime: string;
 };
 
 const typeConfig = {
@@ -52,8 +59,10 @@ const typeConfig = {
 
 export function NotificationBoard() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [blogHighlights, setBlogHighlights] = useState<BlogHighlight[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [blogsLoading, setBlogsLoading] = useState(true);
 
   useEffect(() => {
     api.notifications
@@ -67,6 +76,38 @@ export function NotificationBoard() {
       })
       .finally(() => {
         setLoading(false);
+      });
+
+    fetch("/api/blogs")
+      .then((res) => res.json())
+      .then((data) => {
+        const blogs = (data.blogs || []).slice(0, 3).map((blog: {
+          title: string;
+          authorName: string;
+          publishDate: string;
+          tags: string | string[];
+          type: string;
+          readTime: number;
+        }) => ({
+          title: blog.title,
+          author: blog.authorName,
+          date: new Date(blog.publishDate).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+          tag: Array.isArray(blog.tags)
+            ? blog.tags[0] || blog.type
+            : blog.type,
+          readTime: `${blog.readTime} min read`,
+        }));
+        setBlogHighlights(blogs);
+      })
+      .catch(() => {
+        setBlogHighlights([]);
+      })
+      .finally(() => {
+        setBlogsLoading(false);
       });
   }, []);
 
@@ -200,17 +241,16 @@ export function NotificationBoard() {
             </div>
 
             <div className="space-y-4">
-              {mockBlogs
-                .filter((b) => b.approvalStatus === "approved")
-                .slice(0, 3)
-                .map((blog, i) => ({
-                  title: blog.title,
-                  author: blog.author,
-                  date: new Date(blog.publishDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
-                  tag: blog.tags[0] || blog.type,
-                  readTime: `${blog.readTime} min read`,
-                }))
-                .map((blog, i) => (
+              {blogsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-t2w-accent border-t-transparent" />
+                </div>
+              ) : blogHighlights.length === 0 ? (
+                <p className="py-8 text-center text-sm text-t2w-muted">
+                  No blog posts yet.
+                </p>
+              ) : (
+                blogHighlights.map((blog, i) => (
                 <Link
                   key={i}
                   href="/blogs"
@@ -239,7 +279,7 @@ export function NotificationBoard() {
                   </div>
                   <ChevronRight className="h-5 w-5 shrink-0 self-center text-t2w-muted transition-transform group-hover:translate-x-1 group-hover:text-t2w-accent" />
                 </Link>
-              ))}
+              )))}
             </div>
 
             <Link

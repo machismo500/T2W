@@ -2,6 +2,44 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
+// Name normalization for matching crew names to rider profile names
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+const crewNameAliases: Record<string, string> = {
+  "suren": "surendar p velu",
+  "surendar": "surendar p velu",
+  "surendar velu": "surendar p velu",
+};
+
+function crewNameMatchesRider(crewName: string, riderName: string): boolean {
+  const crewLower = crewName.toLowerCase().trim();
+  const riderLower = riderName.toLowerCase().trim();
+  if (crewLower === riderLower) return true;
+  if (normalizeName(crewName) === normalizeName(riderName)) return true;
+  const alias = crewNameAliases[crewLower];
+  if (alias && normalizeName(alias) === normalizeName(riderName)) return true;
+  if (!crewLower.includes(" ")) {
+    const riderFirstName = riderLower.split(/\s+/)[0];
+    if (crewLower === riderFirstName) return true;
+  }
+  return false;
+}
+
+function computeRideRoleStats(
+  riderName: string,
+  allRides: Array<{ leadRider: string; sweepRider: string; organisedBy: string | null }>
+): { pilotsDone: number; sweepsDone: number; ridesOrganized: number } {
+  let pilotsDone = 0, sweepsDone = 0, ridesOrganized = 0;
+  for (const ride of allRides) {
+    if (ride.leadRider && crewNameMatchesRider(ride.leadRider, riderName)) pilotsDone++;
+    if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, riderName)) sweepsDone++;
+    if (ride.organisedBy && crewNameMatchesRider(ride.organisedBy, riderName)) ridesOrganized++;
+  }
+  return { pilotsDone, sweepsDone, ridesOrganized };
+}
+
 // GET /api/riders - list all rider profiles with participation stats
 export async function GET(req: NextRequest) {
   try {
@@ -34,7 +72,18 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
     });
 
-    const riders = profiles.map((p: typeof profiles[number]) => ({
+    // Load all rides from DB for role stats computation
+    const allRides = await prisma.ride.findMany({
+      select: { leadRider: true, sweepRider: true, organisedBy: true },
+    });
+
+    const riders = profiles.map((p: typeof profiles[number]) => {
+      const stats = computeRideRoleStats(p.name, allRides);
+      // Exclude dropped-out riders from active stats
+      const activeParticipations = p.participations.filter(
+        (pp: typeof p.participations[number]) => !pp.droppedOut
+      );
+      return {
       id: p.id,
       name: p.name,
       email: p.email,
@@ -45,26 +94,26 @@ export async function GET(req: NextRequest) {
       bloodGroup: p.bloodGroup,
       joinDate: p.joinDate.toISOString(),
       avatarUrl: p.avatarUrl,
-      ridesOrganized: p.ridesOrganized,
-      sweepsDone: p.sweepsDone,
-      pilotsDone: p.pilotsDone,
+      ...stats,
       mergedIntoId: p.mergedIntoId,
       userRole: p.role !== "rider" ? p.role : (p.linkedUsers[0]?.role || null),
-      ridesCompleted: p.participations.length,
-      totalKm: p.participations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
-      totalPoints: p.participations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
-      ridesParticipated: p.participations.map((pp: typeof p.participations[number]) => ({
+      ridesCompleted: activeParticipations.length,
+      totalKm: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
+      totalPoints: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
+      ridesParticipated: activeParticipations.map((pp: typeof p.participations[number]) => ({
         rideId: pp.ride.id,
         rideNumber: pp.ride.rideNumber,
         rideTitle: pp.ride.title,
         rideDate: pp.ride.startDate.toISOString(),
         distanceKm: pp.ride.distanceKm,
         points: pp.points,
+        droppedOut: pp.droppedOut,
       })),
       participationMap: Object.fromEntries(
-        p.participations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
+        activeParticipations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
       ),
-    }));
+    };
+    });
 
     return NextResponse.json({ riders });
   } catch (error) {

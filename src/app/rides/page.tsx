@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { RidesPage } from "@/components/rides/RidesPage";
-import { mockRides } from "@/data/mock";
+import { prisma } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title:
@@ -31,8 +33,26 @@ export const metadata: Metadata = {
   },
 };
 
-function UpcomingRidesSchema() {
-  const upcomingRides = mockRides.filter((r) => r.status === "upcoming");
+async function UpcomingRidesSchema() {
+  let upcomingRides: Array<{
+    id: string; title: string; rideNumber: string; description: string;
+    startDate: Date; endDate: Date; startLocation: string;
+    fee: number; maxRiders: number;
+  }> = [];
+
+  try {
+    upcomingRides = await prisma.ride.findMany({
+      where: { status: "upcoming" },
+      select: {
+        id: true, title: true, rideNumber: true, description: true,
+        startDate: true, endDate: true, startLocation: true,
+        fee: true, maxRiders: true,
+      },
+    });
+  } catch {
+    // DB unavailable
+  }
+
   if (upcomingRides.length === 0) return null;
 
   const schema = {
@@ -48,8 +68,8 @@ function UpcomingRidesSchema() {
         "@type": "Event",
         name: `${ride.rideNumber} ${ride.title}`,
         description: ride.description,
-        startDate: ride.startDate,
-        endDate: ride.endDate,
+        startDate: ride.startDate.toISOString(),
+        endDate: ride.endDate.toISOString(),
         eventStatus: "https://schema.org/EventScheduled",
         eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
         location: {
@@ -62,11 +82,9 @@ function UpcomingRidesSchema() {
           "@type": "Offer",
           price: ride.fee,
           priceCurrency: "INR",
-          availability: ride.registeredRiders < ride.maxRiders ? "https://schema.org/InStock" : "https://schema.org/SoldOut",
           url: `https://taleson2wheels.com/ride/${ride.id}`,
         },
         maximumAttendeeCapacity: ride.maxRiders,
-        remainingAttendeeCapacity: ride.maxRiders - ride.registeredRiders,
         image: "https://taleson2wheels.com/og-image.jpg",
       },
     })),

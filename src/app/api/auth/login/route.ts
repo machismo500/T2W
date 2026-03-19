@@ -97,6 +97,13 @@ export async function POST(req: NextRequest) {
           where: { id: user.id },
           data: updateData,
         });
+        // Keep RiderProfile.role in sync
+        if (needsRoleUpgrade && linkedRiderId) {
+          await prisma.riderProfile.update({
+            where: { id: linkedRiderId },
+            data: { role: "t2w_rider" },
+          });
+        }
         user.totalKm = totalKm;
         user.ridesCompleted = ridesCompleted;
         if (needsRoleUpgrade) (user as Record<string, unknown>).role = "t2w_rider";

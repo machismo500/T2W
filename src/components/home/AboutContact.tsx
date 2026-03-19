@@ -51,6 +51,8 @@ export function AboutContact() {
     message: "",
   });
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   // Editable About content
   const [aboutContent, setAboutContent] = useState(DEFAULT_ABOUT);
@@ -86,10 +88,27 @@ export function AboutContact() {
     });
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send message");
+      }
+      setSubmitted(true);
+      setFormData({ name: "", email: "", subject: "", message: "" });
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : "Failed to send message. Please try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSaveAbout = async () => {
@@ -327,6 +346,12 @@ export function AboutContact() {
                   <p className="mt-2 text-sm text-t2w-muted">
                     We&apos;ll get back to you within 24 hours.
                   </p>
+                  <button
+                    onClick={() => setSubmitted(false)}
+                    className="mt-4 text-sm text-t2w-accent hover:underline"
+                  >
+                    Send another message
+                  </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -392,9 +417,27 @@ export function AboutContact() {
                       }
                     />
                   </div>
-                  <button type="submit" className="btn-primary flex w-full items-center justify-center gap-2">
-                    <Send className="h-4 w-4" />
-                    Send Message
+                  {sendError && (
+                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                      {sendError}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={sending}
+                    className="btn-primary flex w-full items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {sending ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        Send Message
+                      </>
+                    )}
                   </button>
                 </form>
               )}

@@ -71,6 +71,7 @@ model RideParticipation {
   riderProfileId String
   rideId         String
   points         Float    @default(5)
+  droppedOut     Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   riderProfile RiderProfile @relation(fields: [riderProfileId], references: [id], onDelete: Cascade)
@@ -126,7 +127,9 @@ model Ride {
   startDate        DateTime
   endDate          DateTime
   startLocation    String
+  startLocationUrl String?
   endLocation      String
+  endLocationUrl   String?
   route            String   // JSON array stored as string
   distanceKm       Float
   maxRiders        Int
@@ -137,20 +140,49 @@ model Ride {
   fee              Float
   leadRider        String
   sweepRider       String
+  organisedBy      String?
+  accountsBy       String?
+  meetupTime       String?
+  rideStartTime    String?
+  startingPoint    String?
+  riders           String?  // JSON array of rider names
+  regFormSettings  String?  // JSON: per-ride registration form overrides
+  regOpenCore      DateTime? // When registration opens for core_member
+  regOpenT2w       DateTime? // When registration opens for t2w_rider
+  regOpenRider     DateTime? // When registration opens for rider / guest
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   registrations    RideRegistration[]
   participations   RideParticipation[]
+  liveSession      LiveRideSession?
+  ridePosts        RidePost[]
 }
 
 model RideRegistration {
-  id             String   @id @default(cuid())
-  userId         String
-  rideId         String
-  agreedIndemnity Boolean @default(false)
-  registeredAt   DateTime @default(now())
-  confirmationCode String?
+  id                    String   @id @default(cuid())
+  userId                String
+  rideId                String
+  riderName             String
+  address               String   @default("")
+  email                 String
+  phone                 String
+  emergencyContactName  String   @default("")
+  emergencyContactPhone String   @default("")
+  bloodGroup            String   @default("")
+  referredBy            String   @default("")
+  foodPreference        String   @default("")
+  ridingType            String   @default("")
+  vehicleModel          String   @default("")
+  vehicleRegNumber      String   @default("")
+  tshirtSize            String   @default("")
+  agreedCancellationTerms Boolean @default(false)
+  agreedIndemnity       Boolean  @default(false)
+  paymentScreenshot     String   @default("") @db.Text
+  upiTransactionId      String   @default("")
+  registeredAt          DateTime @default(now())
+  confirmationCode      String?
+  approvalStatus        String   @default("pending") // pending | confirmed | rejected
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
@@ -159,25 +191,29 @@ model RideRegistration {
 }
 
 model BlogPost {
-  id          String   @id @default(cuid())
-  title       String
-  excerpt     String
-  content     String
-  authorId    String?
-  authorName  String
-  authorAvatar String?
-  publishDate DateTime @default(now())
-  coverImage  String?
-  tags        String   // JSON array stored as string
-  type        String   // official | personal
-  isVlog      Boolean  @default(false)
-  videoUrl    String?
-  readTime    Int
-  likes       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  title          String
+  excerpt        String
+  content        String
+  authorId       String?
+  authorName     String
+  authorAvatar   String?
+  publishDate    DateTime @default(now())
+  coverImage     String?
+  tags           String   // JSON array stored as string
+  type           String   // official | personal
+  isVlog         Boolean  @default(false)
+  videoUrl       String?
+  readTime       Int
+  likes          Int      @default(0)
+  approvalStatus String   @default("approved") // pending | approved | rejected
+  approvedBy     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([approvalStatus])
 }
 
 model Notification {
@@ -212,6 +248,52 @@ model Guideline {
   icon     String
 }
 
+model LiveRideSession {
+  id            String    @id @default(cuid())
+  rideId        String    @unique
+  status        String    @default("waiting") // waiting | live | paused | ended
+  startedAt     DateTime?
+  endedAt       DateTime?
+  startedBy     String    // userId who started the session
+  leadRiderId   String?   // userId of lead rider
+  sweepRiderId  String?   // userId of sweep rider
+  plannedRoute  String?   // JSON: [{lat,lng},...] for deviation detection
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  ride      Ride               @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  locations LiveRideLocation[]
+  breaks    LiveRideBreak[]
+}
+
+model LiveRideLocation {
+  id         String   @id @default(cuid())
+  sessionId  String
+  userId     String
+  lat        Float
+  lng        Float
+  speed      Float?   // km/h
+  heading    Float?   // degrees
+  accuracy   Float?   // meters
+  isDeviated Boolean  @default(false)
+  recordedAt DateTime @default(now())
+
+  session LiveRideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, userId])
+  @@index([sessionId, recordedAt])
+}
+
+model LiveRideBreak {
+  id        String    @id @default(cuid())
+  sessionId String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  reason    String?
+
+  session LiveRideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
 model Content {
   id          String   @id @default(cuid())
   title       String
@@ -220,4 +302,43 @@ model Content {
   lastUpdated DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model RidePost {
+  id             String   @id @default(cuid())
+  rideId         String
+  authorId       String?
+  authorName     String
+  content        String   @db.Text
+  images         String?  // JSON array of image URLs
+  approvalStatus String   @default("pending") // pending | approved | rejected
+  approvedBy     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([rideId])
+  @@index([approvalStatus])
+}
+
+model ActivityLog {
+  id              String   @id @default(cuid())
+  action          String   // ride_created | user_deleted | role_changed | etc.
+  performedBy     String
+  performedByName String
+  targetId        String
+  targetName      String
+  details         String?
+  rollbackData    String?  @db.Text // JSON for undo
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model SiteSettings {
+  id    String @id @default(cuid())
+  key   String @unique  // e.g. "reg_form_settings", "about_content"
+  value String @db.Text // JSON value
+  updatedAt DateTime @updatedAt
 }

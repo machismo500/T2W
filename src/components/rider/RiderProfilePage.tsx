@@ -246,6 +246,35 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
     }
   };
 
+  // Compress image client-side to a small JPEG data URL (max 256x256, ~30-80KB)
+  // This prevents storing multi-MB base64 strings in the DB which break Vercel response limits
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX = 256;
+        let w = img.width;
+        let h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("Canvas not supported")); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+        resolve(dataUrl);
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Failed to load image")); };
+      img.src = objectUrl;
+    });
+  };
+
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -253,26 +282,56 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
       alert("Please select an image file");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image must be under 5MB");
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image must be under 10MB");
       return;
     }
     try {
-      // Upload to server and persist URL in RiderProfile.avatarUrl
-      const url = await api.avatars.upload(riderId, file);
-      setAvatarUrl(url);
-      // Also update the local rider state
-      if (rider) setRider({ ...rider, avatarUrl: url });
+      // Step 1: Compress the image client-side (256x256 JPEG, ~30-80KB)
+      const compressedDataUrl = await compressImage(file);
+
+      // Step 2: Upload the compressed data URL to the server
+      // The server will persist it directly in the DB
+      const formData = new FormData();
+      formData.append("dataUrl", compressedDataUrl);
+      formData.append("type", "avatar");
+      formData.append("targetId", riderId);
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
+
+      // Step 3: Update local state and cache
+      setAvatarUrl(data.url);
+      if (rider) setRider({ ...rider, avatarUrl: data.url });
+      api.avatars.save(riderId, data.url);
     } catch (err) {
       console.error("Avatar upload failed:", err);
-      // Fallback: store as base64 in localStorage
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
-        setAvatarUrl(dataUrl);
-        api.avatars.save(riderId, dataUrl);
-      };
-      reader.readAsDataURL(file);
+      alert(err instanceof Error ? err.message : "Failed to upload profile picture. Please try again.");
+    }
+    // Reset file input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleAvatarDelete = async () => {
+    if (!confirm("Remove your profile picture?")) return;
+    try {
+      // Send null to API to clear the avatar in DB (api.riders.update accepts Record<string, unknown>)
+      const res = await fetch(`/api/riders/${riderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarUrl: null }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setAvatarUrl(null);
+      if (rider) setRider({ ...rider, avatarUrl: undefined });
+      // Clear localStorage cache
+      api.avatars.save(riderId, "");
+    } catch {
+      alert("Failed to remove profile picture.");
     }
   };
 
@@ -413,11 +472,12 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                   </div>
                 )}
               </div>
-              {canEdit && (
+              {canEdit && editing && (
                 <>
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                    title="Change profile picture"
                   >
                     <Camera className="h-6 w-6 text-white" />
                   </button>
@@ -428,6 +488,15 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                     onChange={handleAvatarUpload}
                     className="hidden"
                   />
+                  {avatarUrl && (
+                    <button
+                      onClick={handleAvatarDelete}
+                      className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition-transform hover:scale-110"
+                      title="Remove profile picture"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -438,11 +507,20 @@ export function RiderProfilePage({ riderId }: { riderId: string }) {
                 <h1 className="font-display text-3xl font-bold text-white">
                   {rider.name}
                 </h1>
-                {rider.userRole && (rider.userRole === "core_member" || rider.userRole === "superadmin") && (
-                  <span className="rounded-lg bg-t2w-accent/20 px-3 py-1 text-xs font-semibold text-t2w-accent">
-                    Core
-                  </span>
-                )}
+                {rider.userRole && (() => {
+                  const roleConfig: Record<string, { label: string; bg: string; text: string }> = {
+                    superadmin: { label: "Super Admin", bg: "bg-red-500/20", text: "text-red-400" },
+                    core_member: { label: "Core", bg: "bg-t2w-accent/20", text: "text-t2w-accent" },
+                    t2w_rider: { label: "T2W Rider", bg: "bg-blue-500/20", text: "text-blue-400" },
+                    rider: { label: "Rider", bg: "bg-gray-500/20", text: "text-gray-400" },
+                  };
+                  const cfg = roleConfig[rider.userRole];
+                  return cfg ? (
+                    <span className={`rounded-lg ${cfg.bg} px-3 py-1 text-xs font-semibold ${cfg.text}`}>
+                      {cfg.label}
+                    </span>
+                  ) : null;
+                })()}
                 <span
                   className={`rounded-lg px-3 py-1 text-xs font-semibold ${badge.color} ${badge.bg}`}
                 >
