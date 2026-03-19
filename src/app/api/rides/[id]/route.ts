@@ -42,6 +42,7 @@ export async function GET(
     // Check if current user is registered
     let currentUserRegistered = false;
     let currentUserConfirmationCode: string | null = null;
+    let currentUserApprovalStatus: string | null = null;
     try {
       const currentUser = await getCurrentUser();
       if (currentUser) {
@@ -49,6 +50,7 @@ export async function GET(
         if (userReg) {
           currentUserRegistered = true;
           currentUserConfirmationCode = userReg.confirmationCode || null;
+          currentUserApprovalStatus = userReg.approvalStatus || "pending";
         }
       }
     } catch {
@@ -101,6 +103,7 @@ export async function GET(
       })),
       currentUserRegistered,
       currentUserConfirmationCode,
+      currentUserApprovalStatus,
     };
 
     return NextResponse.json({ ride: result });

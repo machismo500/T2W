@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   Shield,
@@ -127,6 +127,76 @@ const ROLE_COLORS: Record<string, string> = {
   rider: "bg-t2w-surface-light text-t2w-muted",
 };
 
+type RiderSearchResult = { id: string; name: string; email: string; phone: string };
+
+function CrewAutocomplete({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const [query, setQuery] = useState(value);
+  const [results, setResults] = useState<RiderSearchResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const searchRiders = useCallback((q: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (q.length < 1) { setResults([]); setShowDropdown(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/riders/search?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setResults(data.results || []);
+          setShowDropdown(true);
+        }
+      } catch { /* ignore */ }
+      setSearching(false);
+    }, 300);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <label className="mb-1.5 block text-sm font-medium text-gray-300">{label}</label>
+      <input
+        type="text"
+        className="input-field"
+        placeholder={placeholder || "Type to search..."}
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); onChange(e.target.value); searchRiders(e.target.value); }}
+        onFocus={() => { if (results.length > 0) setShowDropdown(true); }}
+      />
+      {searching && <Loader2 className="absolute right-3 top-9 h-4 w-4 animate-spin text-t2w-muted" />}
+      {showDropdown && results.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-t2w-border bg-t2w-surface shadow-xl max-h-48 overflow-y-auto">
+          {results.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              className="w-full px-3 py-2 text-left text-sm hover:bg-t2w-surface-light transition-colors flex flex-col"
+              onClick={() => { setQuery(r.name); onChange(r.name); setShowDropdown(false); }}
+            >
+              <span className="text-white font-medium">{r.name}</span>
+              <span className="text-xs text-t2w-muted">{r.phone || "—"} / {r.email || "—"}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AdminPage() {
   const { user, loading: authLoading, isSuperAdmin, isCoreOrAbove, canManageRoles, canDeleteRide, canCreateRide, canApproveContent } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
@@ -152,6 +222,7 @@ export function AdminPage() {
     title: "", rideNumber: "", type: "day", startDate: "", endDate: "",
     startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "",
     distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "",
+    organisedBy: "", leadRider: "", sweepRider: "",
   });
   const [rideFormUseCustomSettings, setRideFormUseCustomSettings] = useState(false);
   const [rideFormCustomSettings, setRideFormCustomSettings] = useState<string[]>([]); // hidden fields for this ride
@@ -662,6 +733,9 @@ export function AdminPage() {
         description: rideForm.description,
         route: [rideForm.startLocation, rideForm.endLocation],
         highlights: [],
+        organisedBy: rideForm.organisedBy || null,
+        leadRider: rideForm.leadRider || "",
+        sweepRider: rideForm.sweepRider || "",
         regFormSettings: rideFormUseCustomSettings ? { hiddenFields: rideFormCustomSettings } : null,
         regOpenCore: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenCore ? new Date(rideFormRegSchedule.regOpenCore).toISOString() : null,
         regOpenT2w: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenT2w ? new Date(rideFormRegSchedule.regOpenT2w).toISOString() : null,
@@ -679,7 +753,7 @@ export function AdminPage() {
         details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})`,
       });
       setActivityLog(prev => [{ id: `log-${Date.now()}`, action: "ride_created", performedBy: user!.id, performedByName: user!.name, timestamp: new Date().toISOString(), targetId: newRide.id, targetName: rideForm.title, details: `Created ride "${rideForm.title}" (${rideForm.rideNumber})` }, ...prev]);
-      setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "" });
+      setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "", organisedBy: "", leadRider: "", sweepRider: "" });
       setRideFormUseCustomSettings(false);
       setRideFormCustomSettings([]);
       setRideFormRegSchedule({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
@@ -1223,6 +1297,16 @@ export function AdminPage() {
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulty</label><select className="input-field cursor-pointer" value={rideForm.difficulty} onChange={(e) => setRideForm({ ...rideForm, difficulty: e.target.value })}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="challenging">Challenging</option><option value="extreme">Extreme</option></select></div>
                   <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" placeholder="Describe the ride..." value={rideForm.description} onChange={(e) => setRideForm({ ...rideForm, description: e.target.value })} /></div>
 
+                  {/* Ride Crew */}
+                  <div className="sm:col-span-2 rounded-xl border border-t2w-border bg-t2w-bg p-4">
+                    <h4 className="text-sm font-medium text-white mb-3">Ride Crew</h4>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <CrewAutocomplete label="Organised By" placeholder="Search by name, phone, or email" value={rideForm.organisedBy} onChange={(v) => setRideForm({ ...rideForm, organisedBy: v })} />
+                      <CrewAutocomplete label="Lead Rider" placeholder="Can be set later" value={rideForm.leadRider} onChange={(v) => setRideForm({ ...rideForm, leadRider: v })} />
+                      <CrewAutocomplete label="Sweep Rider" placeholder="Can be set later" value={rideForm.sweepRider} onChange={(v) => setRideForm({ ...rideForm, sweepRider: v })} />
+                    </div>
+                  </div>
+
                   {/* Registration Schedule */}
                   <div className="sm:col-span-2 rounded-xl border border-t2w-border bg-t2w-bg p-4">
                     <label className="flex items-center gap-3 cursor-pointer">
@@ -1422,12 +1506,12 @@ export function AdminPage() {
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Distance (km)</label><input type="number" className="input-field" value={editForm.distanceKm} onChange={(e) => setEditForm({ ...editForm, distanceKm: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders</label><input type="number" className="input-field" value={editForm.maxRiders} onChange={(e) => setEditForm({ ...editForm, maxRiders: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee (₹)</label><input type="number" className="input-field" value={editForm.fee} onChange={(e) => setEditForm({ ...editForm, fee: e.target.value })} /></div>
-                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Lead Rider</label><input type="text" className="input-field" placeholder="Name" value={editForm.leadRider} onChange={(e) => setEditForm({ ...editForm, leadRider: e.target.value })} /></div>
-                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Sweep Rider</label><input type="text" className="input-field" placeholder="Name" value={editForm.sweepRider} onChange={(e) => setEditForm({ ...editForm, sweepRider: e.target.value })} /></div>
-                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Organised By</label><input type="text" className="input-field" placeholder="Name" value={editForm.organisedBy} onChange={(e) => setEditForm({ ...editForm, organisedBy: e.target.value })} /></div>
+                        <CrewAutocomplete label="Lead Rider" placeholder="Search by name, phone, or email" value={editForm.leadRider} onChange={(v) => setEditForm({ ...editForm, leadRider: v })} />
+                        <CrewAutocomplete label="Sweep Rider" placeholder="Search by name, phone, or email" value={editForm.sweepRider} onChange={(v) => setEditForm({ ...editForm, sweepRider: v })} />
+                        <CrewAutocomplete label="Organised By" placeholder="Search by name, phone, or email" value={editForm.organisedBy} onChange={(v) => setEditForm({ ...editForm, organisedBy: v })} />
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Meetup Time</label><input type="text" className="input-field" placeholder="e.g. 5:30 AM" value={editForm.meetupTime} onChange={(e) => setEditForm({ ...editForm, meetupTime: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Start Time</label><input type="text" className="input-field" placeholder="e.g. 6:00 AM" value={editForm.rideStartTime} onChange={(e) => setEditForm({ ...editForm, rideStartTime: e.target.value })} /></div>
-                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Accounts By</label><input type="text" className="input-field" placeholder="Name" value={editForm.accountsBy} onChange={(e) => setEditForm({ ...editForm, accountsBy: e.target.value })} /></div>
+                        <CrewAutocomplete label="Accounts By" placeholder="Search by name, phone, or email" value={editForm.accountsBy} onChange={(v) => setEditForm({ ...editForm, accountsBy: v })} />
                         <div className="sm:col-span-2 lg:col-span-3"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></div>
                         <div className="sm:col-span-2 lg:col-span-3">
                           <label className="mb-1.5 block text-sm font-medium text-gray-300">Ride Highlights <span className="text-xs text-t2w-muted">(one per line)</span></label>

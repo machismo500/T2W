@@ -301,6 +301,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const [showRegistration, setShowRegistration] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
+  const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const posterInputRef = useRef<HTMLInputElement>(null);
@@ -454,10 +455,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
         }
         setRide(r);
         // Check if current user is already registered (from DB)
-        const fullResult = rideData as { ride: Ride & { currentUserRegistered?: boolean; currentUserConfirmationCode?: string | null } };
+        const fullResult = rideData as { ride: Ride & { currentUserRegistered?: boolean; currentUserConfirmationCode?: string | null; currentUserApprovalStatus?: string | null } };
         if (fullResult.ride?.currentUserRegistered) {
           setRegistered(true);
           setConfirmationCode(fullResult.ride.currentUserConfirmationCode || null);
+          setApprovalStatus(fullResult.ride.currentUserApprovalStatus || "pending");
         }
         setRidePosts((postsData as { posts: RidePost[] }).posts);
       })
@@ -1532,9 +1534,16 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   <div className="mt-4 rounded-xl bg-t2w-surface p-3 font-mono text-sm text-t2w-accent">
                     Confirmation #{confirmationCode}
                   </div>
-                  <p className="mt-3 text-xs text-yellow-400">
-                    Your registration is pending confirmation by the T2W team. You will appear on the ride page once confirmed.
-                  </p>
+                  {approvalStatus !== "confirmed" && (
+                    <p className="mt-3 text-xs text-yellow-400">
+                      Your registration is pending confirmation by the T2W team. You will appear on the ride page once confirmed.
+                    </p>
+                  )}
+                  {approvalStatus === "confirmed" && (
+                    <p className="mt-3 text-xs text-green-400">
+                      Your registration has been confirmed!
+                    </p>
+                  )}
                 </div>
               </div>
             )}
