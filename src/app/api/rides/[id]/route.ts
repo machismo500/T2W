@@ -85,6 +85,9 @@ export async function GET(
       startingPoint: ride.startingPoint,
       riders: safeJsonParse(ride.riders, []),
       regFormSettings: safeJsonParse(ride.regFormSettings, null),
+      regOpenCore: ride.regOpenCore?.toISOString() || null,
+      regOpenT2w: ride.regOpenT2w?.toISOString() || null,
+      regOpenRider: ride.regOpenRider?.toISOString() || null,
       participations: ride.participations.map((p) => ({
         id: p.id,
         riderProfileId: p.riderProfile.id,
@@ -135,6 +138,11 @@ export async function PUT(
     // Handle date fields
     if (data.startDate) updateData.startDate = new Date(data.startDate);
     if (data.endDate) updateData.endDate = new Date(data.endDate);
+
+    // Handle registration schedule fields (nullable datetimes)
+    if (data.regOpenCore !== undefined) updateData.regOpenCore = data.regOpenCore ? new Date(data.regOpenCore) : null;
+    if (data.regOpenT2w !== undefined) updateData.regOpenT2w = data.regOpenT2w ? new Date(data.regOpenT2w) : null;
+    if (data.regOpenRider !== undefined) updateData.regOpenRider = data.regOpenRider ? new Date(data.regOpenRider) : null;
 
     // Handle JSON array fields
     if (data.route) updateData.route = JSON.stringify(data.route);

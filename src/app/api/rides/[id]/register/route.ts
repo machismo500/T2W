@@ -33,6 +33,24 @@ export async function POST(
       );
     }
 
+    // Check staggered registration schedule
+    const now = new Date();
+    const userRole = user.role;
+    let regOpenDate: Date | null = null;
+    if (userRole === "superadmin" || userRole === "core_member") {
+      regOpenDate = ride.regOpenCore;
+    } else if (userRole === "t2w_rider") {
+      regOpenDate = ride.regOpenT2w;
+    } else {
+      regOpenDate = ride.regOpenRider;
+    }
+    if (regOpenDate && now < regOpenDate) {
+      return NextResponse.json(
+        { error: "Registration is not yet open for your tier. Please check back later." },
+        { status: 403 }
+      );
+    }
+
     // Check capacity
     if (ride.registrations.length >= ride.maxRiders) {
       return NextResponse.json(

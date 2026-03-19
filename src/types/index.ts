@@ -58,6 +58,9 @@ export interface Ride {
   sweepRider: string;
   riders?: string[];
   regFormSettings?: Record<string, unknown> | null;
+  regOpenCore?: string | null;
+  regOpenT2w?: string | null;
+  regOpenRider?: string | null;
   participations?: {
     id: string;
     riderProfileId: string;

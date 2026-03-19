@@ -147,6 +147,9 @@ model Ride {
   startingPoint    String?
   riders           String?  // JSON array of rider names
   regFormSettings  String?  // JSON: per-ride registration form overrides
+  regOpenCore      DateTime? // When registration opens for core_member
+  regOpenT2w       DateTime? // When registration opens for t2w_rider
+  regOpenRider     DateTime? // When registration opens for rider / guest
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

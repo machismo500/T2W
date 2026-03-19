@@ -57,6 +57,9 @@ export async function GET(req: NextRequest) {
       rideStartTime: r.rideStartTime,
       startingPoint: r.startingPoint,
       riders: safeJsonParse(r.riders, []),
+      regOpenCore: r.regOpenCore?.toISOString() || null,
+      regOpenT2w: r.regOpenT2w?.toISOString() || null,
+      regOpenRider: r.regOpenRider?.toISOString() || null,
     }));
 
     return NextResponse.json({ rides: result });
@@ -109,6 +112,9 @@ export async function POST(req: NextRequest) {
         startingPoint: data.startingPoint || null,
         riders: data.riders ? JSON.stringify(data.riders) : null,
         regFormSettings: data.regFormSettings ? JSON.stringify(data.regFormSettings) : null,
+        regOpenCore: data.regOpenCore ? new Date(data.regOpenCore) : null,
+        regOpenT2w: data.regOpenT2w ? new Date(data.regOpenT2w) : null,
+        regOpenRider: data.regOpenRider ? new Date(data.regOpenRider) : null,
       },
     });
 
