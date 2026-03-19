@@ -19,9 +19,9 @@ export async function PATCH(
     const { id: rideId, regId } = await params;
     const { approvalStatus } = await req.json();
 
-    if (!["confirmed", "rejected"].includes(approvalStatus)) {
+    if (!["confirmed", "rejected", "dropout"].includes(approvalStatus)) {
       return NextResponse.json(
-        { error: "Invalid status. Must be 'confirmed' or 'rejected'." },
+        { error: "Invalid status. Must be 'confirmed', 'rejected', or 'dropout'." },
         { status: 400 }
       );
     }
@@ -42,30 +42,39 @@ export async function PATCH(
       data: { approvalStatus },
     });
 
-    // When confirmed, auto-create a RideParticipation with 5 points (if not already present)
-    if (approvalStatus === "confirmed") {
-      // Find the rider's linked RiderProfile
-      const regUser = await prisma.user.findUnique({
-        where: { id: registration.userId },
-        select: { linkedRiderId: true },
-      });
+    // Find the rider's linked RiderProfile for participation updates
+    const regUser = await prisma.user.findUnique({
+      where: { id: registration.userId },
+      select: { linkedRiderId: true },
+    });
 
-      if (regUser?.linkedRiderId) {
-        await prisma.rideParticipation.upsert({
-          where: {
-            riderProfileId_rideId: {
-              riderProfileId: regUser.linkedRiderId,
-              rideId,
-            },
-          },
-          update: {}, // Don't overwrite if already exists (admin may have set custom points)
-          create: {
+    // When confirmed, auto-create a RideParticipation with 5 points (if not already present)
+    if (approvalStatus === "confirmed" && regUser?.linkedRiderId) {
+      await prisma.rideParticipation.upsert({
+        where: {
+          riderProfileId_rideId: {
             riderProfileId: regUser.linkedRiderId,
             rideId,
-            points: 5,
           },
-        });
-      }
+        },
+        update: { droppedOut: false }, // Restore if previously dropped out
+        create: {
+          riderProfileId: regUser.linkedRiderId,
+          rideId,
+          points: 5,
+        },
+      });
+    }
+
+    // When marked as dropout, set droppedOut flag on the participation
+    if (approvalStatus === "dropout" && regUser?.linkedRiderId) {
+      await prisma.rideParticipation.updateMany({
+        where: {
+          riderProfileId: regUser.linkedRiderId,
+          rideId,
+        },
+        data: { droppedOut: true },
+      });
     }
 
     return NextResponse.json({

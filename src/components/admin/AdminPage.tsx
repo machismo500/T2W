@@ -562,7 +562,7 @@ export function AdminPage() {
     }
   };
 
-  const updateRegStatus = async (rideId: string, regId: string, status: "confirmed" | "rejected") => {
+  const updateRegStatus = async (rideId: string, regId: string, status: "confirmed" | "rejected" | "dropout") => {
     setUpdatingRegId(regId);
     try {
       const res = await fetch(`/api/rides/${rideId}/registrations/${regId}`, {
@@ -1439,6 +1439,7 @@ export function AdminPage() {
                             <div key={reg.id} className={`flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl p-3 border ${
                               reg.approvalStatus === "confirmed" ? "border-green-400/20 bg-green-400/5" :
                               reg.approvalStatus === "rejected" ? "border-red-400/20 bg-red-400/5" :
+                              reg.approvalStatus === "dropout" ? "border-orange-400/20 bg-orange-400/5" :
                               "border-yellow-400/20 bg-yellow-400/5"
                             }`}>
                               <div className="flex-1 min-w-0">
@@ -1447,15 +1448,16 @@ export function AdminPage() {
                                   <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-medium uppercase ${
                                     reg.approvalStatus === "confirmed" ? "bg-green-400/10 text-green-400" :
                                     reg.approvalStatus === "rejected" ? "bg-red-400/10 text-red-400" :
+                                    reg.approvalStatus === "dropout" ? "bg-orange-400/10 text-orange-400" :
                                     "bg-yellow-400/10 text-yellow-400"
-                                  }`}>{reg.approvalStatus}</span>
+                                  }`}>{reg.approvalStatus === "dropout" ? "Drop-Out" : reg.approvalStatus}</span>
                                 </div>
                                 <p className="text-xs text-t2w-muted mt-0.5">
                                   {reg.email} &middot; {reg.phone || "No phone"} &middot; {new Date(reg.registeredAt).toLocaleDateString()}
                                 </p>
                               </div>
                               <div className="flex gap-2 shrink-0">
-                                {reg.approvalStatus !== "confirmed" && (
+                                {reg.approvalStatus !== "confirmed" && reg.approvalStatus !== "dropout" && (
                                   <button
                                     onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
                                     disabled={updatingRegId === reg.id}
@@ -1465,7 +1467,7 @@ export function AdminPage() {
                                     Confirm
                                   </button>
                                 )}
-                                {reg.approvalStatus !== "rejected" && (
+                                {reg.approvalStatus === "pending" && (
                                   <button
                                     onClick={() => updateRegStatus(ride.id, reg.id, "rejected")}
                                     disabled={updatingRegId === reg.id}
@@ -1473,6 +1475,26 @@ export function AdminPage() {
                                   >
                                     {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
                                     Reject
+                                  </button>
+                                )}
+                                {reg.approvalStatus === "confirmed" && (
+                                  <button
+                                    onClick={() => updateRegStatus(ride.id, reg.id, "dropout")}
+                                    disabled={updatingRegId === reg.id}
+                                    className="flex items-center gap-1 rounded-lg bg-orange-400/10 px-3 py-1.5 text-xs text-orange-400 transition-colors hover:bg-orange-400/20 disabled:opacity-50"
+                                  >
+                                    {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserX className="h-3 w-3" />}
+                                    Drop-Out
+                                  </button>
+                                )}
+                                {reg.approvalStatus === "dropout" && (
+                                  <button
+                                    onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
+                                    disabled={updatingRegId === reg.id}
+                                    className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
+                                  >
+                                    {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                                    Restore
                                   </button>
                                 )}
                               </div>
