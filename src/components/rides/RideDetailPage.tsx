@@ -247,6 +247,9 @@ interface Ride {
   rideStartTime?: string;
   startingPoint?: string;
   regFormSettings?: Record<string, unknown> | null;
+  regOpenCore?: string | null;
+  regOpenT2w?: string | null;
+  regOpenRider?: string | null;
   participations?: {
     id: string;
     riderProfileId: string;
@@ -255,6 +258,38 @@ interface Ride {
     droppedOut: boolean;
     points: number;
   }[];
+}
+
+/** Check if registration is open for the current user based on staggered schedule */
+function getRegistrationStatus(
+  ride: Ride,
+  userRole: string | undefined
+): { open: boolean; opensAt: Date | null } {
+  // If no schedule is set at all, registration is open for everyone
+  if (!ride.regOpenCore && !ride.regOpenT2w && !ride.regOpenRider) {
+    return { open: true, opensAt: null };
+  }
+
+  const now = new Date();
+
+  // SuperAdmin and Core members use regOpenCore
+  if (userRole === "superadmin" || userRole === "core_member") {
+    if (!ride.regOpenCore) return { open: true, opensAt: null };
+    const openDate = new Date(ride.regOpenCore);
+    return { open: now >= openDate, opensAt: now < openDate ? openDate : null };
+  }
+
+  // T2W Riders use regOpenT2w
+  if (userRole === "t2w_rider") {
+    if (!ride.regOpenT2w) return { open: true, opensAt: null };
+    const openDate = new Date(ride.regOpenT2w);
+    return { open: now >= openDate, opensAt: now < openDate ? openDate : null };
+  }
+
+  // Regular riders and guests (not logged in or role=rider) use regOpenRider
+  if (!ride.regOpenRider) return { open: true, opensAt: null };
+  const openDate = new Date(ride.regOpenRider);
+  return { open: now >= openDate, opensAt: now < openDate ? openDate : null };
 }
 
 export function RideDetailPage({ rideId }: { rideId: string }) {
@@ -1001,45 +1036,55 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   Register for this Ride
                 </h3>
 
-                {!user ? (
-                  <div className="rounded-xl bg-t2w-surface-light p-4 text-center">
-                    <p className="text-sm text-t2w-muted mb-3">
-                      You must be logged in to register for a ride.
-                    </p>
-                    <Link href="/login" className="btn-primary inline-block">
-                      Log In to Register
-                    </Link>
-                  </div>
-                ) : spotsLeft > 0 ? (
-                  <>
-                    <div className="mb-4 rounded-xl bg-t2w-accent/10 p-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-t2w-muted">
-                          Registration Fee
-                        </span>
-                        <span className="font-display text-2xl font-bold text-t2w-accent">
-                          ₹{ride.fee.toLocaleString()}
-                        </span>
+                {(() => {
+                  const regStatus = getRegistrationStatus(ride, user?.role);
+                  if (!user) {
+                    // For guests, check if the rider/guest window is even open
+                    const guestStatus = getRegistrationStatus(ride, undefined);
+                    if (!guestStatus.open && guestStatus.opensAt) {
+                      return (
+                        <div className="rounded-xl bg-yellow-400/10 p-4 text-center">
+                          <p className="text-sm font-medium text-yellow-400 mb-1">Registration opens soon</p>
+                          <p className="text-xs text-t2w-muted">Opens on {guestStatus.opensAt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} at {guestStatus.opensAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</p>
+                          <Link href="/login" className="btn-primary inline-block mt-3 text-sm">Log In to Register</Link>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="rounded-xl bg-t2w-surface-light p-4 text-center">
+                        <p className="text-sm text-t2w-muted mb-3">You must be logged in to register for a ride.</p>
+                        <Link href="/login" className="btn-primary inline-block">Log In to Register</Link>
                       </div>
-                      <p className="mt-1 text-xs text-t2w-muted">
-                        {spotsLeft} spots remaining
-                      </p>
+                    );
+                  }
+                  if (!regStatus.open && regStatus.opensAt) {
+                    return (
+                      <div className="rounded-xl bg-yellow-400/10 p-4 text-center">
+                        <p className="text-sm font-medium text-yellow-400 mb-1">Registration not yet open</p>
+                        <p className="text-xs text-t2w-muted">Opens for you on {regStatus.opensAt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} at {regStatus.opensAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</p>
+                      </div>
+                    );
+                  }
+                  if (spotsLeft > 0) {
+                    return (
+                      <>
+                        <div className="mb-4 rounded-xl bg-t2w-accent/10 p-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-t2w-muted">Registration Fee</span>
+                            <span className="font-display text-2xl font-bold text-t2w-accent">₹{ride.fee.toLocaleString()}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-t2w-muted">{spotsLeft} spots remaining</p>
+                        </div>
+                        <button onClick={() => setShowRegistration(true)} className="btn-primary w-full">Register Now</button>
+                      </>
+                    );
+                  }
+                  return (
+                    <div className="rounded-xl bg-red-400/10 p-4 text-center">
+                      <p className="text-sm font-medium text-red-400">This ride is fully booked</p>
                     </div>
-
-                    <button
-                      onClick={() => setShowRegistration(true)}
-                      className="btn-primary w-full"
-                    >
-                      Register Now
-                    </button>
-                  </>
-                ) : (
-                  <div className="rounded-xl bg-red-400/10 p-4 text-center">
-                    <p className="text-sm font-medium text-red-400">
-                      This ride is fully booked
-                    </p>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 

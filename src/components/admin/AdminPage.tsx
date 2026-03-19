@@ -154,6 +154,7 @@ export function AdminPage() {
   });
   const [rideFormUseCustomSettings, setRideFormUseCustomSettings] = useState(false);
   const [rideFormCustomSettings, setRideFormCustomSettings] = useState<string[]>([]); // hidden fields for this ride
+  const [rideFormRegSchedule, setRideFormRegSchedule] = useState({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
   const [publishingRide, setPublishingRide] = useState(false);
 
   // Edit ride state
@@ -175,6 +176,7 @@ export function AdminPage() {
   // Per-ride form settings for edit
   const [editRideUseCustomSettings, setEditRideUseCustomSettings] = useState(false);
   const [editRideFormCustomSettings, setEditRideFormCustomSettings] = useState<string[]>([]);
+  const [editRideRegSchedule, setEditRideRegSchedule] = useState({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
 
   // Delete confirmation modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -356,6 +358,20 @@ export function AdminPage() {
       const rideRegSettings = r.regFormSettings as Record<string, unknown> | null;
       setEditRideFormCustomSettings(rideRegSettings ? ((rideRegSettings.hiddenFields as string[]) || []) : []);
       setEditRideUseCustomSettings(!!rideRegSettings);
+      // Load registration schedule
+      const hasRegSchedule = !!(r.regOpenCore || r.regOpenT2w || r.regOpenRider);
+      const toLocalDatetime = (iso: string | null | undefined) => {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const pad = (n: number) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+      setEditRideRegSchedule({
+        enabled: hasRegSchedule,
+        regOpenCore: toLocalDatetime(r.regOpenCore as string | null),
+        regOpenT2w: toLocalDatetime(r.regOpenT2w as string | null),
+        regOpenRider: toLocalDatetime(r.regOpenRider as string | null),
+      });
       setRidersLoaded(true);
       setNewRiderName("");
       setEditingRideId(id);
@@ -418,6 +434,9 @@ export function AdminPage() {
         route: [editForm.startLocation, editForm.endLocation],
         highlights: editForm.highlights.split("\n").map((h) => h.trim()).filter(Boolean),
         regFormSettings: editRideUseCustomSettings ? { hiddenFields: editRideFormCustomSettings } : null,
+        regOpenCore: editRideRegSchedule.enabled && editRideRegSchedule.regOpenCore ? new Date(editRideRegSchedule.regOpenCore).toISOString() : null,
+        regOpenT2w: editRideRegSchedule.enabled && editRideRegSchedule.regOpenT2w ? new Date(editRideRegSchedule.regOpenT2w).toISOString() : null,
+        regOpenRider: editRideRegSchedule.enabled && editRideRegSchedule.regOpenRider ? new Date(editRideRegSchedule.regOpenRider).toISOString() : null,
       });
       // Refresh rides list
       const ridesData = await api.rides.list();
@@ -592,6 +611,9 @@ export function AdminPage() {
         route: [rideForm.startLocation, rideForm.endLocation],
         highlights: [],
         regFormSettings: rideFormUseCustomSettings ? { hiddenFields: rideFormCustomSettings } : null,
+        regOpenCore: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenCore ? new Date(rideFormRegSchedule.regOpenCore).toISOString() : null,
+        regOpenT2w: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenT2w ? new Date(rideFormRegSchedule.regOpenT2w).toISOString() : null,
+        regOpenRider: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenRider ? new Date(rideFormRegSchedule.regOpenRider).toISOString() : null,
       });
       const newRide = (result as { ride: AdminRide }).ride;
       setRides((prev) => [newRide, ...prev]);
@@ -608,6 +630,7 @@ export function AdminPage() {
       setRideForm({ title: "", rideNumber: "", type: "day", startDate: "", endDate: "", startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "", distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy", description: "" });
       setRideFormUseCustomSettings(false);
       setRideFormCustomSettings([]);
+      setRideFormRegSchedule({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
     } catch (err) {
       console.error("Failed to create ride:", err);
     } finally {
@@ -1148,6 +1171,31 @@ export function AdminPage() {
                   <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulty</label><select className="input-field cursor-pointer" value={rideForm.difficulty} onChange={(e) => setRideForm({ ...rideForm, difficulty: e.target.value })}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="challenging">Challenging</option><option value="extreme">Extreme</option></select></div>
                   <div className="sm:col-span-2"><label className="mb-1.5 block text-sm font-medium text-gray-300">Description</label><textarea rows={3} className="input-field resize-none" placeholder="Describe the ride..." value={rideForm.description} onChange={(e) => setRideForm({ ...rideForm, description: e.target.value })} /></div>
 
+                  {/* Registration Schedule */}
+                  <div className="sm:col-span-2 rounded-xl border border-t2w-border bg-t2w-bg p-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" checked={rideFormRegSchedule.enabled} onChange={(e) => setRideFormRegSchedule((prev) => ({ ...prev, enabled: e.target.checked }))} className="h-4 w-4 rounded accent-t2w-accent" />
+                      <span className="text-sm font-medium text-white">Staggered registration schedule</span>
+                    </label>
+                    <p className="mt-1 ml-7 text-xs text-t2w-muted">Open registration at different times for Core, T2W Rider, and Rider/Guest tiers. If unchecked, registration opens immediately for everyone.</p>
+                    {rideFormRegSchedule.enabled && (
+                      <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-green-400">Core Members</label>
+                          <input type="datetime-local" className="input-field text-sm" value={rideFormRegSchedule.regOpenCore} onChange={(e) => setRideFormRegSchedule((prev) => ({ ...prev, regOpenCore: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-blue-400">T2W Riders</label>
+                          <input type="datetime-local" className="input-field text-sm" value={rideFormRegSchedule.regOpenT2w} onChange={(e) => setRideFormRegSchedule((prev) => ({ ...prev, regOpenT2w: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-yellow-400">Riders &amp; Guests</label>
+                          <input type="datetime-local" className="input-field text-sm" value={rideFormRegSchedule.regOpenRider} onChange={(e) => setRideFormRegSchedule((prev) => ({ ...prev, regOpenRider: e.target.value }))} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Per-Ride Form Settings */}
                   <div className="sm:col-span-2 rounded-xl border border-t2w-border bg-t2w-bg p-4">
                     <label className="flex items-center gap-3 cursor-pointer">
@@ -1319,6 +1367,31 @@ export function AdminPage() {
                             )}
                           </div>
                         )}
+
+                        {/* Registration Schedule (edit) */}
+                        <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-t2w-border bg-t2w-bg p-4">
+                          <label className="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" checked={editRideRegSchedule.enabled} onChange={(e) => setEditRideRegSchedule((prev) => ({ ...prev, enabled: e.target.checked }))} className="h-4 w-4 rounded accent-t2w-accent" />
+                            <span className="text-sm font-medium text-white">Staggered registration schedule</span>
+                          </label>
+                          <p className="mt-1 ml-7 text-xs text-t2w-muted">Open registration at different times for Core, T2W Rider, and Rider/Guest tiers.</p>
+                          {editRideRegSchedule.enabled && (
+                            <div className="mt-3 ml-7 grid gap-3 sm:grid-cols-3">
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-green-400">Core Members</label>
+                                <input type="datetime-local" className="input-field text-sm" value={editRideRegSchedule.regOpenCore} onChange={(e) => setEditRideRegSchedule((prev) => ({ ...prev, regOpenCore: e.target.value }))} />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-blue-400">T2W Riders</label>
+                                <input type="datetime-local" className="input-field text-sm" value={editRideRegSchedule.regOpenT2w} onChange={(e) => setEditRideRegSchedule((prev) => ({ ...prev, regOpenT2w: e.target.value }))} />
+                              </div>
+                              <div>
+                                <label className="mb-1 block text-xs font-medium text-yellow-400">Riders &amp; Guests</label>
+                                <input type="datetime-local" className="input-field text-sm" value={editRideRegSchedule.regOpenRider} onChange={(e) => setEditRideRegSchedule((prev) => ({ ...prev, regOpenRider: e.target.value }))} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
 
                         {/* Per-Ride Registration Form Settings (SuperAdmin only) */}
                         {isSuperAdmin && (
