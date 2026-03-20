@@ -218,6 +218,15 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ riders }),
       });
+      // Also create a RideParticipation record so leaderboard stays in sync
+      try {
+        const { rider } = await api.riders.getByName(riderName);
+        if (rider) {
+          await api.participation.toggle(rider.id, rideId, true);
+        }
+      } catch {
+        // Best-effort: participation sync is non-blocking
+      }
       return { success: true, riders };
     },
     removeRider: async (rideId: string, riderName: string) => {
@@ -230,6 +239,15 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ riders }),
       });
+      // Also remove the RideParticipation record so leaderboard stays in sync
+      try {
+        const { rider } = await api.riders.getByName(riderName);
+        if (rider) {
+          await api.participation.toggle(rider.id, rideId, false);
+        }
+      } catch {
+        // Best-effort: participation sync is non-blocking
+      }
       return { success: true, riders };
     },
   },

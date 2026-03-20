@@ -23,6 +23,8 @@ export async function PUT(req: NextRequest) {
       });
       // Update user stats if linked
       await syncUserStats(riderProfileId);
+      // Sync the ride's riders JSON field
+      await syncRideRidersList(rideId);
       return NextResponse.json({ success: true, action: "removed" });
     }
 
@@ -35,6 +37,8 @@ export async function PUT(req: NextRequest) {
 
     // Update user stats if linked
     await syncUserStats(riderProfileId);
+    // Sync the ride's riders JSON field
+    await syncRideRidersList(rideId);
 
     return NextResponse.json({ success: true, action: "set", points });
   } catch (error) {
@@ -59,10 +63,12 @@ export async function POST(req: NextRequest) {
     }
 
     const affectedRiderIds = new Set<string>();
+    const affectedRideIds = new Set<string>();
 
     for (const change of changes) {
       const { riderProfileId, rideId, points } = change;
       affectedRiderIds.add(riderProfileId);
+      affectedRideIds.add(rideId);
 
       if (points <= 0) {
         await prisma.rideParticipation.deleteMany({
@@ -80,6 +86,11 @@ export async function POST(req: NextRequest) {
     // Sync stats for all affected riders
     for (const riderId of affectedRiderIds) {
       await syncUserStats(riderId);
+    }
+
+    // Sync the riders JSON field for all affected rides
+    for (const rideId of affectedRideIds) {
+      await syncRideRidersList(rideId);
     }
 
     return NextResponse.json({ success: true, processed: changes.length });
@@ -110,11 +121,32 @@ export async function PATCH(req: NextRequest) {
 
     // Re-sync user stats (excluding dropped-out rides)
     await syncUserStats(riderProfileId);
+    // Sync the ride's riders JSON field
+    await syncRideRidersList(rideId);
 
     return NextResponse.json({ success: true, droppedOut: Boolean(droppedOut) });
   } catch (error) {
     console.error("[T2W] Drop-out error:", error);
     return NextResponse.json({ error: "Failed to update drop-out status" }, { status: 500 });
+  }
+}
+
+// Sync the ride's riders JSON field from active RideParticipation records
+async function syncRideRidersList(rideId: string) {
+  try {
+    const activeParticipations = await prisma.rideParticipation.findMany({
+      where: { rideId, droppedOut: false },
+      include: { riderProfile: { select: { name: true } } },
+    });
+
+    const riderNames = activeParticipations.map((p) => p.riderProfile.name);
+
+    await prisma.ride.update({
+      where: { id: rideId },
+      data: { riders: JSON.stringify(riderNames) },
+    });
+  } catch (error) {
+    console.error("[T2W] syncRideRidersList error:", error);
   }
 }
 
