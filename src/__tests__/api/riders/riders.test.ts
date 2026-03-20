@@ -1,0 +1,266 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createNextRequest, parseResponse, mockSuperAdmin, mockCoreMember, mockRider } from '@/__tests__/helpers';
+
+vi.mock('@/lib/db', () => ({
+  prisma: {
+    riderProfile: {
+      findMany: vi.fn(),
+      create: vi.fn(),
+    },
+    ride: {
+      findMany: vi.fn(),
+    },
+    user: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+  },
+}));
+
+vi.mock('@/lib/auth', () => ({
+  getCurrentUser: vi.fn(),
+}));
+
+import { GET, POST } from '@/app/api/riders/route';
+import { prisma } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
+
+const mockGetCurrentUser = getCurrentUser as ReturnType<typeof vi.fn>;
+const mockProfileFindMany = prisma.riderProfile.findMany as ReturnType<typeof vi.fn>;
+const mockProfileCreate = prisma.riderProfile.create as ReturnType<typeof vi.fn>;
+const mockRideFindMany = prisma.ride.findMany as ReturnType<typeof vi.fn>;
+const mockUserFindUnique = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+
+const mockProfile = {
+  id: 'rider-1',
+  name: 'Test Rider',
+  email: 'rider@t2w.com',
+  phone: '9876543210',
+  address: 'Bangalore',
+  emergencyContact: 'Emergency Person',
+  emergencyPhone: '1234567890',
+  bloodGroup: 'O+',
+  joinDate: new Date('2024-06-01'),
+  avatarUrl: null,
+  role: 'rider',
+  mergedIntoId: null,
+  linkedUsers: [{ role: 'rider' }],
+  participations: [
+    {
+      droppedOut: false,
+      points: 5,
+      ride: {
+        id: 'ride-1',
+        rideNumber: '#001',
+        title: 'Weekend Ride',
+        startDate: new Date('2024-07-01'),
+        distanceKm: 150,
+      },
+    },
+  ],
+};
+
+describe('GET /api/riders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns rider profiles with stats', async () => {
+    mockProfileFindMany.mockResolvedValue([mockProfile]);
+    mockRideFindMany.mockResolvedValue([]);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { status, data } = await parseResponse(await GET(req));
+
+    expect(status).toBe(200);
+    expect(data.riders).toHaveLength(1);
+    expect(data.riders[0].name).toBe('Test Rider');
+    expect(data.riders[0].ridesCompleted).toBe(1);
+    expect(data.riders[0].totalKm).toBe(150);
+    expect(data.riders[0].totalPoints).toBe(5);
+  });
+
+  it('excludes merged profiles by default', async () => {
+    mockProfileFindMany.mockResolvedValue([]);
+    mockRideFindMany.mockResolvedValue([]);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    await GET(req);
+
+    expect(mockProfileFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ mergedIntoId: null }),
+      })
+    );
+  });
+
+  it('includes merged profiles when ?includemerged=true', async () => {
+    mockProfileFindMany.mockResolvedValue([]);
+    mockRideFindMany.mockResolvedValue([]);
+
+    const req = createNextRequest('http://localhost:3000/api/riders?includemerged=true');
+    await GET(req);
+
+    expect(mockProfileFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({ mergedIntoId: null }),
+      })
+    );
+  });
+
+  it('filters by search query', async () => {
+    mockProfileFindMany.mockResolvedValue([]);
+    mockRideFindMany.mockResolvedValue([]);
+
+    const req = createNextRequest('http://localhost:3000/api/riders?search=john');
+    await GET(req);
+
+    expect(mockProfileFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { name: { contains: 'john', mode: 'insensitive' } },
+            { email: { contains: 'john', mode: 'insensitive' } },
+          ],
+        }),
+      })
+    );
+  });
+
+  it('excludes dropped-out participations from stats', async () => {
+    const profileWithDropout = {
+      ...mockProfile,
+      participations: [
+        ...mockProfile.participations,
+        {
+          droppedOut: true,
+          points: 5,
+          ride: {
+            id: 'ride-2',
+            rideNumber: '#002',
+            title: 'Dropped Ride',
+            startDate: new Date('2024-08-01'),
+            distanceKm: 200,
+          },
+        },
+      ],
+    };
+    mockProfileFindMany.mockResolvedValue([profileWithDropout]);
+    mockRideFindMany.mockResolvedValue([]);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { data } = await parseResponse(await GET(req));
+
+    expect(data.riders[0].ridesCompleted).toBe(1);
+    expect(data.riders[0].totalKm).toBe(150);
+  });
+
+  it('computes ride role stats (pilot, sweep, organized)', async () => {
+    mockProfileFindMany.mockResolvedValue([mockProfile]);
+    mockRideFindMany.mockResolvedValue([
+      { leadRider: 'Test Rider', sweepRider: 'Someone', organisedBy: 'Test Rider' },
+      { leadRider: 'Someone', sweepRider: 'Test Rider', organisedBy: null },
+    ]);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { data } = await parseResponse(await GET(req));
+
+    expect(data.riders[0].pilotsDone).toBe(1);
+    expect(data.riders[0].sweepsDone).toBe(1);
+    expect(data.riders[0].ridesOrganized).toBe(1);
+  });
+});
+
+describe('POST /api/riders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns 403 for unauthenticated users', async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+
+    const req = createNextRequest('http://localhost:3000/api/riders', {
+      method: 'POST',
+      body: { name: 'New Rider' },
+    });
+    const { status, data } = await parseResponse(await POST(req));
+
+    expect(status).toBe(403);
+    expect(data.error).toBe('Forbidden');
+  });
+
+  it('returns 403 for regular riders', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockRider);
+
+    const req = createNextRequest('http://localhost:3000/api/riders', {
+      method: 'POST',
+      body: { name: 'New Rider' },
+    });
+    const { status } = await parseResponse(await POST(req));
+
+    expect(status).toBe(403);
+  });
+
+  it('returns 400 when name is missing', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+
+    const req = createNextRequest('http://localhost:3000/api/riders', {
+      method: 'POST',
+      body: { email: 'new@t2w.com' },
+    });
+    const { status, data } = await parseResponse(await POST(req));
+
+    expect(status).toBe(400);
+    expect(data.error).toBe('Name is required');
+  });
+
+  it('creates rider profile for superadmin', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    const created = { id: 'rider-new', name: 'New Rider', email: 'new@t2w.com' };
+    mockProfileCreate.mockResolvedValue(created);
+    mockUserFindUnique.mockResolvedValue(null);
+
+    const req = createNextRequest('http://localhost:3000/api/riders', {
+      method: 'POST',
+      body: { name: 'New Rider', email: 'new@t2w.com' },
+    });
+    const { status, data } = await parseResponse(await POST(req));
+
+    expect(status).toBe(200);
+    expect(data.profile.name).toBe('New Rider');
+  });
+
+  it('creates rider profile for core_member', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockCoreMember);
+    const created = { id: 'rider-new', name: 'New Rider', email: '' };
+    mockProfileCreate.mockResolvedValue(created);
+
+    const req = createNextRequest('http://localhost:3000/api/riders', {
+      method: 'POST',
+      body: { name: 'New Rider' },
+    });
+    const { status } = await parseResponse(await POST(req));
+
+    expect(status).toBe(200);
+  });
+
+  it('auto-links user when matching email exists', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    const created = { id: 'rider-new', name: 'New Rider', email: 'existing@t2w.com' };
+    mockProfileCreate.mockResolvedValue(created);
+    mockUserFindUnique.mockResolvedValue({ id: 'user-x', linkedRiderId: null });
+
+    const req = createNextRequest('http://localhost:3000/api/riders', {
+      method: 'POST',
+      body: { name: 'New Rider', email: 'existing@t2w.com' },
+    });
+    await POST(req);
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-x' },
+        data: { linkedRiderId: 'rider-new' },
+      })
+    );
+  });
+});
