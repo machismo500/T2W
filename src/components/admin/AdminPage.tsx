@@ -38,6 +38,7 @@ import {
   Grid3X3,
   Merge,
   ClipboardList,
+  Award,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
@@ -46,7 +47,7 @@ import { MergeProfiles } from "./MergeProfiles";
 import type { ActivityLogEntry } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "content" | "approvals" | "form-settings" | "activity";
+type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "badges" | "content" | "approvals" | "form-settings" | "activity";
 
 type PendingUser = {
   id: string;
@@ -274,6 +275,15 @@ export function AdminPage() {
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [rollingBack, setRollingBack] = useState<string | null>(null);
 
+  // Badge management state (SuperAdmin)
+  const [adminBadges, setAdminBadges] = useState<Array<{
+    id: string; tier: string; name: string; description: string; minKm: number; icon: string; color: string;
+  }>>([]);
+  const [badgesLoaded, setBadgesLoaded] = useState(false);
+  const [editingBadgeId, setEditingBadgeId] = useState<string | null>(null);
+  const [badgeEditForm, setBadgeEditForm] = useState({ name: "", description: "", minKm: "", icon: "", color: "" });
+  const [savingBadge, setSavingBadge] = useState(false);
+
   // Registration form settings (SuperAdmin)
   const [formSettingsLoaded, setFormSettingsLoaded] = useState(false);
   const [savingFormSettings, setSavingFormSettings] = useState(false);
@@ -319,6 +329,11 @@ export function AdminPage() {
       });
       // Auto-clear dropouts and sync roles on admin page load
       api.participation.syncRoles().catch(() => {});
+      // Load badge tiers for badge management
+      api.badges.list().then((data: { badges: typeof adminBadges }) => {
+        setAdminBadges(data.badges || []);
+        setBadgesLoaded(true);
+      }).catch(() => setBadgesLoaded(true));
     }
 
     // Load form settings (with migration from legacy single UPI/bank to arrays)
@@ -859,6 +874,9 @@ export function AdminPage() {
       : []),
     ...(isSuperAdmin
       ? [{ key: "merge" as const, label: "Merge Profiles", icon: Merge }]
+      : []),
+    ...(isSuperAdmin
+      ? [{ key: "badges" as const, label: "Badges", icon: Award }]
       : []),
     { key: "approvals" as const, label: "Approvals", icon: BookOpen, badge: pendingBlogs.length + pendingPosts.length },
     { key: "content" as const, label: "Content", icon: Copyright },
@@ -1679,6 +1697,187 @@ export function AdminPage() {
         {/* Merge Profiles Tab */}
         {activeTab === "merge" && isSuperAdmin && (
           <MergeProfiles />
+        )}
+
+        {/* Badges Tab - Super Admin only */}
+        {activeTab === "badges" && isSuperAdmin && (
+          <div className="space-y-6">
+            <div className="card">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 font-display text-xl font-bold text-white">
+                  <Award className="h-5 w-5 text-t2w-accent" />
+                  Badge Tiers
+                </h3>
+                <p className="text-xs text-t2w-muted">{adminBadges.length} tiers configured</p>
+              </div>
+              <p className="mb-6 text-sm text-t2w-muted">
+                Manage badge tiers that are automatically awarded to riders based on their total kilometers. Changes here apply immediately across the site.
+              </p>
+              {!badgesLoaded ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-t2w-accent" />
+                </div>
+              ) : adminBadges.length === 0 ? (
+                <div className="py-12 text-center">
+                  <Award className="mx-auto h-12 w-12 text-t2w-border" />
+                  <p className="mt-3 text-t2w-muted">No badge tiers found. Run the seed script to initialize badges.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {adminBadges
+                    .sort((a, b) => a.minKm - b.minKm)
+                    .map((badge) => (
+                    <div key={badge.id} className="rounded-xl border border-t2w-border bg-t2w-surface-light p-5">
+                      {editingBadgeId === badge.id ? (
+                        /* Edit mode */
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-t2w-muted">Name</label>
+                              <input
+                                type="text"
+                                value={badgeEditForm.name}
+                                onChange={(e) => setBadgeEditForm({ ...badgeEditForm, name: e.target.value })}
+                                className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-t2w-muted">Min KM Required</label>
+                              <input
+                                type="number"
+                                value={badgeEditForm.minKm}
+                                onChange={(e) => setBadgeEditForm({ ...badgeEditForm, minKm: e.target.value })}
+                                className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-t2w-muted">Icon</label>
+                              <select
+                                value={badgeEditForm.icon}
+                                onChange={(e) => setBadgeEditForm({ ...badgeEditForm, icon: e.target.value })}
+                                className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                              >
+                                <option value="shield">Shield</option>
+                                <option value="award">Award</option>
+                                <option value="star">Star</option>
+                                <option value="gem">Gem</option>
+                                <option value="zap">Zap</option>
+                                <option value="crown">Crown</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-t2w-muted">Color</label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="color"
+                                  value={badgeEditForm.color}
+                                  onChange={(e) => setBadgeEditForm({ ...badgeEditForm, color: e.target.value })}
+                                  className="h-9 w-12 cursor-pointer rounded border border-t2w-border bg-t2w-dark"
+                                />
+                                <input
+                                  type="text"
+                                  value={badgeEditForm.color}
+                                  onChange={(e) => setBadgeEditForm({ ...badgeEditForm, color: e.target.value })}
+                                  className="flex-1 rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-t2w-muted">Description</label>
+                            <textarea
+                              value={badgeEditForm.description}
+                              onChange={(e) => setBadgeEditForm({ ...badgeEditForm, description: e.target.value })}
+                              rows={2}
+                              className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                setSavingBadge(true);
+                                try {
+                                  await api.badges.update(badge.id, {
+                                    name: badgeEditForm.name,
+                                    description: badgeEditForm.description,
+                                    minKm: Number(badgeEditForm.minKm),
+                                    icon: badgeEditForm.icon,
+                                    color: badgeEditForm.color,
+                                  });
+                                  setAdminBadges((prev) =>
+                                    prev.map((b) =>
+                                      b.id === badge.id
+                                        ? { ...b, name: badgeEditForm.name, description: badgeEditForm.description, minKm: Number(badgeEditForm.minKm), icon: badgeEditForm.icon, color: badgeEditForm.color }
+                                        : b
+                                    )
+                                  );
+                                  setEditingBadgeId(null);
+                                } catch (err) {
+                                  console.error("Failed to update badge:", err);
+                                } finally {
+                                  setSavingBadge(false);
+                                }
+                              }}
+                              disabled={savingBadge}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-t2w-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-t2w-accent/80 disabled:opacity-50"
+                            >
+                              {savingBadge ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingBadgeId(null)}
+                              className="rounded-lg border border-t2w-border px-4 py-2 text-sm font-medium text-t2w-muted transition-colors hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* View mode */
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-4">
+                            <div
+                              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+                              style={{ backgroundColor: `${badge.color}20` }}
+                            >
+                              <Award className="h-6 w-6" style={{ color: badge.color }} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold text-white">{badge.name}</h4>
+                                <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: `${badge.color}20`, color: badge.color }}>
+                                  {badge.tier}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-sm text-t2w-muted">{badge.description}</p>
+                              <p className="mt-1 text-xs text-t2w-muted">
+                                Required: <span className="font-medium text-white">{badge.minKm.toLocaleString()} km</span>
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setEditingBadgeId(badge.id);
+                              setBadgeEditForm({
+                                name: badge.name,
+                                description: badge.description,
+                                minKm: String(badge.minKm),
+                                icon: badge.icon,
+                                color: badge.color,
+                              });
+                            }}
+                            className="shrink-0 rounded-lg border border-t2w-border p-2 text-t2w-muted transition-colors hover:border-t2w-accent/30 hover:text-white"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Approvals Tab */}

@@ -147,6 +147,35 @@ export interface Guideline {
   icon: string;
 }
 
+// ── Rider Profile ──
+export interface RiderProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+  bloodGroup: string;
+  joinDate: string;
+  ridesCompleted: number;
+  totalKm: number;
+  totalPoints: number;
+  ridesOrganized: number;
+  sweepsDone: number;
+  pilotsDone: number;
+  avatarUrl?: string;
+  userRole?: string | null;
+  ridesParticipated: {
+    rideId: string;
+    rideNumber: string;
+    rideTitle: string;
+    rideDate: string;
+    distanceKm: number;
+    points: number;
+  }[];
+}
+
 // Ride registration data (based on registration form)
 // ── Live Ride Tracking ──
 export interface LiveRideSession {

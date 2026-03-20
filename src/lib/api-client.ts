@@ -1,6 +1,4 @@
-import {
-  type RiderProfile,
-} from "@/data/rider-profiles";
+import type { RiderProfile } from "@/types";
 import type { Ride, BlogPost, UserRole, RidePost, RideRegistration } from "@/types";
 
 // ── Helpers ──
@@ -808,6 +806,15 @@ export const api = {
     checkAndAward: async () => {
       const res = await fetch("/api/badges", { method: "POST" });
       if (!res.ok) throw new Error("Failed to check badges");
+      return res.json();
+    },
+    update: async (id: string, data: Record<string, unknown>) => {
+      const res = await fetch("/api/badges", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...data }),
+      });
+      if (!res.ok) throw new Error("Failed to update badge");
       return res.json();
     },
   },

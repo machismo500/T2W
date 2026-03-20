@@ -31,6 +31,39 @@ export async function POST() {
   }
 }
 
+// PUT /api/badges - update a badge tier (superadmin only)
+export async function PUT(request: Request) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || user.role !== "superadmin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { id, name, description, minKm, icon, color } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Badge id is required" }, { status: 400 });
+    }
+
+    const updated = await prisma.badge.update({
+      where: { id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
+        ...(minKm !== undefined && { minKm: Number(minKm) }),
+        ...(icon !== undefined && { icon }),
+        ...(color !== undefined && { color }),
+      },
+    });
+
+    return NextResponse.json({ badge: updated });
+  } catch (error) {
+    console.error("[T2W] Update badge error:", error);
+    return NextResponse.json({ error: "Failed to update badge" }, { status: 500 });
+  }
+}
+
 // Award any badges the user has earned based on totalKm
 export async function awardBadgesForUser(userId: string, totalKm: number): Promise<string[]> {
   const allBadges = await prisma.badge.findMany({

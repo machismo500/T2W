@@ -20,7 +20,7 @@ import {
 import type { ArenaRider, SortField } from "./types";
 import { ARENA_WEIGHTS } from "./types";
 import { ArenaRiderCard } from "./ArenaRiderCard";
-import { BADGE_TIERS } from "@/data/badges";
+import type { Badge } from "@/types";
 
 const badgeIcons: Record<string, React.ElementType> = {
   shield: Shield,
@@ -68,11 +68,13 @@ function getInitials(name: string) {
 interface ArenaLeaderboardProps {
   riders: ArenaRider[];
   currentUserId?: string | null;
+  badgeTiers: Badge[];
 }
 
 export function ArenaLeaderboard({
   riders,
   currentUserId,
+  badgeTiers,
 }: ArenaLeaderboardProps) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("arenaScore");
@@ -251,7 +253,7 @@ export function ArenaLeaderboard({
             className="appearance-none rounded-xl border border-t2w-border bg-t2w-surface py-2.5 pl-4 pr-10 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
           >
             <option value="all">All Badges</option>
-            {BADGE_TIERS.map((b) => (
+            {badgeTiers.map((b) => (
               <option key={b.tier} value={b.tier}>
                 {b.name}
               </option>
@@ -298,7 +300,7 @@ export function ArenaLeaderboard({
 
       {/* Badge distribution */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        {BADGE_TIERS.map((b) => {
+        {badgeTiers.map((b) => {
           const BadgeIcon = badgeIcons[b.icon];
           const count = badgeCounts[b.tier] || 0;
           return (
