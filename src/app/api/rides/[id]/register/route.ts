@@ -97,7 +97,7 @@ export async function POST(
     // Verify ride exists
     const ride = await prisma.ride.findUnique({
       where: { id: rideId },
-      include: { registrations: { select: { id: true } } },
+      include: { registrations: { select: { id: true, approvalStatus: true } } },
     });
 
     if (!ride) {
@@ -129,8 +129,11 @@ export async function POST(
       );
     }
 
-    // Check capacity
-    if (ride.registrations.length >= ride.maxRiders) {
+    // Check capacity — only count active registrations (pending + confirmed)
+    const activeRegistrations = ride.registrations.filter(
+      (r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed"
+    );
+    if (activeRegistrations.length >= ride.maxRiders) {
       return NextResponse.json(
         { error: "This ride is full — no spots available" },
         { status: 400 }

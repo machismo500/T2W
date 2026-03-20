@@ -49,6 +49,7 @@ export interface Ride {
   distanceKm: number;
   maxRiders: number;
   registeredRiders: number;
+  activeRegistrations?: number;
   difficulty: "easy" | "moderate" | "challenging" | "extreme";
   description: string;
   highlights: string[];

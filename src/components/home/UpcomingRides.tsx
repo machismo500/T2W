@@ -30,8 +30,8 @@ function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
     expedition: "Expedition",
   };
 
-  const spotsLeft = ride.maxRiders - ride.registeredRiders;
-  const fillPercentage = (ride.registeredRiders / ride.maxRiders) * 100;
+  const spotsLeft = ride.maxRiders - (ride.activeRegistrations ?? ride.registeredRiders);
+  const fillPercentage = ((ride.activeRegistrations ?? ride.registeredRiders) / ride.maxRiders) * 100;
 
   return (
     <div

@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
       distanceKm: r.distanceKm,
       maxRiders: r.maxRiders,
       registeredRiders: r.registrations.filter((reg) => reg.approvalStatus === "confirmed").length,
+      activeRegistrations: r.registrations.filter((reg) => reg.approvalStatus === "pending" || reg.approvalStatus === "confirmed").length,
       difficulty: r.difficulty,
       description: r.description,
       highlights: safeJsonParse(r.highlights, []),

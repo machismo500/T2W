@@ -73,6 +73,7 @@ export async function GET(
       distanceKm: ride.distanceKm,
       maxRiders: ride.maxRiders,
       registeredRiders: ride.registrations.filter((r) => r.approvalStatus === "confirmed").length,
+      activeRegistrations: ride.registrations.filter((r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed").length,
       confirmedRiderNames: ride.registrations
         .filter((r) => r.approvalStatus === "confirmed")
         .map((r) => r.riderName),

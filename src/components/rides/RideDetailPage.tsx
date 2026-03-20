@@ -233,6 +233,7 @@ interface Ride {
   distanceKm: number;
   maxRiders: number;
   registeredRiders: number;
+  activeRegistrations?: number;
   confirmedRiderNames?: string[];
   difficulty: string;
   description: string;
@@ -652,7 +653,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     );
   }
 
-  const spotsLeft = ride.maxRiders - ride.registeredRiders;
+  const spotsLeft = ride.maxRiders - (ride.activeRegistrations ?? ride.registeredRiders);
   const difficultyColors: Record<string, string> = {
     easy: "text-green-400 bg-green-400/10",
     moderate: "text-yellow-400 bg-yellow-400/10",
