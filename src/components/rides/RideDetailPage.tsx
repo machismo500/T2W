@@ -680,10 +680,14 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               className={`rounded-lg px-3 py-1 text-sm font-medium capitalize ${
                 ride.status === "upcoming"
                   ? "bg-blue-400/10 text-blue-400"
+                  : ride.status === "ongoing"
+                  ? "bg-yellow-400/10 text-yellow-400"
+                  : ride.status === "cancelled"
+                  ? "bg-red-400/10 text-red-400"
                   : "bg-green-400/10 text-green-400"
               }`}
             >
-              {ride.status}
+              {ride.status === "ongoing" ? "Ongoing Ride" : ride.status}
             </span>
             <span
               className={`rounded-lg px-3 py-1 text-sm font-medium ${difficultyColors[ride.difficulty]}`}

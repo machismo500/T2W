@@ -41,10 +41,15 @@ function callPOST(rideId: string, body: Record<string, unknown>) {
   return POST(req, { params: Promise.resolve({ id: rideId }) });
 }
 
+const futureStart = new Date(Date.now() + 7 * 86400000); // 7 days from now
+const futureEnd = new Date(Date.now() + 10 * 86400000); // 10 days from now
+
 const baseRide = {
   id: 'ride-1',
   title: 'Test Ride',
   status: 'upcoming',
+  startDate: futureStart,
+  endDate: futureEnd,
   maxRiders: 10,
   regOpenCore: null,
   regOpenT2w: null,
@@ -92,12 +97,14 @@ describe('POST /api/rides/[id]/register', () => {
 
   it('returns 400 for non-upcoming ride', async () => {
     mockGetCurrentUser.mockResolvedValue(mockRider);
-    mockFindUnique.mockResolvedValue({ ...baseRide, status: 'completed' });
+    const pastStart = new Date(Date.now() - 10 * 86400000);
+    const pastEnd = new Date(Date.now() - 3 * 86400000);
+    mockFindUnique.mockResolvedValue({ ...baseRide, status: 'completed', startDate: pastStart, endDate: pastEnd });
 
     const { status, data } = await parseResponse(await callPOST('ride-1', baseRegBody));
 
     expect(status).toBe(400);
-    expect(data.error).toBe('Registration is only open for upcoming rides');
+    expect(data.error).toContain('Registration is closed');
   });
 
   it('returns 403 when registration not yet open for user tier', async () => {

@@ -1404,8 +1404,8 @@ export function AdminPage() {
                       <div className="flex items-center gap-2">
                         <h4 className="font-semibold text-white truncate">{ride.title}</h4>
                         <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium capitalize ${
-                          ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : "bg-gray-400/10 text-gray-400"
-                        }`}>{ride.status}</span>
+                          ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "ongoing" ? "bg-yellow-400/10 text-yellow-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : ride.status === "cancelled" ? "bg-red-400/10 text-red-400" : "bg-gray-400/10 text-gray-400"
+                        }`}>{ride.status === "ongoing" ? "Ongoing Ride" : ride.status}</span>
                       </div>
                       <p className="mt-1 text-sm text-t2w-muted">
                         {ride.rideNumber} &middot; {ride.startLocation} &rarr; {ride.endLocation} &middot; {ride.distanceKm} km &middot; {ride.registeredRiders} registered
