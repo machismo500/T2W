@@ -457,16 +457,20 @@ export function AdminPage() {
         accountsBy: String(r.accountsBy || ""),
         highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).join("\n") : "",
       });
-      // Use confirmed registration names as the source of truth for riders list,
-      // falling back to the manual riders JSON only if no registrations exist
+      // For completed rides, use only confirmed registrations as the rider list.
+      // For other statuses, merge confirmed registrations + manually-added riders.
       const confirmedNames = Array.isArray(r.confirmedRiderNames) ? (r.confirmedRiderNames as string[]) : [];
       const manualRiders = Array.isArray(r.riders) ? (r.riders as string[]) : [];
-      // Merge: confirmed registrations + any manually-added riders not in registrations
-      const mergedRiders = [...confirmedNames];
-      for (const name of manualRiders) {
-        if (!mergedRiders.includes(name)) mergedRiders.push(name);
+      const rideStatus = String(r.status || "upcoming");
+      if (rideStatus === "completed" && confirmedNames.length > 0) {
+        setEditRideRiders(confirmedNames);
+      } else {
+        const mergedRiders = [...confirmedNames];
+        for (const name of manualRiders) {
+          if (!mergedRiders.includes(name)) mergedRiders.push(name);
+        }
+        setEditRideRiders(mergedRiders);
       }
-      setEditRideRiders(mergedRiders);
       // Load per-ride form settings
       const rideRegSettings = r.regFormSettings as Record<string, unknown> | null;
       setEditRideFormCustomSettings(rideRegSettings ? ((rideRegSettings.hiddenFields as string[]) || []) : []);
