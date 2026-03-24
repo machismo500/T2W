@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { computeRideStatus } from "@/lib/ride-status";
 
 function safeJsonParse(value: string | null | undefined, fallback: unknown): unknown {
   if (!value) return fallback;
@@ -62,7 +63,7 @@ export async function GET(
       title: ride.title,
       rideNumber: ride.rideNumber,
       type: ride.type,
-      status: ride.status,
+      status: computeRideStatus(ride.startDate, ride.endDate, ride.status),
       startDate: ride.startDate.toISOString(),
       endDate: ride.endDate.toISOString(),
       startLocation: ride.startLocation,

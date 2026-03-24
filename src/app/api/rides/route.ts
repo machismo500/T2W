@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { computeRideStatus } from "@/lib/ride-status";
 
 // GET /api/rides - list all rides
 export async function GET(req: NextRequest) {
@@ -9,13 +10,7 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status"); // upcoming | completed | all
     const limit = parseInt(searchParams.get("limit") || "0") || 0;
 
-    const where: Record<string, unknown> = {};
-    if (status && status !== "all") {
-      where.status = status;
-    }
-
     const rides = await prisma.ride.findMany({
-      where,
       include: {
         participations: {
           select: { riderProfileId: true },
@@ -25,15 +20,14 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: { startDate: "desc" },
-      ...(limit > 0 ? { take: limit } : {}),
     });
 
-    const result = rides.map((r) => ({
+    let result = rides.map((r) => ({
       id: r.id,
       title: r.title,
       rideNumber: r.rideNumber,
       type: r.type,
-      status: r.status,
+      status: computeRideStatus(r.startDate, r.endDate, r.status),
       startDate: r.startDate.toISOString(),
       endDate: r.endDate.toISOString(),
       startLocation: r.startLocation,
@@ -62,6 +56,16 @@ export async function GET(req: NextRequest) {
       regOpenT2w: r.regOpenT2w?.toISOString() || null,
       regOpenRider: r.regOpenRider?.toISOString() || null,
     }));
+
+    // Apply status filter after dynamic status computation
+    if (status && status !== "all") {
+      result = result.filter((r) => r.status === status);
+    }
+
+    // Apply limit after filtering
+    if (limit > 0) {
+      result = result.slice(0, limit);
+    }
 
     return NextResponse.json({ rides: result });
   } catch (error) {

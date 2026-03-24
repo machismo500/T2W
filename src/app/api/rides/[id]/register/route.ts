@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { computeRideStatus } from "@/lib/ride-status";
 import nodemailer from "nodemailer";
 
 function escapeHtml(str: string): string {
@@ -104,9 +105,14 @@ export async function POST(
       return NextResponse.json({ error: "Ride not found" }, { status: 404 });
     }
 
-    if (ride.status !== "upcoming") {
+    const dynamicStatus = computeRideStatus(ride.startDate, ride.endDate, ride.status);
+    if (dynamicStatus !== "upcoming") {
       return NextResponse.json(
-        { error: "Registration is only open for upcoming rides" },
+        { error: dynamicStatus === "ongoing"
+            ? "Registration is closed — this ride has already started"
+            : dynamicStatus === "completed"
+            ? "Registration is closed — this ride has already ended"
+            : "Registration is not available for this ride" },
         { status: 400 }
       );
     }

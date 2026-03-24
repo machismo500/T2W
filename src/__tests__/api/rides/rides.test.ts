@@ -37,8 +37,8 @@ describe('GET /api/rides', () => {
         rideNumber: '#001',
         type: 'day',
         status: 'upcoming',
-        startDate: new Date('2025-04-01'),
-        endDate: new Date('2025-04-01'),
+        startDate: new Date(Date.now() + 7 * 86400000),
+        endDate: new Date(Date.now() + 10 * 86400000),
         startLocation: 'Bangalore',
         startLocationUrl: null,
         endLocation: 'Mysore',
@@ -84,8 +84,8 @@ describe('GET /api/rides', () => {
         rideNumber: '#001',
         type: 'day',
         status: 'upcoming',
-        startDate: new Date('2025-04-01'),
-        endDate: new Date('2025-04-01'),
+        startDate: new Date(Date.now() + 7 * 86400000),
+        endDate: new Date(Date.now() + 10 * 86400000),
         startLocation: 'A',
         startLocationUrl: null,
         endLocation: 'B',
@@ -128,30 +128,80 @@ describe('GET /api/rides', () => {
     expect(data.rides[0].activeRegistrations).toBe(3);     // pending + confirmed
   });
 
-  it('filters by ?status=upcoming', async () => {
-    mockFindMany.mockResolvedValue([]);
+  it('filters by ?status=upcoming (dynamic)', async () => {
+    const futureStart = new Date(Date.now() + 7 * 86400000);
+    const futureEnd = new Date(Date.now() + 10 * 86400000);
+    const pastStart = new Date(Date.now() - 10 * 86400000);
+    const pastEnd = new Date(Date.now() - 3 * 86400000);
+
+    const rides = [
+      {
+        id: 'ride-upcoming', title: 'Upcoming', rideNumber: '#001', type: 'day', status: 'upcoming',
+        startDate: futureStart, endDate: futureEnd,
+        startLocation: 'A', startLocationUrl: null, endLocation: 'B', endLocationUrl: null,
+        route: '[]', distanceKm: 100, maxRiders: 10, difficulty: 'easy',
+        description: '', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [], registrations: [],
+      },
+      {
+        id: 'ride-past', title: 'Past Ride', rideNumber: '#002', type: 'day', status: 'upcoming',
+        startDate: pastStart, endDate: pastEnd,
+        startLocation: 'C', startLocationUrl: null, endLocation: 'D', endLocationUrl: null,
+        route: '[]', distanceKm: 200, maxRiders: 10, difficulty: 'easy',
+        description: '', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [], registrations: [],
+      },
+    ];
+    mockFindMany.mockResolvedValue(rides);
 
     const req = createNextRequest('http://localhost:3000/api/rides?status=upcoming');
-    await GET(req);
+    const { data } = await parseResponse(await GET(req));
 
-    expect(mockFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { status: 'upcoming' },
-      })
-    );
+    // Only the future ride should be returned as "upcoming"
+    expect(data.rides).toHaveLength(1);
+    expect(data.rides[0].id).toBe('ride-upcoming');
   });
 
-  it('respects ?limit=5', async () => {
-    mockFindMany.mockResolvedValue([]);
+  it('respects ?limit=1', async () => {
+    const futureStart = new Date(Date.now() + 7 * 86400000);
+    const futureEnd = new Date(Date.now() + 10 * 86400000);
 
-    const req = createNextRequest('http://localhost:3000/api/rides?limit=5');
-    await GET(req);
+    const rides = [
+      {
+        id: 'ride-a', title: 'Ride A', rideNumber: '#001', type: 'day', status: 'upcoming',
+        startDate: futureStart, endDate: futureEnd,
+        startLocation: 'A', startLocationUrl: null, endLocation: 'B', endLocationUrl: null,
+        route: '[]', distanceKm: 100, maxRiders: 10, difficulty: 'easy',
+        description: '', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [], registrations: [],
+      },
+      {
+        id: 'ride-b', title: 'Ride B', rideNumber: '#002', type: 'day', status: 'upcoming',
+        startDate: futureStart, endDate: futureEnd,
+        startLocation: 'C', startLocationUrl: null, endLocation: 'D', endLocationUrl: null,
+        route: '[]', distanceKm: 200, maxRiders: 10, difficulty: 'easy',
+        description: '', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [], registrations: [],
+      },
+    ];
+    mockFindMany.mockResolvedValue(rides);
 
-    expect(mockFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        take: 5,
-      })
-    );
+    const req = createNextRequest('http://localhost:3000/api/rides?limit=1');
+    const { data } = await parseResponse(await GET(req));
+
+    expect(data.rides).toHaveLength(1);
   });
 });
 
