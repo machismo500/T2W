@@ -306,6 +306,67 @@ export const api = {
     },
   },
 
+  arenaWeights: {
+    get: async () => {
+      try {
+        const res = await fetch("/api/site-settings?key=arena_weights");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.value) return data.value;
+        }
+      } catch { /* fall through */ }
+      return null;
+    },
+    save: async (weights: { ridesCompleted: number; ridesOrganized: number; sweepsDone: number; totalKm: number }) => {
+      const res = await fetch("/api/site-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "arena_weights", value: weights }),
+      });
+      if (!res.ok) throw new Error("Failed to save arena weights");
+      return { success: true };
+    },
+  },
+
+  achievementSettings: {
+    get: async () => {
+      try {
+        const res = await fetch("/api/site-settings?key=achievement_settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.value) return data.value;
+        }
+      } catch { /* fall through */ }
+      return null;
+    },
+    save: async (settings: {
+      periodStart: string;
+      periodEnd: string;
+      pointsPerParticipation: number;
+      pointsPerOrganize: number;
+      pointsPerSweep: number;
+      thresholdPercent: number;
+    }) => {
+      const res = await fetch("/api/site-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "achievement_settings", value: settings }),
+      });
+      if (!res.ok) throw new Error("Failed to save achievement settings");
+      return { success: true };
+    },
+  },
+
+  achievements: {
+    get: async () => {
+      try {
+        const res = await fetch("/api/achievements");
+        if (res.ok) return res.json();
+      } catch { /* fall through */ }
+      return null;
+    },
+  },
+
   riders: {
     list: async (search?: string, period?: string) => {
       const params = new URLSearchParams();

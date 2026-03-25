@@ -7,8 +7,9 @@ import { useAuth } from "@/context/AuthContext";
 import { ArenaHero } from "./ArenaHero";
 import { ArenaPodium } from "./ArenaPodium";
 import { ArenaLeaderboard } from "./ArenaLeaderboard";
-import { computeArenaScore } from "./types";
-import type { ArenaRider } from "./types";
+import { ArenaAchievements } from "./ArenaAchievements";
+import { computeArenaScore, DEFAULT_ARENA_WEIGHTS } from "./types";
+import type { ArenaRider, ArenaWeights } from "./types";
 import type { Badge } from "@/types";
 
 function assignBadgeTier(totalKm: number, badgeTiers: Badge[]) {
@@ -21,6 +22,7 @@ function assignBadgeTier(totalKm: number, badgeTiers: Badge[]) {
 }
 
 export type ArenaPeriod = "all" | "1y" | "6m";
+export type ArenaView = "leaderboard" | "achievements";
 
 export function RiderArenaPage() {
   const { user } = useAuth();
@@ -28,16 +30,22 @@ export function RiderArenaPage() {
   const [badgeTiers, setBadgeTiers] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<ArenaPeriod>("all");
+  const [weights, setWeights] = useState<ArenaWeights>(DEFAULT_ARENA_WEIGHTS);
+  const [view, setView] = useState<ArenaView>("leaderboard");
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
       api.riders.list(undefined, period),
       api.badges.list(),
+      api.arenaWeights.get(),
     ])
-      .then(([data, badgesData]: [{ riders: Array<Record<string, unknown>> }, { badges: Badge[] }]) => {
+      .then(([data, badgesData, weightsData]: [{ riders: Array<Record<string, unknown>> }, { badges: Badge[] }, ArenaWeights | null]) => {
         const tiers = (badgesData.badges || []).sort((a: Badge, b: Badge) => a.minKm - b.minKm);
         setBadgeTiers(tiers);
+
+        const activeWeights = weightsData || DEFAULT_ARENA_WEIGHTS;
+        setWeights(activeWeights);
 
         const mapped: ArenaRider[] = data.riders
           .filter((r: Record<string, unknown>) => (r.ridesCompleted as number) > 0 || (r.totalKm as number) > 0)
@@ -48,7 +56,7 @@ export function RiderArenaPage() {
               ridesOrganized: r.ridesOrganized as number,
               sweepsDone: r.sweepsDone as number,
               totalKm: r.totalKm as number,
-            });
+            }, activeWeights);
             return {
               id: r.id as string,
               name: r.name as string,
@@ -97,13 +105,23 @@ export function RiderArenaPage() {
         totalRides={totalRides}
         period={period}
         onPeriodChange={setPeriod}
+        view={view}
+        onViewChange={setView}
       />
-      <ArenaPodium riders={riders} />
-      <ArenaLeaderboard
-        riders={riders}
-        currentUserId={user?.linkedRiderId}
-        badgeTiers={badgeTiers}
-      />
+      {view === "leaderboard" && (
+        <>
+          <ArenaPodium riders={riders} />
+          <ArenaLeaderboard
+            riders={riders}
+            currentUserId={user?.linkedRiderId}
+            badgeTiers={badgeTiers}
+            weights={weights}
+          />
+        </>
+      )}
+      {view === "achievements" && (
+        <ArenaAchievements />
+      )}
     </div>
   );
 }

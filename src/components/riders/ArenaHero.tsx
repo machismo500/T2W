@@ -1,7 +1,7 @@
 "use client";
 
-import { Trophy, Route, Users, Bike, Calendar } from "lucide-react";
-import type { ArenaPeriod } from "./RiderArenaPage";
+import { Trophy, Route, Users, Bike, Calendar, Award } from "lucide-react";
+import type { ArenaPeriod, ArenaView } from "./RiderArenaPage";
 
 const periodOptions: { value: ArenaPeriod; label: string }[] = [
   { value: "all", label: "All Time" },
@@ -15,9 +15,11 @@ interface ArenaHeroProps {
   totalRides: number;
   period: ArenaPeriod;
   onPeriodChange: (period: ArenaPeriod) => void;
+  view: ArenaView;
+  onViewChange: (view: ArenaView) => void;
 }
 
-export function ArenaHero({ totalRiders, totalKm, totalRides, period, onPeriodChange }: ArenaHeroProps) {
+export function ArenaHero({ totalRiders, totalKm, totalRides, period, onPeriodChange, view, onViewChange }: ArenaHeroProps) {
   return (
     <section className="relative overflow-hidden border-b border-t2w-border bg-gradient-to-br from-t2w-dark via-t2w-secondary to-t2w-dark pt-28 pb-12 sm:pt-32 sm:pb-16">
       {/* Background glow effects */}
@@ -44,49 +46,79 @@ export function ArenaHero({ totalRiders, totalKm, totalRides, period, onPeriodCh
             Where legends are forged on the open road
           </p>
 
-          {/* Time period selector */}
-          <div className="mt-5 flex items-center justify-center gap-1.5">
-            <Calendar className="mr-1 h-3.5 w-3.5 text-t2w-muted" />
-            {periodOptions.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => onPeriodChange(opt.value)}
-                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                  period === opt.value
-                    ? "bg-t2w-accent text-white shadow-lg shadow-t2w-accent/25"
-                    : "border border-t2w-border bg-t2w-surface/50 text-t2w-muted hover:border-t2w-accent/40 hover:text-white"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+          {/* View toggle: Leaderboard / Achievements */}
+          <div className="mt-5 flex items-center justify-center gap-2">
+            <button
+              onClick={() => onViewChange("leaderboard")}
+              className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-medium transition-all ${
+                view === "leaderboard"
+                  ? "bg-t2w-accent text-white shadow-lg shadow-t2w-accent/25"
+                  : "border border-t2w-border bg-t2w-surface/50 text-t2w-muted hover:border-t2w-accent/40 hover:text-white"
+              }`}
+            >
+              <Trophy className="h-3.5 w-3.5" />
+              Leaderboard
+            </button>
+            <button
+              onClick={() => onViewChange("achievements")}
+              className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-medium transition-all ${
+                view === "achievements"
+                  ? "bg-t2w-gold text-white shadow-lg shadow-t2w-gold/25"
+                  : "border border-t2w-border bg-t2w-surface/50 text-t2w-muted hover:border-t2w-gold/40 hover:text-white"
+              }`}
+            >
+              <Award className="h-3.5 w-3.5" />
+              Achievements
+            </button>
           </div>
+
+          {/* Time period selector - only for leaderboard view */}
+          {view === "leaderboard" && (
+            <div className="mt-4 flex items-center justify-center gap-1.5">
+              <Calendar className="mr-1 h-3.5 w-3.5 text-t2w-muted" />
+              {periodOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onPeriodChange(opt.value)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                    period === opt.value
+                      ? "bg-t2w-accent text-white shadow-lg shadow-t2w-accent/25"
+                      : "border border-t2w-border bg-t2w-surface/50 text-t2w-muted hover:border-t2w-accent/40 hover:text-white"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Summary stats */}
-        <div className="mt-8 grid grid-cols-3 gap-4 sm:mt-10 sm:gap-6 lg:mx-auto lg:max-w-2xl">
-          <div className="rounded-xl border border-t2w-border bg-t2w-surface/60 p-4 text-center backdrop-blur">
-            <Users className="mx-auto mb-1.5 h-5 w-5 text-t2w-accent" />
-            <p className="text-2xl font-bold text-white sm:text-3xl">
-              {totalRiders}
-            </p>
-            <p className="text-xs text-t2w-muted sm:text-sm">Riders</p>
+        {/* Summary stats - only for leaderboard view */}
+        {view === "leaderboard" && (
+          <div className="mt-8 grid grid-cols-3 gap-4 sm:mt-10 sm:gap-6 lg:mx-auto lg:max-w-2xl">
+            <div className="rounded-xl border border-t2w-border bg-t2w-surface/60 p-4 text-center backdrop-blur">
+              <Users className="mx-auto mb-1.5 h-5 w-5 text-t2w-accent" />
+              <p className="text-2xl font-bold text-white sm:text-3xl">
+                {totalRiders}
+              </p>
+              <p className="text-xs text-t2w-muted sm:text-sm">Riders</p>
+            </div>
+            <div className="rounded-xl border border-t2w-border bg-t2w-surface/60 p-4 text-center backdrop-blur">
+              <Route className="mx-auto mb-1.5 h-5 w-5 text-t2w-gold" />
+              <p className="text-2xl font-bold text-white sm:text-3xl">
+                {(totalKm / 1000).toFixed(0)}k
+              </p>
+              <p className="text-xs text-t2w-muted sm:text-sm">KM Covered</p>
+            </div>
+            <div className="rounded-xl border border-t2w-border bg-t2w-surface/60 p-4 text-center backdrop-blur">
+              <Bike className="mx-auto mb-1.5 h-5 w-5 text-green-400" />
+              <p className="text-2xl font-bold text-white sm:text-3xl">
+                {totalRides}
+              </p>
+              <p className="text-xs text-t2w-muted sm:text-sm">Rides Done</p>
+            </div>
           </div>
-          <div className="rounded-xl border border-t2w-border bg-t2w-surface/60 p-4 text-center backdrop-blur">
-            <Route className="mx-auto mb-1.5 h-5 w-5 text-t2w-gold" />
-            <p className="text-2xl font-bold text-white sm:text-3xl">
-              {(totalKm / 1000).toFixed(0)}k
-            </p>
-            <p className="text-xs text-t2w-muted sm:text-sm">KM Covered</p>
-          </div>
-          <div className="rounded-xl border border-t2w-border bg-t2w-surface/60 p-4 text-center backdrop-blur">
-            <Bike className="mx-auto mb-1.5 h-5 w-5 text-green-400" />
-            <p className="text-2xl font-bold text-white sm:text-3xl">
-              {totalRides}
-            </p>
-            <p className="text-xs text-t2w-muted sm:text-sm">Rides Done</p>
-          </div>
-        </div>
+        )}
       </div>
     </section>
   );

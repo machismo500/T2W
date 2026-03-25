@@ -27,23 +27,36 @@ export type SortField =
   | "totalPoints"
   | "joinDate";
 
-export const ARENA_WEIGHTS = {
-  ridesCompleted: 5,
-  ridesOrganized: 5,
-  sweepsDone: 2.5,
-  totalKm: 0.01,
-} as const;
-
-export function computeArenaScore(rider: {
+export type ArenaWeights = {
   ridesCompleted: number;
   ridesOrganized: number;
   sweepsDone: number;
   totalKm: number;
-}): number {
+};
+
+export const DEFAULT_ARENA_WEIGHTS: ArenaWeights = {
+  ridesCompleted: 5,
+  ridesOrganized: 5,
+  sweepsDone: 2.5,
+  totalKm: 0.01,
+};
+
+// Backward-compatible alias
+export const ARENA_WEIGHTS = DEFAULT_ARENA_WEIGHTS;
+
+export function computeArenaScore(
+  rider: {
+    ridesCompleted: number;
+    ridesOrganized: number;
+    sweepsDone: number;
+    totalKm: number;
+  },
+  weights: ArenaWeights = DEFAULT_ARENA_WEIGHTS
+): number {
   return (
-    rider.ridesCompleted * ARENA_WEIGHTS.ridesCompleted +
-    rider.ridesOrganized * ARENA_WEIGHTS.ridesOrganized +
-    rider.sweepsDone * ARENA_WEIGHTS.sweepsDone +
-    rider.totalKm * ARENA_WEIGHTS.totalKm
+    rider.ridesCompleted * weights.ridesCompleted +
+    rider.ridesOrganized * weights.ridesOrganized +
+    rider.sweepsDone * weights.sweepsDone +
+    rider.totalKm * weights.totalKm
   );
 }

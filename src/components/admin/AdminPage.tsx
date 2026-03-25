@@ -39,15 +39,17 @@ import {
   Merge,
   ClipboardList,
   Award,
+  Trophy,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
 import { ParticipationMatrix } from "./ParticipationMatrix";
 import { MergeProfiles } from "./MergeProfiles";
+import { ArenaSettingsTab } from "./ArenaSettingsTab";
 import type { ActivityLogEntry } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "badges" | "content" | "approvals" | "form-settings" | "activity";
+type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "badges" | "content" | "approvals" | "form-settings" | "activity" | "arena";
 
 type PendingUser = {
   id: string;
@@ -942,6 +944,9 @@ export function AdminPage() {
       : []),
     ...(isSuperAdmin
       ? [{ key: "activity" as const, label: "Activity", icon: Activity }]
+      : []),
+    ...(isSuperAdmin
+      ? [{ key: "arena" as const, label: "Arena Settings", icon: Trophy }]
       : []),
   ];
 
@@ -2451,6 +2456,10 @@ export function AdminPage() {
               )}
             </div>
           </div>
+        )}
+        {/* Arena Settings Tab - Super Admin only */}
+        {activeTab === "arena" && isSuperAdmin && (
+          <ArenaSettingsTab />
         )}
       </div>
 

@@ -17,8 +17,8 @@ import {
   Crown,
   Info,
 } from "lucide-react";
-import type { ArenaRider, SortField } from "./types";
-import { ARENA_WEIGHTS } from "./types";
+import type { ArenaRider, SortField, ArenaWeights } from "./types";
+import { DEFAULT_ARENA_WEIGHTS } from "./types";
 import { ArenaRiderCard } from "./ArenaRiderCard";
 import type { Badge } from "@/types";
 
@@ -69,12 +69,14 @@ interface ArenaLeaderboardProps {
   riders: ArenaRider[];
   currentUserId?: string | null;
   badgeTiers: Badge[];
+  weights?: ArenaWeights;
 }
 
 export function ArenaLeaderboard({
   riders,
   currentUserId,
   badgeTiers,
+  weights = DEFAULT_ARENA_WEIGHTS,
 }: ArenaLeaderboardProps) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("arenaScore");
@@ -183,33 +185,33 @@ export function ArenaLeaderboard({
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
                 <p className="text-lg font-bold text-blue-400">
-                  {ARENA_WEIGHTS.ridesCompleted}
+                  {weights.ridesCompleted}
                 </p>
                 <p className="text-xs text-t2w-muted">pts / Ride</p>
               </div>
               <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
                 <p className="text-lg font-bold text-t2w-accent">
-                  {ARENA_WEIGHTS.ridesOrganized}
+                  {weights.ridesOrganized}
                 </p>
                 <p className="text-xs text-t2w-muted">pts / Organized</p>
               </div>
               <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
                 <p className="text-lg font-bold text-orange-400">
-                  {ARENA_WEIGHTS.sweepsDone}
+                  {weights.sweepsDone}
                 </p>
                 <p className="text-xs text-t2w-muted">pts / Sweep</p>
               </div>
               <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
                 <p className="text-lg font-bold text-green-400">
-                  {ARENA_WEIGHTS.totalKm}
+                  {weights.totalKm}
                 </p>
                 <p className="text-xs text-t2w-muted">pts / KM</p>
               </div>
             </div>
             <p className="mt-3 text-xs text-t2w-muted">
-              Arena Score = (Rides x {ARENA_WEIGHTS.ridesCompleted}) +
-              (Organized x {ARENA_WEIGHTS.ridesOrganized}) + (Sweeps x{" "}
-              {ARENA_WEIGHTS.sweepsDone}) + (KM x {ARENA_WEIGHTS.totalKm})
+              Arena Score = (Rides x {weights.ridesCompleted}) +
+              (Organized x {weights.ridesOrganized}) + (Sweeps x{" "}
+              {weights.sweepsDone}) + (KM x {weights.totalKm})
             </p>
           </div>
         )}
