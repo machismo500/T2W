@@ -260,8 +260,8 @@ export function ArenaSettingsTab() {
             {achievement.periodStart && achievement.periodEnd && (
               <div className="mt-4 rounded-lg bg-t2w-dark/60 p-3 text-xs text-t2w-muted">
                 <strong className="text-white">Preview:</strong>{" "}
-                Max possible per ride = {achievement.pointsPerParticipation} + {achievement.pointsPerOrganize} + {achievement.pointsPerSweep} = {achievement.pointsPerParticipation + achievement.pointsPerOrganize + achievement.pointsPerSweep} pts.{" "}
-                Riders with ≥ {achievement.thresholdPercent}% of (total rides × {achievement.pointsPerParticipation + achievement.pointsPerOrganize + achievement.pointsPerSweep}) will be highlighted.
+                Threshold base = 12 rides × {achievement.pointsPerParticipation} pts (participation) = {12 * achievement.pointsPerParticipation} pts.{" "}
+                Riders with ≥ {achievement.thresholdPercent}% of {12 * achievement.pointsPerParticipation} pts = {Math.round(12 * achievement.pointsPerParticipation * (achievement.thresholdPercent / 100))} pts will be highlighted.
               </div>
             )}
 

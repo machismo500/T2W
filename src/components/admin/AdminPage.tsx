@@ -977,14 +977,14 @@ export function AdminPage() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-8 flex gap-2 border-b border-t2w-border pb-4 overflow-x-auto">
+        <div className="mb-8 flex gap-2 border-b border-t2w-border pb-4 overflow-x-auto flex-nowrap scrollbar-thin scrollbar-track-transparent scrollbar-thumb-t2w-border" style={{ scrollbarWidth: "thin" }}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all ${
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all ${
                   activeTab === tab.key
                     ? "bg-t2w-accent text-white"
                     : "text-t2w-muted hover:bg-t2w-surface hover:text-white"

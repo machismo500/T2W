@@ -107,7 +107,7 @@ export function ArenaAchievements() {
           {formatPeriodDate(data.periodStart)} &ndash; {formatPeriodDate(data.periodEnd)}
         </h2>
         <p className="mt-2 text-sm text-t2w-muted">
-          Riders meeting {data.thresholdPercent}% of max possible points are highlighted
+          Riders meeting {data.thresholdPercent}% of {data.thresholdBase ?? 60} base points (12 rides × {data.pointsPerParticipation} pts) are highlighted
         </p>
       </div>
 
