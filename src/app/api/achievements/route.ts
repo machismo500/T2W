@@ -81,7 +81,7 @@ export async function GET() {
     const maxPossible = totalRidesInPeriod * maxPossiblePerRide;
     // Threshold is based on actual total rides in period × participation points
     const thresholdBase = totalRidesInPeriod * settings.pointsPerParticipation;
-    const threshold = Math.round(thresholdBase * (settings.thresholdPercent / 100));
+    const threshold = thresholdBase * (settings.thresholdPercent / 100);
 
     // Get all rider profiles with participations in the period
     const profiles = await prisma.riderProfile.findMany({
