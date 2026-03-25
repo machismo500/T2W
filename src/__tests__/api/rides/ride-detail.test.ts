@@ -189,4 +189,36 @@ describe('GET /api/rides/[id]', () => {
     expect(data.ride.activeRegistrations).toBe(0);
     expect(data.ride.confirmedRiderNames).toEqual([]);
   });
+
+  // ── Fallback logic for registeredRiders / activeRegistrations ──
+
+  it('falls back to participations count when no confirmed registrations', async () => {
+    mockFindUnique.mockResolvedValue({
+      ...baseRideDb,
+      registrations: [],
+      participations: [
+        { id: 'p1', riderProfile: { id: 'rp1', name: 'Alice', avatarUrl: null }, droppedOut: false, points: 5 },
+        { id: 'p2', riderProfile: { id: 'rp2', name: 'Bob', avatarUrl: null }, droppedOut: false, points: 3 },
+      ],
+    });
+
+    const { data } = await parseResponse(await callGET('ride-1'));
+
+    expect(data.ride.registeredRiders).toBe(2);
+    expect(data.ride.activeRegistrations).toBe(2);
+  });
+
+  it('falls back to riders JSON when no registrations or participations', async () => {
+    mockFindUnique.mockResolvedValue({
+      ...baseRideDb,
+      registrations: [],
+      participations: [],
+      riders: '["Alice","Bob"]',
+    });
+
+    const { data } = await parseResponse(await callGET('ride-1'));
+
+    expect(data.ride.registeredRiders).toBe(2);
+    expect(data.ride.activeRegistrations).toBe(2);
+  });
 });

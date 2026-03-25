@@ -168,6 +168,84 @@ describe('GET /api/rides', () => {
     expect(data.rides[0].id).toBe('ride-upcoming');
   });
 
+  it('falls back to participations count when no confirmed registrations', async () => {
+    const rides = [
+      {
+        id: 'ride-1', title: 'Test', rideNumber: '#001', type: 'day', status: 'upcoming',
+        startDate: new Date(Date.now() + 7 * 86400000), endDate: new Date(Date.now() + 10 * 86400000),
+        startLocation: 'A', startLocationUrl: null, endLocation: 'B', endLocationUrl: null,
+        route: '[]', distanceKm: 100, maxRiders: 10, difficulty: 'easy',
+        description: 'Test', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [{ riderProfileId: 'r1' }, { riderProfileId: 'r2' }],
+        registrations: [],
+      },
+    ];
+    mockFindMany.mockResolvedValue(rides);
+
+    const req = createNextRequest('http://localhost:3000/api/rides');
+    const { data } = await parseResponse(await GET(req));
+
+    expect(data.rides[0].registeredRiders).toBe(2);
+    expect(data.rides[0].activeRegistrations).toBe(2);
+  });
+
+  it('falls back to riders JSON when no registrations or participations', async () => {
+    const rides = [
+      {
+        id: 'ride-1', title: 'Test', rideNumber: '#001', type: 'day', status: 'upcoming',
+        startDate: new Date(Date.now() + 7 * 86400000), endDate: new Date(Date.now() + 10 * 86400000),
+        startLocation: 'A', startLocationUrl: null, endLocation: 'B', endLocationUrl: null,
+        route: '[]', distanceKm: 100, maxRiders: 10, difficulty: 'easy',
+        description: 'Test', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null,
+        riders: '["Alice","Bob","Charlie"]',
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [],
+        registrations: [],
+      },
+    ];
+    mockFindMany.mockResolvedValue(rides);
+
+    const req = createNextRequest('http://localhost:3000/api/rides');
+    const { data } = await parseResponse(await GET(req));
+
+    expect(data.rides[0].registeredRiders).toBe(3);
+    expect(data.rides[0].activeRegistrations).toBe(3);
+  });
+
+  it('prefers registrations over participations fallback', async () => {
+    const rides = [
+      {
+        id: 'ride-1', title: 'Test', rideNumber: '#001', type: 'day', status: 'upcoming',
+        startDate: new Date(Date.now() + 7 * 86400000), endDate: new Date(Date.now() + 10 * 86400000),
+        startLocation: 'A', startLocationUrl: null, endLocation: 'B', endLocationUrl: null,
+        route: '[]', distanceKm: 100, maxRiders: 10, difficulty: 'easy',
+        description: 'Test', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [
+          { riderProfileId: 'r1' }, { riderProfileId: 'r2' }, { riderProfileId: 'r3' },
+          { riderProfileId: 'r4' }, { riderProfileId: 'r5' },
+        ],
+        registrations: [
+          { id: 'r1', approvalStatus: 'confirmed' },
+          { id: 'r2', approvalStatus: 'confirmed' },
+        ],
+      },
+    ];
+    mockFindMany.mockResolvedValue(rides);
+
+    const req = createNextRequest('http://localhost:3000/api/rides');
+    const { data } = await parseResponse(await GET(req));
+
+    expect(data.rides[0].registeredRiders).toBe(2); // not 5
+  });
+
   it('respects ?limit=1', async () => {
     const futureStart = new Date(Date.now() + 7 * 86400000);
     const futureEnd = new Date(Date.now() + 10 * 86400000);
