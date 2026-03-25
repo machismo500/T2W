@@ -130,7 +130,7 @@ export async function GET() {
         const organizePts = ridesOrganizedInPeriod * settings.pointsPerOrganize;
         const sweepPts = sweepsDoneInPeriod * settings.pointsPerSweep;
         const totalPts = participationPts + organizePts + sweepPts;
-        const percentageAchieved = thresholdBase > 0 ? Math.round((totalPts / thresholdBase) * 100) : 0;
+        const percentageAchieved = thresholdBase > 0 ? Math.round((totalPts / thresholdBase) * 10000) / 100 : 0;
         const highlighted = percentageAchieved >= settings.thresholdPercent;
 
         return {

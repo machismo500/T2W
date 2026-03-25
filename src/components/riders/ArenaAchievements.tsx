@@ -246,7 +246,7 @@ export function ArenaAchievements() {
                 </td>
                 <td className="px-3 py-3 text-center">
                   <span className={`text-sm font-semibold ${rider.highlighted ? "text-green-400" : "text-t2w-muted"}`}>
-                    {rider.percentageAchieved}%
+                    {rider.percentageAchieved.toFixed(2)}%
                   </span>
                 </td>
               </tr>
