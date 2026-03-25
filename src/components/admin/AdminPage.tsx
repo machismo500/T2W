@@ -245,6 +245,7 @@ export function AdminPage() {
   // Ride rider management state
   const [editRideRiders, setEditRideRiders] = useState<string[]>([]);
   const [newRiderName, setNewRiderName] = useState("");
+  const [riderAddError, setRiderAddError] = useState("");
   const [ridersLoaded, setRidersLoaded] = useState(false);
   const [riderSearchResults, setRiderSearchResults] = useState<RiderSearchResult[]>([]);
   const [riderSearchDropdown, setRiderSearchDropdown] = useState(false);
@@ -516,6 +517,7 @@ export function AdminPage() {
 
   const handleAddRider = async () => {
     if (!editingRideId || !newRiderName.trim()) return;
+    setRiderAddError("");
     try {
       await api.rides.addRider(editingRideId, newRiderName.trim());
       setEditRideRiders((prev) => prev.includes(newRiderName.trim()) ? prev : [...prev, newRiderName.trim()]);
@@ -523,6 +525,8 @@ export function AdminPage() {
       setRiderSearchResults([]);
       setRiderSearchDropdown(false);
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to add rider";
+      setRiderAddError(message);
       console.error("Failed to add rider:", err);
     }
   };
@@ -1649,7 +1653,7 @@ export function AdminPage() {
                                   className="input-field w-full"
                                   placeholder="Enter rider name to add..."
                                   value={newRiderName}
-                                  onChange={(e) => { setNewRiderName(e.target.value); searchRidersForManage(e.target.value); }}
+                                  onChange={(e) => { setNewRiderName(e.target.value); setRiderAddError(""); searchRidersForManage(e.target.value); }}
                                   onFocus={() => { if (riderSearchResults.length > 0) setRiderSearchDropdown(true); }}
                                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRider(); } }}
                                 />
@@ -1680,6 +1684,9 @@ export function AdminPage() {
                                 Add
                               </button>
                             </div>
+                            {riderAddError && (
+                              <p className="text-sm text-red-400 mb-2">{riderAddError}</p>
+                            )}
                             {editRideRiders.length > 0 ? (
                               <div className="max-h-60 overflow-y-auto rounded-xl border border-t2w-border bg-t2w-dark p-2 space-y-1">
                                 {editRideRiders.map((rider, i) => (
