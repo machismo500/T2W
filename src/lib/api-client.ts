@@ -206,13 +206,13 @@ export const api = {
       await delay(200);
       return { success: true, id };
     },
-    addRider: async (rideId: string, riderName: string) => {
+    addRider: async (rideId: string, riderName: string, opts?: { riderProfileId?: string; userId?: string }) => {
       // Single source of truth: create a confirmed RideRegistration via admin endpoint.
       // This also syncs RideParticipation and Ride.riders cache automatically.
       const res = await fetch(`/api/rides/${rideId}/registrations/admin-manage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ riderName }),
+        body: JSON.stringify({ riderName, riderProfileId: opts?.riderProfileId, userId: opts?.userId }),
       });
       if (!res.ok) {
         const err = await res.json();

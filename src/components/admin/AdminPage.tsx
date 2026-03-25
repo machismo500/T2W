@@ -128,7 +128,7 @@ const ROLE_COLORS: Record<string, string> = {
   rider: "bg-t2w-surface-light text-t2w-muted",
 };
 
-type RiderSearchResult = { id: string; name: string; email: string; phone: string };
+type RiderSearchResult = { id: string; name: string; email: string; phone: string; riderProfileId?: string | null; userId?: string | null };
 
 function CrewAutocomplete({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [query, setQuery] = useState(value);
@@ -245,6 +245,7 @@ export function AdminPage() {
   // Ride rider management state
   const [editRideRiders, setEditRideRiders] = useState<string[]>([]);
   const [newRiderName, setNewRiderName] = useState("");
+  const [selectedRiderIds, setSelectedRiderIds] = useState<{ riderProfileId?: string | null; userId?: string | null }>({});
   const [riderAddError, setRiderAddError] = useState("");
   const [ridersLoaded, setRidersLoaded] = useState(false);
   const [riderSearchResults, setRiderSearchResults] = useState<RiderSearchResult[]>([]);
@@ -519,9 +520,14 @@ export function AdminPage() {
     if (!editingRideId || !newRiderName.trim()) return;
     setRiderAddError("");
     try {
-      await api.rides.addRider(editingRideId, newRiderName.trim());
-      setEditRideRiders((prev) => prev.includes(newRiderName.trim()) ? prev : [...prev, newRiderName.trim()]);
+      const result = await api.rides.addRider(editingRideId, newRiderName.trim(), {
+        riderProfileId: selectedRiderIds.riderProfileId || undefined,
+        userId: selectedRiderIds.userId || undefined,
+      });
+      const addedName = result.riderName || newRiderName.trim();
+      setEditRideRiders((prev) => prev.includes(addedName) ? prev : [...prev, addedName]);
       setNewRiderName("");
+      setSelectedRiderIds({});
       setRiderSearchResults([]);
       setRiderSearchDropdown(false);
     } catch (err) {
@@ -1639,8 +1645,8 @@ export function AdminPage() {
                             </div>
                           )}
                         </div>
-                        {/* Rider Management (Super Admin only) */}
-                        {isSuperAdmin && ridersLoaded && (
+                        {/* Rider Management (Admin & Core Members) */}
+                        {isCoreOrAbove && ridersLoaded && (
                           <div className="sm:col-span-2 lg:col-span-3">
                             <label className="mb-1.5 block text-sm font-medium text-gray-300">
                               <Users className="mr-1 inline h-4 w-4" />
@@ -1653,7 +1659,7 @@ export function AdminPage() {
                                   className="input-field w-full"
                                   placeholder="Enter rider name to add..."
                                   value={newRiderName}
-                                  onChange={(e) => { setNewRiderName(e.target.value); setRiderAddError(""); searchRidersForManage(e.target.value); }}
+                                  onChange={(e) => { setNewRiderName(e.target.value); setSelectedRiderIds({}); setRiderAddError(""); searchRidersForManage(e.target.value); }}
                                   onFocus={() => { if (riderSearchResults.length > 0) setRiderSearchDropdown(true); }}
                                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRider(); } }}
                                 />
@@ -1665,7 +1671,7 @@ export function AdminPage() {
                                         key={r.id}
                                         type="button"
                                         className="w-full px-3 py-2 text-left text-sm hover:bg-t2w-surface-light transition-colors flex flex-col"
-                                        onClick={() => { setNewRiderName(r.name); setRiderSearchDropdown(false); }}
+                                        onClick={() => { setNewRiderName(r.name); setSelectedRiderIds({ riderProfileId: r.riderProfileId, userId: r.userId }); setRiderSearchDropdown(false); }}
                                       >
                                         <span className="text-white font-medium">{r.name}</span>
                                         <span className="text-xs text-t2w-muted">{r.phone || "—"} / {r.email || "—"}</span>
