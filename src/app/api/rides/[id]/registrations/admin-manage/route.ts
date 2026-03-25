@@ -36,7 +36,24 @@ export async function POST(
     });
 
     // Find the linked user account (needed for RideRegistration)
-    const linkedUser = riderProfile?.linkedUsers?.[0];
+    // First try linkedUsers from the rider profile, then fall back to direct User lookup by name
+    let linkedUser = riderProfile?.linkedUsers?.[0];
+    if (!linkedUser) {
+      const userByName = await prisma.user.findFirst({
+        where: { name: { equals: trimmedName, mode: "insensitive" } },
+        select: { id: true, email: true, phone: true },
+      });
+      if (userByName) {
+        linkedUser = userByName;
+        // Auto-link the user to the rider profile if both exist
+        if (riderProfile) {
+          await prisma.user.update({
+            where: { id: userByName.id },
+            data: { linkedRiderId: riderProfile.id },
+          });
+        }
+      }
+    }
     if (!linkedUser) {
       return NextResponse.json(
         { error: `No user account found for "${trimmedName}". The rider must have a linked account to be added.` },
