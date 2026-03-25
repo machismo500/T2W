@@ -74,10 +74,10 @@ export async function GET(
       distanceKm: ride.distanceKm,
       maxRiders: ride.maxRiders,
       registeredRiders: ride.registrations.filter((r) => r.approvalStatus === "confirmed").length
-        || ride.participations.length
+        || ride.participations.filter((p) => !p.droppedOut).length
         || (safeJsonParse(ride.riders, []) as string[]).length,
       activeRegistrations: ride.registrations.filter((r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed").length
-        || ride.participations.length
+        || ride.participations.filter((p) => !p.droppedOut).length
         || (safeJsonParse(ride.riders, []) as string[]).length,
       confirmedRiderNames: ride.registrations
         .filter((r) => r.approvalStatus === "confirmed")

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const rides = await prisma.ride.findMany({
       include: {
         participations: {
-          select: { riderProfileId: true },
+          select: { riderProfileId: true, droppedOut: true },
         },
         registrations: {
           select: { id: true, approvalStatus: true },
@@ -38,10 +38,10 @@ export async function GET(req: NextRequest) {
       distanceKm: r.distanceKm,
       maxRiders: r.maxRiders,
       registeredRiders: r.registrations.filter((reg) => reg.approvalStatus === "confirmed").length
-        || r.participations.length
+        || r.participations.filter((p) => !p.droppedOut).length
         || (safeJsonParse(r.riders, []) as string[]).length,
       activeRegistrations: r.registrations.filter((reg) => reg.approvalStatus === "pending" || reg.approvalStatus === "confirmed").length
-        || r.participations.length
+        || r.participations.filter((p) => !p.droppedOut).length
         || (safeJsonParse(r.riders, []) as string[]).length,
       difficulty: r.difficulty,
       description: r.description,

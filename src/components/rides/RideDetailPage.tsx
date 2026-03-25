@@ -962,10 +962,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
             )}
 
             {/* Riders List - for completed rides with rider data */}
-            {ride.status === "completed" && ((ride.riders && ride.riders.length > 0) || (ride.confirmedRiderNames && ride.confirmedRiderNames.length > 0)) && (() => {
+            {ride.status === "completed" && ((ride.riders && ride.riders.length > 0) || (ride.confirmedRiderNames && ride.confirmedRiderNames.length > 0) || (ride.participations && ride.participations.length > 0)) && (() => {
               const confirmedNames = ride.confirmedRiderNames ?? [];
+              const participationNames = (ride.participations ?? []).filter((p) => !p.droppedOut).map((p) => p.riderName);
               const staticRiders = ride.riders ?? [];
-              const ridersList = confirmedNames.length > 0 ? confirmedNames : staticRiders;
+              const ridersList = confirmedNames.length > 0 ? confirmedNames : participationNames.length > 0 ? participationNames : staticRiders;
               return (
               <div className="card">
                 <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
