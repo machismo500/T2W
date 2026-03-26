@@ -17,7 +17,7 @@ import {
 import { api } from "@/lib/api-client";
 import { Ride } from "@/types";
 
-type FilterTab = "all" | "upcoming" | "completed";
+type FilterTab = "all" | "upcoming" | "ongoing" | "completed";
 
 const difficultyColors = {
   easy: "text-green-400 bg-green-400/10 border-green-400/20",
@@ -80,6 +80,7 @@ export function RidesPage() {
   const filtered = rides
     .filter((ride) => {
       if (activeTab === "upcoming" && ride.status !== "upcoming") return false;
+      if (activeTab === "ongoing" && ride.status !== "ongoing") return false;
       if (activeTab === "completed" && ride.status !== "completed") return false;
       if (typeFilter !== "all" && ride.type !== typeFilter) return false;
       if (
@@ -93,15 +94,15 @@ export function RidesPage() {
       return true;
     })
     .sort((a, b) => {
-      if (a.status === "completed" && b.status === "completed") {
+      const statusOrder = { upcoming: 0, ongoing: 1, completed: 2, cancelled: 3 };
+      const orderA = statusOrder[a.status] ?? 4;
+      const orderB = statusOrder[b.status] ?? 4;
+      if (orderA !== orderB) return orderA - orderB;
+      // Within the same status group, sort by date
+      if (a.status === "completed") {
         return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
       }
-      if (a.status === "upcoming" && b.status === "upcoming") {
-        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
-      }
-      if (a.status === "upcoming") return -1;
-      if (b.status === "upcoming") return 1;
-      return 0;
+      return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
     });
 
   const totalKm = rides
@@ -145,6 +146,10 @@ export function RidesPage() {
                 value: rides.filter((r) => r.status === "upcoming").length,
               },
               {
+                label: "Ongoing",
+                value: rides.filter((r) => r.status === "ongoing").length,
+              },
+              {
                 label: "Completed",
                 value: rides.filter((r) => r.status === "completed").length,
               },
@@ -169,7 +174,7 @@ export function RidesPage() {
         {/* Filters */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-2">
-            {(["all", "upcoming", "completed"] as FilterTab[]).map((tab) => (
+            {(["all", "upcoming", "ongoing", "completed"] as FilterTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -255,9 +260,9 @@ export function RidesPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={`rounded-lg px-2.5 py-1 text-xs font-medium ${statusColors[ride.status]}`}
+                      className={`rounded-lg px-2.5 py-1 text-xs font-medium capitalize ${statusColors[ride.status]}`}
                     >
-                      {ride.status}
+                      {ride.status === "ongoing" ? "Ongoing Ride" : ride.status}
                     </span>
                     <span
                       className={`rounded-lg border px-2.5 py-1 text-xs font-medium ${difficultyColors[ride.difficulty]}`}
@@ -400,7 +405,7 @@ export function RidesPage() {
                       <span
                         className={`rounded-lg px-2.5 py-1 text-xs font-medium capitalize ${statusColors[ride.status]}`}
                       >
-                        {ride.status}
+                        {ride.status === "ongoing" ? "Ongoing Ride" : ride.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-400">

@@ -30,8 +30,8 @@ function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
     expedition: "Expedition",
   };
 
-  const spotsLeft = ride.maxRiders - ride.registeredRiders;
-  const fillPercentage = (ride.registeredRiders / ride.maxRiders) * 100;
+  const spotsLeft = ride.maxRiders - (ride.activeRegistrations ?? ride.registeredRiders);
+  const fillPercentage = ((ride.activeRegistrations ?? ride.registeredRiders) / ride.maxRiders) * 100;
 
   return (
     <div
@@ -141,6 +141,15 @@ function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
             <ArrowRight className="h-4 w-4" />
           </Link>
         )}
+        {ride.status === "ongoing" && (
+          <Link
+            href={`/ride/${ride.id}/live`}
+            className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-yellow-400/10 py-3 text-sm font-semibold text-yellow-400 transition-all hover:bg-yellow-400 hover:text-black"
+          >
+            Live Tracking
+            <MapPin className="h-4 w-4" />
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -179,6 +188,7 @@ export function UpcomingRides() {
     };
   }, []);
 
+  const ongoing = rides.filter((r) => r.status === "ongoing");
   const upcoming = rides.filter((r) => r.status === "upcoming");
   const recent = rides
     .filter((r) => r.status === "completed")
@@ -203,6 +213,33 @@ export function UpcomingRides() {
   return (
     <section className="relative py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* Ongoing Rides */}
+        {ongoing.length > 0 && (
+          <div className="mb-16">
+            <div className="mb-10 flex items-end justify-between">
+              <div>
+                <h2 className="section-title">Ongoing Rides</h2>
+                <p className="mt-3 section-subtitle">
+                  These rides are currently in progress!
+                </p>
+              </div>
+              <Link
+                href="/rides"
+                className="group hidden items-center gap-2 text-sm font-medium text-t2w-accent transition-colors hover:text-t2w-accent/80 sm:flex"
+              >
+                View All Rides
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </Link>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {ongoing.map((ride, i) => (
+                <RideCard key={ride.id} ride={ride} featured={i === 0} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Upcoming */}
         <div className="mb-16">
           <div className="mb-10 flex items-end justify-between">

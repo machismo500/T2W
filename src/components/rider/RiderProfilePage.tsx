@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
-import type { RiderProfile } from "@/data/rider-profiles";
+import type { RiderProfile } from "@/types";
 
 type Motorcycle = {
   id: string;

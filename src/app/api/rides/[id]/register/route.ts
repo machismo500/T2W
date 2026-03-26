@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { computeRideStatus } from "@/lib/ride-status";
 import nodemailer from "nodemailer";
 
 function escapeHtml(str: string): string {
@@ -97,16 +98,21 @@ export async function POST(
     // Verify ride exists
     const ride = await prisma.ride.findUnique({
       where: { id: rideId },
-      include: { registrations: { select: { id: true } } },
+      include: { registrations: { select: { id: true, approvalStatus: true } } },
     });
 
     if (!ride) {
       return NextResponse.json({ error: "Ride not found" }, { status: 404 });
     }
 
-    if (ride.status !== "upcoming") {
+    const dynamicStatus = computeRideStatus(ride.startDate, ride.endDate, ride.status);
+    if (dynamicStatus !== "upcoming") {
       return NextResponse.json(
-        { error: "Registration is only open for upcoming rides" },
+        { error: dynamicStatus === "ongoing"
+            ? "Registration is closed — this ride has already started"
+            : dynamicStatus === "completed"
+            ? "Registration is closed — this ride has already ended"
+            : "Registration is not available for this ride" },
         { status: 400 }
       );
     }
@@ -129,8 +135,11 @@ export async function POST(
       );
     }
 
-    // Check capacity
-    if (ride.registrations.length >= ride.maxRiders) {
+    // Check capacity — only count active registrations (pending + confirmed)
+    const activeRegistrations = ride.registrations.filter(
+      (r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed"
+    );
+    if (activeRegistrations.length >= ride.maxRiders) {
       return NextResponse.json(
         { error: "This ride is full — no spots available" },
         { status: 400 }

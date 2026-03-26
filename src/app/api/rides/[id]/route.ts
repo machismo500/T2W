@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { computeRideStatus } from "@/lib/ride-status";
 
 function safeJsonParse(value: string | null | undefined, fallback: unknown): unknown {
   if (!value) return fallback;
@@ -62,7 +63,7 @@ export async function GET(
       title: ride.title,
       rideNumber: ride.rideNumber,
       type: ride.type,
-      status: ride.status,
+      status: computeRideStatus(ride.startDate, ride.endDate, ride.status),
       startDate: ride.startDate.toISOString(),
       endDate: ride.endDate.toISOString(),
       startLocation: ride.startLocation,
@@ -72,7 +73,12 @@ export async function GET(
       route: safeJsonParse(ride.route, []),
       distanceKm: ride.distanceKm,
       maxRiders: ride.maxRiders,
-      registeredRiders: ride.registrations.filter((r) => r.approvalStatus === "confirmed").length,
+      registeredRiders: ride.registrations.filter((r) => r.approvalStatus === "confirmed").length
+        || ride.participations.filter((p) => !p.droppedOut).length
+        || (safeJsonParse(ride.riders, []) as string[]).length,
+      activeRegistrations: ride.registrations.filter((r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed").length
+        || ride.participations.filter((p) => !p.droppedOut).length
+        || (safeJsonParse(ride.riders, []) as string[]).length,
       confirmedRiderNames: ride.registrations
         .filter((r) => r.approvalStatus === "confirmed")
         .map((r) => r.riderName),
@@ -98,7 +104,7 @@ export async function GET(
         riderProfileId: p.riderProfile.id,
         riderName: p.riderProfile.name,
         riderAvatar: p.riderProfile.avatarUrl,
-        droppedOut: false,
+        droppedOut: p.droppedOut,
         points: p.points,
       })),
       currentUserRegistered,

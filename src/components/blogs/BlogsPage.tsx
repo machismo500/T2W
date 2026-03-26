@@ -27,7 +27,7 @@ type BlogPost = {
   title: string;
   excerpt: string;
   content: string;
-  author: string;
+  authorName: string;
   authorId?: string;
   publishDate: string;
   tags: string[];
@@ -88,7 +88,7 @@ export function BlogsPage() {
         title: newBlog.title,
         excerpt: newBlog.excerpt || newBlog.content.slice(0, 150) + "...",
         content: newBlog.content,
-        author: user.name,
+        authorName: user.name,
         authorId: user.id,
         tags: newBlog.tags
           .split(",")
@@ -264,7 +264,7 @@ export function BlogsPage() {
                       {blog.title}
                     </h4>
                     <p className="text-xs text-t2w-muted mt-1">
-                      By {blog.author} &middot;{" "}
+                      By {blog.authorName} &middot;{" "}
                       {new Date(blog.publishDate).toLocaleDateString("en-IN", {
                         day: "numeric",
                         month: "short",
@@ -339,14 +339,14 @@ export function BlogsPage() {
                 <div className="mt-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-t2w-accent/10 text-xs font-bold text-t2w-accent">
-                      {featuredBlog.author
+                      {(featuredBlog.authorName || "")
                         .split(" ")
                         .map((n) => n[0])
                         .join("")}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-white">
-                        {featuredBlog.author}
+                        {featuredBlog.authorName}
                       </p>
                       <p className="text-xs text-t2w-muted">
                         {new Date(featuredBlog.publishDate).toLocaleDateString(
@@ -419,7 +419,7 @@ export function BlogsPage() {
 
               <div className="mt-4 flex items-center justify-between border-t border-t2w-border pt-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-t2w-muted">{blog.author}</span>
+                  <span className="text-xs text-t2w-muted">{blog.authorName}</span>
                   <span className="text-xs text-t2w-muted">&middot;</span>
                   <span className="flex items-center gap-1 text-xs text-t2w-muted">
                     <Clock className="h-3 w-3" />

@@ -77,6 +77,9 @@ export async function PATCH(
       });
     }
 
+    // Sync Ride.riders cache from confirmed registrations (single source of truth)
+    await syncRideRidersFromRegistrations(rideId);
+
     return NextResponse.json({
       registration: {
         id: updated.id,
@@ -89,5 +92,25 @@ export async function PATCH(
       { error: "Failed to update registration" },
       { status: 500 }
     );
+  }
+}
+
+/** Sync the Ride.riders JSON field from confirmed RideRegistration records. */
+async function syncRideRidersFromRegistrations(rideId: string) {
+  try {
+    const confirmedRegistrations = await prisma.rideRegistration.findMany({
+      where: { rideId, approvalStatus: "confirmed" },
+      select: { riderName: true },
+      orderBy: { registeredAt: "asc" },
+    });
+
+    const riderNames = confirmedRegistrations.map((r) => r.riderName);
+
+    await prisma.ride.update({
+      where: { id: rideId },
+      data: { riders: JSON.stringify(riderNames) },
+    });
+  } catch (error) {
+    console.error("[T2W] syncRideRidersFromRegistrations error:", error);
   }
 }

@@ -49,6 +49,7 @@ export interface Ride {
   distanceKm: number;
   maxRiders: number;
   registeredRiders: number;
+  activeRegistrations?: number;
   difficulty: "easy" | "moderate" | "challenging" | "extreme";
   description: string;
   highlights: string[];
@@ -83,7 +84,7 @@ export interface BlogPost {
   title: string;
   excerpt: string;
   content: string;
-  author: string;
+  authorName: string;
   authorId?: string;
   authorAvatar?: string;
   publishDate: string;
@@ -144,6 +145,35 @@ export interface Guideline {
   content: string;
   category: "group" | "general" | "safety" | "maintenance";
   icon: string;
+}
+
+// ── Rider Profile ──
+export interface RiderProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+  bloodGroup: string;
+  joinDate: string;
+  ridesCompleted: number;
+  totalKm: number;
+  totalPoints: number;
+  ridesOrganized: number;
+  sweepsDone: number;
+  pilotsDone: number;
+  avatarUrl?: string;
+  userRole?: string | null;
+  ridesParticipated: {
+    rideId: string;
+    rideNumber: string;
+    rideTitle: string;
+    rideDate: string;
+    distanceKm: number;
+    points: number;
+  }[];
 }
 
 // Ride registration data (based on registration form)

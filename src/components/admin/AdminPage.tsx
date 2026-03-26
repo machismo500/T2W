@@ -38,15 +38,18 @@ import {
   Grid3X3,
   Merge,
   ClipboardList,
+  Award,
+  Trophy,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
 import { ParticipationMatrix } from "./ParticipationMatrix";
 import { MergeProfiles } from "./MergeProfiles";
+import { ArenaSettingsTab } from "./ArenaSettingsTab";
 import type { ActivityLogEntry } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "content" | "approvals" | "form-settings" | "activity";
+type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "badges" | "content" | "approvals" | "form-settings" | "activity" | "arena";
 
 type PendingUser = {
   id: string;
@@ -99,7 +102,7 @@ type AdminStats = {
 type PendingBlog = {
   id: string;
   title: string;
-  author: string;
+  authorName: string;
   publishDate: string;
   approvalStatus: string;
 };
@@ -127,7 +130,7 @@ const ROLE_COLORS: Record<string, string> = {
   rider: "bg-t2w-surface-light text-t2w-muted",
 };
 
-type RiderSearchResult = { id: string; name: string; email: string; phone: string };
+type RiderSearchResult = { id: string; name: string; email: string; phone: string; riderProfileId?: string | null; userId?: string | null };
 
 function CrewAutocomplete({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [query, setQuery] = useState(value);
@@ -244,7 +247,14 @@ export function AdminPage() {
   // Ride rider management state
   const [editRideRiders, setEditRideRiders] = useState<string[]>([]);
   const [newRiderName, setNewRiderName] = useState("");
+  const [selectedRiderIds, setSelectedRiderIds] = useState<{ riderProfileId?: string | null; userId?: string | null }>({});
+  const [riderAddError, setRiderAddError] = useState("");
   const [ridersLoaded, setRidersLoaded] = useState(false);
+  const [riderSearchResults, setRiderSearchResults] = useState<RiderSearchResult[]>([]);
+  const [riderSearchDropdown, setRiderSearchDropdown] = useState(false);
+  const [riderSearching, setRiderSearching] = useState(false);
+  const riderSearchDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const riderInputWrapperRef = useRef<HTMLDivElement>(null);
   // Per-ride form settings for edit
   const [editRideUseCustomSettings, setEditRideUseCustomSettings] = useState(false);
   const [editRideFormCustomSettings, setEditRideFormCustomSettings] = useState<string[]>([]);
@@ -273,6 +283,15 @@ export function AdminPage() {
   // Activity log state
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [rollingBack, setRollingBack] = useState<string | null>(null);
+
+  // Badge management state (SuperAdmin)
+  const [adminBadges, setAdminBadges] = useState<Array<{
+    id: string; tier: string; name: string; description: string; minKm: number; icon: string; color: string;
+  }>>([]);
+  const [badgesLoaded, setBadgesLoaded] = useState(false);
+  const [editingBadgeId, setEditingBadgeId] = useState<string | null>(null);
+  const [badgeEditForm, setBadgeEditForm] = useState({ name: "", description: "", minKm: "", icon: "", color: "" });
+  const [savingBadge, setSavingBadge] = useState(false);
 
   // Registration form settings (SuperAdmin)
   const [formSettingsLoaded, setFormSettingsLoaded] = useState(false);
@@ -319,6 +338,11 @@ export function AdminPage() {
       });
       // Auto-clear dropouts and sync roles on admin page load
       api.participation.syncRoles().catch(() => {});
+      // Load badge tiers for badge management
+      api.badges.list().then((data: { badges: typeof adminBadges }) => {
+        setAdminBadges(data.badges || []);
+        setBadgesLoaded(true);
+      }).catch(() => setBadgesLoaded(true));
     }
 
     // Load form settings (with migration from legacy single UPI/bank to arrays)
@@ -437,7 +461,9 @@ export function AdminPage() {
         accountsBy: String(r.accountsBy || ""),
         highlights: Array.isArray(r.highlights) ? (r.highlights as string[]).join("\n") : "",
       });
-      setEditRideRiders(Array.isArray(r.riders) ? (r.riders as string[]) : []);
+      // Single source of truth: only use confirmed registrations for the rider list.
+      const confirmedNames = Array.isArray(r.confirmedRiderNames) ? (r.confirmedRiderNames as string[]) : [];
+      setEditRideRiders(confirmedNames);
       // Load per-ride form settings
       const rideRegSettings = r.regFormSettings as Record<string, unknown> | null;
       setEditRideFormCustomSettings(rideRegSettings ? ((rideRegSettings.hiddenFields as string[]) || []) : []);
@@ -464,13 +490,51 @@ export function AdminPage() {
     }
   };
 
+  // Click-outside handler for rider search dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (riderInputWrapperRef.current && !riderInputWrapperRef.current.contains(e.target as Node)) {
+        setRiderSearchDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const searchRidersForManage = useCallback((q: string) => {
+    if (riderSearchDebounceRef.current) clearTimeout(riderSearchDebounceRef.current);
+    if (q.length < 1) { setRiderSearchResults([]); setRiderSearchDropdown(false); return; }
+    riderSearchDebounceRef.current = setTimeout(async () => {
+      setRiderSearching(true);
+      try {
+        const res = await fetch(`/api/riders/search?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setRiderSearchResults(data.results || []);
+          setRiderSearchDropdown(true);
+        }
+      } catch { /* ignore */ }
+      setRiderSearching(false);
+    }, 300);
+  }, []);
+
   const handleAddRider = async () => {
     if (!editingRideId || !newRiderName.trim()) return;
+    setRiderAddError("");
     try {
-      await api.rides.addRider(editingRideId, newRiderName.trim());
-      setEditRideRiders((prev) => prev.includes(newRiderName.trim()) ? prev : [...prev, newRiderName.trim()]);
+      const result = await api.rides.addRider(editingRideId, newRiderName.trim(), {
+        riderProfileId: selectedRiderIds.riderProfileId || undefined,
+        userId: selectedRiderIds.userId || undefined,
+      });
+      const addedName = result.riderName || newRiderName.trim();
+      setEditRideRiders((prev) => prev.includes(addedName) ? prev : [...prev, addedName]);
       setNewRiderName("");
+      setSelectedRiderIds({});
+      setRiderSearchResults([]);
+      setRiderSearchDropdown(false);
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to add rider";
+      setRiderAddError(message);
       console.error("Failed to add rider:", err);
     }
   };
@@ -572,6 +636,16 @@ export function AdminPage() {
       });
       if (!res.ok) throw new Error("Failed to update");
       setRideRegistrations((prev) => prev.map((r) => r.id === regId ? { ...r, approvalStatus: status } : r));
+      // The PATCH endpoint handles all sync (participation + Ride.riders cache).
+      // Update local edit riders list to stay in sync with confirmed registrations.
+      const reg = rideRegistrations.find((r) => r.id === regId);
+      if (reg?.riderName) {
+        if (status === "confirmed") {
+          setEditRideRiders((prev) => prev.includes(reg.riderName) ? prev : [...prev, reg.riderName]);
+        } else {
+          setEditRideRiders((prev) => prev.filter((r) => r !== reg.riderName));
+        }
+      }
       // Refresh ride list to update count
       const ridesData = await api.rides.list();
       setRides((ridesData as { rides: AdminRide[] }).rides);
@@ -860,6 +934,9 @@ export function AdminPage() {
     ...(isSuperAdmin
       ? [{ key: "merge" as const, label: "Merge Profiles", icon: Merge }]
       : []),
+    ...(isSuperAdmin
+      ? [{ key: "badges" as const, label: "Badges", icon: Award }]
+      : []),
     { key: "approvals" as const, label: "Approvals", icon: BookOpen, badge: pendingBlogs.length + pendingPosts.length },
     { key: "content" as const, label: "Content", icon: Copyright },
     ...(isSuperAdmin
@@ -867,6 +944,9 @@ export function AdminPage() {
       : []),
     ...(isSuperAdmin
       ? [{ key: "activity" as const, label: "Activity", icon: Activity }]
+      : []),
+    ...(isSuperAdmin
+      ? [{ key: "arena" as const, label: "Arena Settings", icon: Trophy }]
       : []),
   ];
 
@@ -897,14 +977,14 @@ export function AdminPage() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-8 flex gap-2 border-b border-t2w-border pb-4 overflow-x-auto">
+        <div className="mb-8 flex gap-2 border-b border-t2w-border pb-4 overflow-x-auto flex-nowrap scrollbar-thin scrollbar-track-transparent scrollbar-thumb-t2w-border" style={{ scrollbarWidth: "thin" }}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all ${
+                className={`flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-all ${
                   activeTab === tab.key
                     ? "bg-t2w-accent text-white"
                     : "text-t2w-muted hover:bg-t2w-surface hover:text-white"
@@ -1386,8 +1466,8 @@ export function AdminPage() {
                       <div className="flex items-center gap-2">
                         <h4 className="font-semibold text-white truncate">{ride.title}</h4>
                         <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium capitalize ${
-                          ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : "bg-gray-400/10 text-gray-400"
-                        }`}>{ride.status}</span>
+                          ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "ongoing" ? "bg-yellow-400/10 text-yellow-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : ride.status === "cancelled" ? "bg-red-400/10 text-red-400" : "bg-gray-400/10 text-gray-400"
+                        }`}>{ride.status === "ongoing" ? "Ongoing Ride" : ride.status}</span>
                       </div>
                       <p className="mt-1 text-sm text-t2w-muted">
                         {ride.rideNumber} &middot; {ride.startLocation} &rarr; {ride.endLocation} &middot; {ride.distanceKm} km &middot; {ride.registeredRiders} registered
@@ -1457,26 +1537,28 @@ export function AdminPage() {
                                 </p>
                               </div>
                               <div className="flex gap-2 shrink-0">
-                                {reg.approvalStatus !== "confirmed" && reg.approvalStatus !== "dropout" && (
-                                  <button
-                                    onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
-                                    disabled={updatingRegId === reg.id}
-                                    className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
-                                  >
-                                    {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
-                                    Confirm
-                                  </button>
-                                )}
+                                {/* pending → Confirm / Reject */}
                                 {reg.approvalStatus === "pending" && (
-                                  <button
-                                    onClick={() => updateRegStatus(ride.id, reg.id, "rejected")}
-                                    disabled={updatingRegId === reg.id}
-                                    className="flex items-center gap-1 rounded-lg bg-red-400/10 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/20 disabled:opacity-50"
-                                  >
-                                    {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
-                                    Reject
-                                  </button>
+                                  <>
+                                    <button
+                                      onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                                      Confirm
+                                    </button>
+                                    <button
+                                      onClick={() => updateRegStatus(ride.id, reg.id, "rejected")}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-red-400/10 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                                      Reject
+                                    </button>
+                                  </>
                                 )}
+                                {/* confirmed → Drop-Out */}
                                 {reg.approvalStatus === "confirmed" && (
                                   <button
                                     onClick={() => updateRegStatus(ride.id, reg.id, "dropout")}
@@ -1487,14 +1569,36 @@ export function AdminPage() {
                                     Drop-Out
                                   </button>
                                 )}
+                                {/* dropout → Re-Confirm / Reject */}
                                 {reg.approvalStatus === "dropout" && (
+                                  <>
+                                    <button
+                                      onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                                      Re-Confirm
+                                    </button>
+                                    <button
+                                      onClick={() => updateRegStatus(ride.id, reg.id, "rejected")}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-red-400/10 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                                {/* rejected → Re-Confirm */}
+                                {reg.approvalStatus === "rejected" && (
                                   <button
                                     onClick={() => updateRegStatus(ride.id, reg.id, "confirmed")}
                                     disabled={updatingRegId === reg.id}
                                     className="flex items-center gap-1 rounded-lg bg-green-400/10 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-400/20 disabled:opacity-50"
                                   >
                                     {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                                    Restore
+                                    Re-Confirm
                                   </button>
                                 )}
                               </div>
@@ -1546,22 +1650,41 @@ export function AdminPage() {
                             </div>
                           )}
                         </div>
-                        {/* Rider Management (Super Admin only) */}
-                        {isSuperAdmin && ridersLoaded && (
+                        {/* Rider Management (Admin & Core Members) */}
+                        {isCoreOrAbove && ridersLoaded && (
                           <div className="sm:col-span-2 lg:col-span-3">
                             <label className="mb-1.5 block text-sm font-medium text-gray-300">
                               <Users className="mr-1 inline h-4 w-4" />
                               Manage Riders ({editRideRiders.length})
                             </label>
                             <div className="flex gap-2 mb-3">
-                              <input
-                                type="text"
-                                className="input-field flex-1"
-                                placeholder="Enter rider name to add..."
-                                value={newRiderName}
-                                onChange={(e) => setNewRiderName(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRider(); } }}
-                              />
+                              <div ref={riderInputWrapperRef} className="relative flex-1">
+                                <input
+                                  type="text"
+                                  className="input-field w-full"
+                                  placeholder="Enter rider name to add..."
+                                  value={newRiderName}
+                                  onChange={(e) => { setNewRiderName(e.target.value); setSelectedRiderIds({}); setRiderAddError(""); searchRidersForManage(e.target.value); }}
+                                  onFocus={() => { if (riderSearchResults.length > 0) setRiderSearchDropdown(true); }}
+                                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddRider(); } }}
+                                />
+                                {riderSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-t2w-muted" />}
+                                {riderSearchDropdown && riderSearchResults.length > 0 && (
+                                  <div className="absolute z-50 mt-1 w-full rounded-lg border border-t2w-border bg-t2w-surface shadow-xl max-h-48 overflow-y-auto">
+                                    {riderSearchResults.map((r) => (
+                                      <button
+                                        key={r.id}
+                                        type="button"
+                                        className="w-full px-3 py-2 text-left text-sm hover:bg-t2w-surface-light transition-colors flex flex-col"
+                                        onClick={() => { setNewRiderName(r.name); setSelectedRiderIds({ riderProfileId: r.riderProfileId, userId: r.userId }); setRiderSearchDropdown(false); }}
+                                      >
+                                        <span className="text-white font-medium">{r.name}</span>
+                                        <span className="text-xs text-t2w-muted">{r.phone || "—"} / {r.email || "—"}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                               <button
                                 type="button"
                                 onClick={handleAddRider}
@@ -1572,6 +1695,9 @@ export function AdminPage() {
                                 Add
                               </button>
                             </div>
+                            {riderAddError && (
+                              <p className="text-sm text-red-400 mb-2">{riderAddError}</p>
+                            )}
                             {editRideRiders.length > 0 ? (
                               <div className="max-h-60 overflow-y-auto rounded-xl border border-t2w-border bg-t2w-dark p-2 space-y-1">
                                 {editRideRiders.map((rider, i) => (
@@ -1681,6 +1807,187 @@ export function AdminPage() {
           <MergeProfiles />
         )}
 
+        {/* Badges Tab - Super Admin only */}
+        {activeTab === "badges" && isSuperAdmin && (
+          <div className="space-y-6">
+            <div className="card">
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 font-display text-xl font-bold text-white">
+                  <Award className="h-5 w-5 text-t2w-accent" />
+                  Badge Tiers
+                </h3>
+                <p className="text-xs text-t2w-muted">{adminBadges.length} tiers configured</p>
+              </div>
+              <p className="mb-6 text-sm text-t2w-muted">
+                Manage badge tiers that are automatically awarded to riders based on their total kilometers. Changes here apply immediately across the site.
+              </p>
+              {!badgesLoaded ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-t2w-accent" />
+                </div>
+              ) : adminBadges.length === 0 ? (
+                <div className="py-12 text-center">
+                  <Award className="mx-auto h-12 w-12 text-t2w-border" />
+                  <p className="mt-3 text-t2w-muted">No badge tiers found. Run the seed script to initialize badges.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {adminBadges
+                    .sort((a, b) => a.minKm - b.minKm)
+                    .map((badge) => (
+                    <div key={badge.id} className="rounded-xl border border-t2w-border bg-t2w-surface-light p-5">
+                      {editingBadgeId === badge.id ? (
+                        /* Edit mode */
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-t2w-muted">Name</label>
+                              <input
+                                type="text"
+                                value={badgeEditForm.name}
+                                onChange={(e) => setBadgeEditForm({ ...badgeEditForm, name: e.target.value })}
+                                className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-t2w-muted">Min KM Required</label>
+                              <input
+                                type="number"
+                                value={badgeEditForm.minKm}
+                                onChange={(e) => setBadgeEditForm({ ...badgeEditForm, minKm: e.target.value })}
+                                className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-t2w-muted">Icon</label>
+                              <select
+                                value={badgeEditForm.icon}
+                                onChange={(e) => setBadgeEditForm({ ...badgeEditForm, icon: e.target.value })}
+                                className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                              >
+                                <option value="shield">Shield</option>
+                                <option value="award">Award</option>
+                                <option value="star">Star</option>
+                                <option value="gem">Gem</option>
+                                <option value="zap">Zap</option>
+                                <option value="crown">Crown</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-medium text-t2w-muted">Color</label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="color"
+                                  value={badgeEditForm.color}
+                                  onChange={(e) => setBadgeEditForm({ ...badgeEditForm, color: e.target.value })}
+                                  className="h-9 w-12 cursor-pointer rounded border border-t2w-border bg-t2w-dark"
+                                />
+                                <input
+                                  type="text"
+                                  value={badgeEditForm.color}
+                                  onChange={(e) => setBadgeEditForm({ ...badgeEditForm, color: e.target.value })}
+                                  className="flex-1 rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-t2w-muted">Description</label>
+                            <textarea
+                              value={badgeEditForm.description}
+                              onChange={(e) => setBadgeEditForm({ ...badgeEditForm, description: e.target.value })}
+                              rows={2}
+                              className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={async () => {
+                                setSavingBadge(true);
+                                try {
+                                  await api.badges.update(badge.id, {
+                                    name: badgeEditForm.name,
+                                    description: badgeEditForm.description,
+                                    minKm: Number(badgeEditForm.minKm),
+                                    icon: badgeEditForm.icon,
+                                    color: badgeEditForm.color,
+                                  });
+                                  setAdminBadges((prev) =>
+                                    prev.map((b) =>
+                                      b.id === badge.id
+                                        ? { ...b, name: badgeEditForm.name, description: badgeEditForm.description, minKm: Number(badgeEditForm.minKm), icon: badgeEditForm.icon, color: badgeEditForm.color }
+                                        : b
+                                    )
+                                  );
+                                  setEditingBadgeId(null);
+                                } catch (err) {
+                                  console.error("Failed to update badge:", err);
+                                } finally {
+                                  setSavingBadge(false);
+                                }
+                              }}
+                              disabled={savingBadge}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-t2w-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-t2w-accent/80 disabled:opacity-50"
+                            >
+                              {savingBadge ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingBadgeId(null)}
+                              className="rounded-lg border border-t2w-border px-4 py-2 text-sm font-medium text-t2w-muted transition-colors hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* View mode */
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-4">
+                            <div
+                              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
+                              style={{ backgroundColor: `${badge.color}20` }}
+                            >
+                              <Award className="h-6 w-6" style={{ color: badge.color }} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold text-white">{badge.name}</h4>
+                                <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: `${badge.color}20`, color: badge.color }}>
+                                  {badge.tier}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-sm text-t2w-muted">{badge.description}</p>
+                              <p className="mt-1 text-xs text-t2w-muted">
+                                Required: <span className="font-medium text-white">{badge.minKm.toLocaleString()} km</span>
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setEditingBadgeId(badge.id);
+                              setBadgeEditForm({
+                                name: badge.name,
+                                description: badge.description,
+                                minKm: String(badge.minKm),
+                                icon: badge.icon,
+                                color: badge.color,
+                              });
+                            }}
+                            className="shrink-0 rounded-lg border border-t2w-border p-2 text-t2w-muted transition-colors hover:border-t2w-accent/30 hover:text-white"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Approvals Tab */}
         {activeTab === "approvals" && canApproveContent && (
           <div className="space-y-8">
@@ -1699,7 +2006,7 @@ export function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-white truncate">{blog.title}</h4>
                         <p className="text-xs text-t2w-muted mt-1">
-                          By {blog.author} &middot;{" "}
+                          By {blog.authorName} &middot;{" "}
                           {new Date(blog.publishDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                         </p>
                       </div>
@@ -2149,6 +2456,10 @@ export function AdminPage() {
               )}
             </div>
           </div>
+        )}
+        {/* Arena Settings Tab - Super Admin only */}
+        {activeTab === "arena" && isSuperAdmin && (
+          <ArenaSettingsTab />
         )}
       </div>
 

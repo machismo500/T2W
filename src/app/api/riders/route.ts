@@ -40,12 +40,29 @@ function computeRideRoleStats(
   return { pilotsDone, sweepsDone, ridesOrganized };
 }
 
+// Compute a cutoff date from period string (e.g., "6m", "1y")
+function periodCutoffDate(period: string | null): Date | null {
+  if (!period || period === "all") return null;
+  const now = new Date();
+  if (period === "6m") {
+    now.setMonth(now.getMonth() - 6);
+    return now;
+  }
+  if (period === "1y") {
+    now.setFullYear(now.getFullYear() - 1);
+    return now;
+  }
+  return null;
+}
+
 // GET /api/riders - list all rider profiles with participation stats
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
     const search = searchParams.get("search") || "";
     const includemerged = searchParams.get("includemerged") === "true";
+    const period = searchParams.get("period");
+    const cutoff = periodCutoffDate(period);
 
     const where: Record<string, unknown> = {};
     if (!includemerged) {
@@ -62,7 +79,7 @@ export async function GET(req: NextRequest) {
       where,
       include: {
         participations: {
-          include: { ride: { select: { id: true, rideNumber: true, title: true, startDate: true, distanceKm: true } } },
+          include: { ride: { select: { id: true, rideNumber: true, title: true, startDate: true, distanceKm: true, type: true } } },
         },
         linkedUsers: {
           select: { role: true },
@@ -73,15 +90,20 @@ export async function GET(req: NextRequest) {
     });
 
     // Load all rides from DB for role stats computation
-    const allRides = await prisma.ride.findMany({
-      select: { leadRider: true, sweepRider: true, organisedBy: true },
+    const allRidesRaw = await prisma.ride.findMany({
+      select: { leadRider: true, sweepRider: true, organisedBy: true, startDate: true },
     });
+    // Filter rides by period cutoff if specified
+    const allRides = cutoff
+      ? allRidesRaw.filter((r) => r.startDate >= cutoff)
+      : allRidesRaw;
 
     const riders = profiles.map((p: typeof profiles[number]) => {
       const stats = computeRideRoleStats(p.name, allRides);
-      // Exclude dropped-out riders from active stats
+      // Exclude dropped-out riders from active stats, and filter by period
       const activeParticipations = p.participations.filter(
-        (pp: typeof p.participations[number]) => !pp.droppedOut
+        (pp: typeof p.participations[number]) =>
+          !pp.droppedOut && (!cutoff || pp.ride.startDate >= cutoff)
       );
       return {
       id: p.id,
@@ -98,6 +120,10 @@ export async function GET(req: NextRequest) {
       mergedIntoId: p.mergedIntoId,
       userRole: p.role !== "rider" ? p.role : (p.linkedUsers[0]?.role || null),
       ridesCompleted: activeParticipations.length,
+      dayRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "day").length,
+      weekendRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "weekend").length,
+      multiDayRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "multi-day").length,
+      expeditionRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "expedition").length,
       totalKm: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
       totalPoints: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
       ridesParticipated: activeParticipations.map((pp: typeof p.participations[number]) => ({

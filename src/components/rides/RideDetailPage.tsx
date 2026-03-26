@@ -233,6 +233,7 @@ interface Ride {
   distanceKm: number;
   maxRiders: number;
   registeredRiders: number;
+  activeRegistrations?: number;
   confirmedRiderNames?: string[];
   difficulty: string;
   description: string;
@@ -652,7 +653,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     );
   }
 
-  const spotsLeft = ride.maxRiders - ride.registeredRiders;
+  const spotsLeft = ride.maxRiders - (ride.activeRegistrations ?? ride.registeredRiders);
   const difficultyColors: Record<string, string> = {
     easy: "text-green-400 bg-green-400/10",
     moderate: "text-yellow-400 bg-yellow-400/10",
@@ -669,7 +670,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
           className="mb-8 inline-flex items-center gap-2 text-sm text-t2w-muted transition-colors hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to T2W Tales
+          Back to Rides
         </Link>
 
         {/* Header */}
@@ -679,10 +680,14 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               className={`rounded-lg px-3 py-1 text-sm font-medium capitalize ${
                 ride.status === "upcoming"
                   ? "bg-blue-400/10 text-blue-400"
+                  : ride.status === "ongoing"
+                  ? "bg-yellow-400/10 text-yellow-400"
+                  : ride.status === "cancelled"
+                  ? "bg-red-400/10 text-red-400"
                   : "bg-green-400/10 text-green-400"
               }`}
             >
-              {ride.status}
+              {ride.status === "ongoing" ? "Ongoing Ride" : ride.status}
             </span>
             <span
               className={`rounded-lg px-3 py-1 text-sm font-medium ${difficultyColors[ride.difficulty]}`}
@@ -957,14 +962,19 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
             )}
 
             {/* Riders List - for completed rides with rider data */}
-            {ride.status === "completed" && ride.riders && ride.riders.length > 0 && (
+            {ride.status === "completed" && ((ride.riders && ride.riders.length > 0) || (ride.confirmedRiderNames && ride.confirmedRiderNames.length > 0) || (ride.participations && ride.participations.length > 0)) && (() => {
+              const confirmedNames = ride.confirmedRiderNames ?? [];
+              const participationNames = (ride.participations ?? []).filter((p) => !p.droppedOut).map((p) => p.riderName);
+              const staticRiders = ride.riders ?? [];
+              const ridersList = confirmedNames.length > 0 ? confirmedNames : participationNames.length > 0 ? participationNames : staticRiders;
+              return (
               <div className="card">
                 <h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-white">
                   <Users className="h-5 w-5 text-t2w-accent" />
-                  Riders ({ride.riders.length})
+                  Riders ({ridersList.length})
                 </h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {ride.riders.map((riderName, index) => {
+                  {ridersList.map((riderName, index) => {
                     const riderId = getRiderId(riderName, riderNameToId);
                     const avatar = riderId ? riderIdToAvatar[riderId] : null;
                     const initials = riderName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -1006,7 +1016,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   })}
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Approved Ride Posts / Tales */}
             {ridePosts.length > 0 && (
