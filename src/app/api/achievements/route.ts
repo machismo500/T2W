@@ -26,6 +26,12 @@ function crewNameMatchesRider(crewName: string, riderName: string): boolean {
   return false;
 }
 
+// Participation points by ride type:
+// expedition = 10 pts; day / weekend / multi-day = 5 pts
+function pointsForRideType(type: string): number {
+  return type === "expedition" ? 10 : 5;
+}
+
 // GET /api/achievements - compute period achievement data
 export async function GET() {
   try {
@@ -69,6 +75,7 @@ export async function GET() {
         rideNumber: true,
         title: true,
         startDate: true,
+        type: true,
         leadRider: true,
         sweepRider: true,
         organisedBy: true,
@@ -77,10 +84,20 @@ export async function GET() {
     });
 
     const totalRidesInPeriod = ridesInPeriod.length;
-    const maxPossiblePerRide = settings.pointsPerParticipation + settings.pointsPerOrganize + settings.pointsPerSweep;
-    const maxPossible = totalRidesInPeriod * maxPossiblePerRide;
-    // Threshold is based on actual total rides in period × participation points
-    const thresholdBase = totalRidesInPeriod * settings.pointsPerParticipation;
+
+    // Build a map of rideId → participation points (varies by ride type)
+    const ridePointsMap: Record<string, number> = {};
+    for (const ride of ridesInPeriod) {
+      ridePointsMap[ride.id] = pointsForRideType(ride.type);
+    }
+
+    // thresholdBase = sum of participation points across all rides in period
+    const thresholdBase = ridesInPeriod.reduce((sum, r) => sum + pointsForRideType(r.type), 0);
+    // maxPossible = participation + organize + sweep for every ride
+    const maxPossible = ridesInPeriod.reduce(
+      (sum, r) => sum + pointsForRideType(r.type) + settings.pointsPerOrganize + settings.pointsPerSweep,
+      0
+    );
     const threshold = thresholdBase * (settings.thresholdPercent / 100);
 
     // Get all rider profiles with participations in the period
@@ -126,7 +143,11 @@ export async function GET() {
           }
         }
 
-        const participationPts = ridesCompletedInPeriod * settings.pointsPerParticipation;
+        // Sum actual points per participated ride based on ride type
+        const participationPts = p.participations.reduce(
+          (sum, participation) => sum + (ridePointsMap[participation.ride.id] ?? 5),
+          0
+        );
         const organizePts = ridesOrganizedInPeriod * settings.pointsPerOrganize;
         const sweepPts = sweepsDoneInPeriod * settings.pointsPerSweep;
         const totalPts = participationPts + organizePts + sweepPts;

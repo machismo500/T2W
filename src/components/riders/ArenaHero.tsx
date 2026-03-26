@@ -68,7 +68,7 @@ export function ArenaHero({ totalRiders, totalKm, totalRides, period, onPeriodCh
               }`}
             >
               <Award className="h-3.5 w-3.5" />
-              Achievements
+              Active Status
             </button>
           </div>
 

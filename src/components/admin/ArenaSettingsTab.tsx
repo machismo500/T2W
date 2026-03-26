@@ -205,19 +205,12 @@ export function ArenaSettingsTab() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-t2w-muted">
-                  Points per Participation
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  value={achievement.pointsPerParticipation}
-                  onChange={(e) => setAchievement({ ...achievement, pointsPerParticipation: parseFloat(e.target.value) || 0 })}
-                  className="w-full rounded-lg border border-t2w-border bg-t2w-dark px-3 py-2 text-sm text-white focus:border-t2w-accent/50 focus:outline-none"
-                />
-              </div>
+            <div className="mt-4 rounded-lg bg-t2w-dark/60 p-3 text-xs text-t2w-muted">
+              <strong className="text-white">Participation points (fixed by ride type):</strong>{" "}
+              Day / Weekend / Multi-day = 5 pts · Expedition = 10 pts
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-t2w-muted">
                   Points per Organise
@@ -260,8 +253,8 @@ export function ArenaSettingsTab() {
             {achievement.periodStart && achievement.periodEnd && (
               <div className="mt-4 rounded-lg bg-t2w-dark/60 p-3 text-xs text-t2w-muted">
                 <strong className="text-white">Preview:</strong>{" "}
-                Total points = Total rides in period × {achievement.pointsPerParticipation} pts (participation).{" "}
-                Threshold = {achievement.thresholdPercent}% of total points. Riders achieving ≥ {achievement.thresholdPercent}% will be highlighted.
+                Base points = sum of participation pts per ride (5 or 10 by type).{" "}
+                Threshold = {achievement.thresholdPercent}% of base points. Riders achieving ≥ {achievement.thresholdPercent}% will be highlighted.
               </div>
             )}
 
