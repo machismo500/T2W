@@ -121,6 +121,7 @@ const ROLE_LABELS: Record<string, string> = {
   core_member: "Core Member",
   t2w_rider: "T2W Rider",
   rider: "Rider",
+  admin: "Core Member",  // legacy role — treat as core_member for display
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -128,6 +129,7 @@ const ROLE_COLORS: Record<string, string> = {
   core_member: "bg-t2w-accent/10 text-t2w-accent",
   t2w_rider: "bg-green-400/10 text-green-400",
   rider: "bg-t2w-surface-light text-t2w-muted",
+  admin: "bg-t2w-accent/10 text-t2w-accent",  // legacy role — same colour as core_member
 };
 
 type RiderSearchResult = { id: string; name: string; email: string; phone: string; riderProfileId?: string | null; userId?: string | null };
@@ -1259,6 +1261,9 @@ export function AdminPage() {
                                 <option value="core_member">Core Member</option>
                                 <option value="t2w_rider">T2W Rider</option>
                                 <option value="rider">Rider</option>
+                                {!["superadmin", "core_member", "t2w_rider", "rider"].includes(u.role) && (
+                                  <option value={u.role} disabled>{u.role} (legacy)</option>
+                                )}
                               </select>
                               <button
                                 onClick={() => setRoleChangeUser(null)}
