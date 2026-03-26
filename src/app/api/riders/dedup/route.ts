@@ -50,14 +50,16 @@ export async function POST() {
       const target = group[0];
       const sources = group.slice(1);
 
+      // Load target's existing ride IDs once before iterating sources
+      const targetRideIds = new Set(
+        (await prisma.rideParticipation.findMany({
+          where: { riderProfileId: target.id },
+          select: { rideId: true },
+        })).map((p) => p.rideId)
+      );
+
       for (const source of sources) {
         // Move participation records from source to target
-        const targetRideIds = new Set(
-          (await prisma.rideParticipation.findMany({
-            where: { riderProfileId: target.id },
-            select: { rideId: true },
-          })).map((p) => p.rideId)
-        );
 
         for (const participation of source.participations) {
           if (targetRideIds.has(participation.rideId)) {

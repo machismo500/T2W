@@ -102,7 +102,9 @@ export async function PUT(
     }
 
     const data = await req.json();
-    const allowedFields = ["name", "email", "phone", "address", "emergencyContact", "emergencyPhone", "bloodGroup", "avatarUrl", "ridesOrganized", "sweepsDone", "pilotsDone"];
+    const userFields = ["name", "email", "phone", "address", "emergencyContact", "emergencyPhone", "bloodGroup", "avatarUrl"];
+    const adminOnlyFields = ["ridesOrganized", "sweepsDone", "pilotsDone"];
+    const allowedFields = isSuperAdmin ? [...userFields, ...adminOnlyFields] : userFields;
     const updateData: Record<string, unknown> = {};
     for (const field of allowedFields) {
       if (data[field] !== undefined) {

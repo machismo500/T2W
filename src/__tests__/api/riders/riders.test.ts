@@ -7,9 +7,6 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(),
       create: vi.fn(),
     },
-    ride: {
-      findMany: vi.fn(),
-    },
     user: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -28,7 +25,6 @@ import { getCurrentUser } from '@/lib/auth';
 const mockGetCurrentUser = getCurrentUser as ReturnType<typeof vi.fn>;
 const mockProfileFindMany = prisma.riderProfile.findMany as ReturnType<typeof vi.fn>;
 const mockProfileCreate = prisma.riderProfile.create as ReturnType<typeof vi.fn>;
-const mockRideFindMany = prisma.ride.findMany as ReturnType<typeof vi.fn>;
 const mockUserFindUnique = prisma.user.findUnique as ReturnType<typeof vi.fn>;
 
 const mockProfile = {
@@ -44,6 +40,9 @@ const mockProfile = {
   avatarUrl: null,
   role: 'rider',
   mergedIntoId: null,
+  ridesOrganized: 0,
+  sweepsDone: 0,
+  pilotsDone: 0,
   linkedUsers: [{ role: 'rider' }],
   participations: [
     {
@@ -63,11 +62,11 @@ const mockProfile = {
 describe('GET /api/riders', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
   });
 
   it('returns rider profiles with stats', async () => {
     mockProfileFindMany.mockResolvedValue([mockProfile]);
-    mockRideFindMany.mockResolvedValue([]);
 
     const req = createNextRequest('http://localhost:3000/api/riders');
     const { status, data } = await parseResponse(await GET(req));
@@ -82,7 +81,6 @@ describe('GET /api/riders', () => {
 
   it('excludes merged profiles by default', async () => {
     mockProfileFindMany.mockResolvedValue([]);
-    mockRideFindMany.mockResolvedValue([]);
 
     const req = createNextRequest('http://localhost:3000/api/riders');
     await GET(req);
@@ -96,7 +94,6 @@ describe('GET /api/riders', () => {
 
   it('includes merged profiles when ?includemerged=true', async () => {
     mockProfileFindMany.mockResolvedValue([]);
-    mockRideFindMany.mockResolvedValue([]);
 
     const req = createNextRequest('http://localhost:3000/api/riders?includemerged=true');
     await GET(req);
@@ -110,7 +107,6 @@ describe('GET /api/riders', () => {
 
   it('filters by search query', async () => {
     mockProfileFindMany.mockResolvedValue([]);
-    mockRideFindMany.mockResolvedValue([]);
 
     const req = createNextRequest('http://localhost:3000/api/riders?search=john');
     await GET(req);
@@ -146,7 +142,6 @@ describe('GET /api/riders', () => {
       ],
     };
     mockProfileFindMany.mockResolvedValue([profileWithDropout]);
-    mockRideFindMany.mockResolvedValue([]);
 
     const req = createNextRequest('http://localhost:3000/api/riders');
     const { data } = await parseResponse(await GET(req));
@@ -155,18 +150,15 @@ describe('GET /api/riders', () => {
     expect(data.riders[0].totalKm).toBe(150);
   });
 
-  it('computes ride role stats (pilot, sweep, organized)', async () => {
-    mockProfileFindMany.mockResolvedValue([mockProfile]);
-    mockRideFindMany.mockResolvedValue([
-      { leadRider: 'Test Rider', sweepRider: 'Someone', organisedBy: 'Test Rider' },
-      { leadRider: 'Someone', sweepRider: 'Test Rider', organisedBy: null },
-    ]);
+  it('returns cached ride role stats (pilot, sweep, organized) from profile', async () => {
+    const profileWithStats = { ...mockProfile, pilotsDone: 3, sweepsDone: 2, ridesOrganized: 1 };
+    mockProfileFindMany.mockResolvedValue([profileWithStats]);
 
     const req = createNextRequest('http://localhost:3000/api/riders');
     const { data } = await parseResponse(await GET(req));
 
-    expect(data.riders[0].pilotsDone).toBe(1);
-    expect(data.riders[0].sweepsDone).toBe(1);
+    expect(data.riders[0].pilotsDone).toBe(3);
+    expect(data.riders[0].sweepsDone).toBe(2);
     expect(data.riders[0].ridesOrganized).toBe(1);
   });
 });

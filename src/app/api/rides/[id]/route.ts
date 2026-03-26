@@ -2,15 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { computeRideStatus } from "@/lib/ride-status";
-
-function safeJsonParse(value: string | null | undefined, fallback: unknown): unknown {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
+import { safeJsonParse } from "@/lib/json-utils";
 
 // GET /api/rides/[id] - get a single ride
 export async function GET(

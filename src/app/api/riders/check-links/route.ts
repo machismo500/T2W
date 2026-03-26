@@ -121,6 +121,26 @@ export async function POST(req: Request) {
       profilesByName.set(p.name.toLowerCase().trim(), p.id);
     }
 
+    // Pre-compute all matched profileIds so we can batch-load participations
+    const matchedProfileIds = new Set<string>();
+    for (const u of unlinkedUsers) {
+      const pid = profilesByEmail.get(u.email.toLowerCase().trim()) ||
+        (includeNameMatches ? profilesByName.get(u.name.toLowerCase().trim()) : undefined);
+      if (pid) matchedProfileIds.add(pid);
+    }
+
+    // Batch-load all participations for matched profiles
+    const allParticipations = await prisma.rideParticipation.findMany({
+      where: { riderProfileId: { in: [...matchedProfileIds] } },
+      include: { ride: { select: { distanceKm: true } } },
+    });
+    const participationsByProfile = new Map<string, typeof allParticipations>();
+    for (const p of allParticipations) {
+      const arr = participationsByProfile.get(p.riderProfileId) ?? [];
+      arr.push(p);
+      participationsByProfile.set(p.riderProfileId, arr);
+    }
+
     let linkedByEmail = 0;
     let linkedByName = 0;
     const linked: Array<{ userName: string; userEmail: string; matchType: string }> = [];
@@ -143,11 +163,8 @@ export async function POST(req: Request) {
           data: { linkedRiderId: profileId },
         });
 
-        // Sync stats
-        const participations = await prisma.rideParticipation.findMany({
-          where: { riderProfileId: profileId },
-          include: { ride: { select: { distanceKm: true } } },
-        });
+        // Sync stats using pre-loaded participations
+        const participations = participationsByProfile.get(profileId) ?? [];
         const totalKm = participations.reduce((sum, p) => sum + p.ride.distanceKm, 0);
         await prisma.user.update({
           where: { id: u.id },

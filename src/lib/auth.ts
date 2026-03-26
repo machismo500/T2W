@@ -3,9 +3,13 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "t2w-fallback-secret"
-);
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET environment variable is required in production");
+  }
+  return new TextEncoder().encode(secret || "t2w-fallback-secret");
+}
 
 const TOKEN_NAME = "t2w-token";
 const TOKEN_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -26,14 +30,14 @@ export async function createToken(userId: string): Promise<string> {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${TOKEN_MAX_AGE}s`)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifyToken(
   token: string
 ): Promise<{ userId: string } | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return { userId: payload.userId as string };
   } catch {
     return null;
@@ -70,12 +74,6 @@ export async function getCurrentUser() {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
-    include: {
-      motorcycles: true,
-      earnedBadges: {
-        include: { badge: true },
-      },
-    },
   });
 
   if (!user) return null;
@@ -111,9 +109,3 @@ export function requireAuth(user: unknown): asserts user is NonNullable<
   }
 }
 
-export function requireAdmin(user: Awaited<ReturnType<typeof getCurrentUser>>) {
-  requireAuth(user);
-  if (user.role !== "admin" && user.role !== "superadmin") {
-    throw new Error("Forbidden");
-  }
-}

@@ -41,7 +41,7 @@ describe('POST /api/auth/send-reset-otp', () => {
     expect(status).toBe(400);
   });
 
-  it('returns 404 when user does not exist', async () => {
+  it('returns 200 silently when user does not exist (prevent enumeration)', async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
 
     const req = createNextRequest('http://localhost:3000/api/auth/send-reset-otp', {
@@ -50,8 +50,9 @@ describe('POST /api/auth/send-reset-otp', () => {
     });
     const res = await POST(req);
     const { status, data } = await parseResponse(res);
-    expect(status).toBe(404);
-    expect(data.error).toContain('No account');
+    expect(status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.emailSent).toBe(false);
   });
 
   it('returns 503 when SMTP not configured', async () => {

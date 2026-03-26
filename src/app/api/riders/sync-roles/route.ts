@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-
-function safeJsonParse<T>(val: string | null | undefined, fallback: T): T {
-  if (!val) return fallback;
-  try {
-    return JSON.parse(val);
-  } catch {
-    return fallback;
-  }
-}
+import { safeJsonParse } from "@/lib/json-utils";
 
 // POST /api/riders/sync-roles - comprehensive role sync based on ALL ride participation data
 // 1. Cross-references Ride.riders JSON with RideParticipation records

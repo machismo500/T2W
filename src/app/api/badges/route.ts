@@ -80,8 +80,10 @@ export async function awardBadgesForUser(userId: string, totalKm: number): Promi
 
   for (const badge of allBadges) {
     if (totalKm >= badge.minKm && !existingBadgeIds.has(badge.id)) {
-      await prisma.userBadge.create({
-        data: { userId, badgeId: badge.id },
+      await prisma.userBadge.upsert({
+        where: { userId_badgeId: { userId, badgeId: badge.id } },
+        update: {},
+        create: { userId, badgeId: badge.id },
       });
       newlyAwarded.push(badge.name);
     }

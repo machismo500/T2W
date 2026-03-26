@@ -16,7 +16,7 @@ model User {
   phone          String?
   password       String
   avatar         String?
-  role           String   @default("rider") // rider | admin | superadmin
+  role           String   @default("rider") // rider | t2w_rider | core_member | superadmin
   joinDate       DateTime @default(now())
   isApproved     Boolean  @default(false)
   city           String?
@@ -35,6 +35,8 @@ model User {
   riderProfile      RiderProfile? @relation(fields: [linkedRiderId], references: [id])
 
   @@index([linkedRiderId])
+  @@index([role])
+  @@index([isApproved])
 }
 
 // Rider profile data - the primary record for all riders (imported from Excel/admin)
@@ -95,6 +97,8 @@ model Motorcycle {
   userId   String
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Badge {
@@ -160,6 +164,9 @@ model Ride {
   participations   RideParticipation[]
   liveSession      LiveRideSession?
   ridePosts        RidePost[]
+
+  @@index([status])
+  @@index([startDate])
 }
 
 model RideRegistration {
@@ -191,6 +198,8 @@ model RideRegistration {
   ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
 
   @@unique([userId, rideId])
+  @@index([userId])
+  @@index([rideId, approvalStatus])
 }
 
 model BlogPost {
@@ -267,6 +276,8 @@ model LiveRideSession {
   ride      Ride               @relation(fields: [rideId], references: [id], onDelete: Cascade)
   locations LiveRideLocation[]
   breaks    LiveRideBreak[]
+
+  @@index([status])
 }
 
 model LiveRideLocation {
