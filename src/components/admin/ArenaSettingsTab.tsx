@@ -253,8 +253,8 @@ export function ArenaSettingsTab() {
             {achievement.periodStart && achievement.periodEnd && (
               <div className="mt-4 rounded-lg bg-t2w-dark/60 p-3 text-xs text-t2w-muted">
                 <strong className="text-white">Preview:</strong>{" "}
-                Base points = sum of participation pts per ride (5 or 10 by type).{" "}
-                Threshold = {achievement.thresholdPercent}% of base points. Riders achieving ≥ {achievement.thresholdPercent}% will be highlighted.
+                Threshold base = total rides × 5 pts (fixed, regardless of ride type).{" "}
+                Threshold = {achievement.thresholdPercent}% of threshold base. Riders achieving ≥ {achievement.thresholdPercent}% will be highlighted.
               </div>
             )}
 

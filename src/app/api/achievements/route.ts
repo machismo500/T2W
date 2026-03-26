@@ -91,8 +91,8 @@ export async function GET() {
       ridePointsMap[ride.id] = pointsForRideType(ride.type);
     }
 
-    // thresholdBase = sum of participation points across all rides in period
-    const thresholdBase = ridesInPeriod.reduce((sum, r) => sum + pointsForRideType(r.type), 0);
+    // thresholdBase is always 5 pts per ride (fixed, regardless of ride type)
+    const thresholdBase = totalRidesInPeriod * 5;
     // maxPossible = participation + organize + sweep for every ride
     const maxPossible = ridesInPeriod.reduce(
       (sum, r) => sum + pointsForRideType(r.type) + settings.pointsPerOrganize + settings.pointsPerSweep,
