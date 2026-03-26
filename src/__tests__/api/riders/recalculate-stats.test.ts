@@ -1,12 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseResponse, mockSuperAdmin, mockCoreMember, mockRider } from '@/__tests__/helpers';
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
+vi.mock('@/lib/db', () => {
+  const mock: Record<string, unknown> = {
     riderProfile: { findMany: vi.fn(), update: vi.fn() },
     ride: { findMany: vi.fn() },
-  },
-}));
+    $transaction: null,
+  };
+  mock.$transaction = vi.fn().mockImplementation(async (ops: unknown) => {
+    // Handle array form: prisma.$transaction([op1, op2, ...])
+    if (Array.isArray(ops)) return Promise.all(ops);
+    // Handle callback form
+    return (ops as (p: typeof mock) => unknown)(mock);
+  });
+  return { prisma: mock };
+});
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
@@ -46,11 +54,6 @@ describe('POST /api/riders/recalculate-stats', () => {
   it('recalculates pilot/sweep/organized counts from ride data', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(mockSuperAdmin as any);
 
-    const profiles = [
-      { id: 'p1', name: 'Alice Smith' },
-      { id: 'p2', name: 'Bob Jones' },
-    ];
-
     const rides = [
       { id: 'r1', rideNumber: 1, leadRider: 'Alice Smith', sweepRider: 'Bob Jones', organisedBy: 'Alice Smith' },
       { id: 'r2', rideNumber: 2, leadRider: 'Bob Jones', sweepRider: 'Alice Smith', organisedBy: null },
@@ -62,10 +65,8 @@ describe('POST /api/riders/recalculate-stats', () => {
       { id: 'p2', name: 'Bob Jones', pilotsDone: 0, sweepsDone: 0, ridesOrganized: 0 },
     ];
 
-    // First call: profiles for name lookup, second call: allProfiles with stats
-    vi.mocked(prisma.riderProfile.findMany)
-      .mockResolvedValueOnce(profiles as any)
-      .mockResolvedValueOnce(allProfilesWithStats as any);
+    // Single call returns profiles with all needed fields
+    vi.mocked(prisma.riderProfile.findMany).mockResolvedValue(allProfilesWithStats as any);
     vi.mocked(prisma.ride.findMany).mockResolvedValue(rides as any);
     vi.mocked(prisma.riderProfile.update).mockResolvedValue({} as any);
 
@@ -95,10 +96,6 @@ describe('POST /api/riders/recalculate-stats', () => {
   it('reports unmatched names', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(mockSuperAdmin as any);
 
-    const profiles = [
-      { id: 'p1', name: 'Alice Smith' },
-    ];
-
     const rides = [
       { id: 'r1', rideNumber: 1, leadRider: 'Unknown Rider', sweepRider: 'Alice Smith', organisedBy: null },
     ];
@@ -107,9 +104,7 @@ describe('POST /api/riders/recalculate-stats', () => {
       { id: 'p1', name: 'Alice Smith', pilotsDone: 0, sweepsDone: 0, ridesOrganized: 0 },
     ];
 
-    vi.mocked(prisma.riderProfile.findMany)
-      .mockResolvedValueOnce(profiles as any)
-      .mockResolvedValueOnce(allProfilesWithStats as any);
+    vi.mocked(prisma.riderProfile.findMany).mockResolvedValue(allProfilesWithStats as any);
     vi.mocked(prisma.ride.findMany).mockResolvedValue(rides as any);
     vi.mocked(prisma.riderProfile.update).mockResolvedValue({} as any);
 
@@ -123,10 +118,6 @@ describe('POST /api/riders/recalculate-stats', () => {
   it('handles no changes needed', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(mockSuperAdmin as any);
 
-    const profiles = [
-      { id: 'p1', name: 'Alice Smith' },
-    ];
-
     const rides = [
       { id: 'r1', rideNumber: 1, leadRider: 'Alice Smith', sweepRider: null, organisedBy: null },
     ];
@@ -135,9 +126,7 @@ describe('POST /api/riders/recalculate-stats', () => {
       { id: 'p1', name: 'Alice Smith', pilotsDone: 1, sweepsDone: 0, ridesOrganized: 0 },
     ];
 
-    vi.mocked(prisma.riderProfile.findMany)
-      .mockResolvedValueOnce(profiles as any)
-      .mockResolvedValueOnce(allProfilesWithStats as any);
+    vi.mocked(prisma.riderProfile.findMany).mockResolvedValue(allProfilesWithStats as any);
     vi.mocked(prisma.ride.findMany).mockResolvedValue(rides as any);
 
     const res = await POST();

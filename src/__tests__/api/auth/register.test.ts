@@ -73,7 +73,7 @@ describe('POST /api/auth/register', () => {
   it('returns 400 when name is missing', async () => {
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { email: 'new@example.com', password: 'password123' },
+      body: { email: 'new@example.com', password: 'securepassword1' },
     });
 
     const res = await POST(req);
@@ -86,7 +86,7 @@ describe('POST /api/auth/register', () => {
   it('returns 400 when email is missing', async () => {
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { name: 'New User', password: 'password123' },
+      body: { name: 'New User', password: 'securepassword1' },
     });
 
     const res = await POST(req);
@@ -112,14 +112,14 @@ describe('POST /api/auth/register', () => {
   it('returns 400 when password is too short', async () => {
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { name: 'New User', email: 'new@example.com', password: '12345' },
+      body: { name: 'New User', email: 'new@example.com', password: '11charpassw' },
     });
 
     const res = await POST(req);
     const { status, data } = await parseResponse(res);
 
     expect(status).toBe(400);
-    expect(data.error).toBe('Password must be at least 6 characters');
+    expect(data.error).toBe('Password must be at least 12 characters');
   });
 
   it('returns 409 when email already exists', async () => {
@@ -129,7 +129,7 @@ describe('POST /api/auth/register', () => {
 
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { name: 'New User', email: 'new@example.com', password: 'password123' },
+      body: { name: 'New User', email: 'new@example.com', password: 'securepassword1' },
     });
 
     const res = await POST(req);
@@ -142,7 +142,7 @@ describe('POST /api/auth/register', () => {
   it('returns 200 with user data on successful registration', async () => {
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { name: 'New User', email: 'new@example.com', password: 'password123' },
+      body: { name: 'New User', email: 'new@example.com', password: 'securepassword1' },
     });
 
     const res = await POST(req);
@@ -157,7 +157,7 @@ describe('POST /api/auth/register', () => {
   it('sets auth cookie on successful registration', async () => {
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { name: 'New User', email: 'new@example.com', password: 'password123' },
+      body: { name: 'New User', email: 'new@example.com', password: 'securepassword1' },
     });
 
     await POST(req);
@@ -170,7 +170,7 @@ describe('POST /api/auth/register', () => {
 
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { name: 'New User', email: 'new@example.com', password: 'password123' },
+      body: { name: 'New User', email: 'new@example.com', password: 'securepassword1' },
     });
 
     await POST(req);
@@ -196,7 +196,7 @@ describe('POST /api/auth/register', () => {
 
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { name: 'New User', email: 'new@example.com', password: 'password123' },
+      body: { name: 'New User', email: 'new@example.com', password: 'securepassword1' },
     });
 
     await POST(req);
@@ -212,7 +212,7 @@ describe('POST /api/auth/register', () => {
       body: {
         name: 'New User',
         email: 'new@example.com',
-        password: 'password123',
+        password: 'securepassword1',
         motorcycle: 'Honda CB500',
       },
     });
@@ -230,7 +230,7 @@ describe('POST /api/auth/register', () => {
   it('does not create motorcycle when not provided', async () => {
     const req = createNextRequest('http://localhost:3000/api/auth/register', {
       method: 'POST',
-      body: { name: 'New User', email: 'new@example.com', password: 'password123' },
+      body: { name: 'New User', email: 'new@example.com', password: 'securepassword1' },
     });
 
     await POST(req);

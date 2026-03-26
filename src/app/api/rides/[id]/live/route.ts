@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { safeJsonParse } from "@/lib/json-utils";
 
 // GET /api/rides/[id]/live - fetch live session state + rider locations
 export async function GET(
@@ -96,7 +97,7 @@ export async function GET(
         leadRiderId: session.leadRiderId,
         sweepRiderId: session.sweepRiderId,
         plannedRoute: session.plannedRoute
-          ? JSON.parse(session.plannedRoute)
+          ? safeJsonParse(session.plannedRoute, undefined)
           : undefined,
         breaks: session.breaks.map((b) => ({
           id: b.id,
@@ -151,9 +152,11 @@ export async function POST(
         );
       }
 
-      // Fuzzy-match lead/sweep rider names to user accounts
-      const leadRiderId = await matchRiderToUser(ride.leadRider);
-      const sweepRiderId = await matchRiderToUser(ride.sweepRider);
+      // Fuzzy-match lead/sweep rider names to user accounts (in parallel)
+      const [leadRiderId, sweepRiderId] = await Promise.all([
+        matchRiderToUser(ride.leadRider),
+        matchRiderToUser(ride.sweepRider),
+      ]);
 
       // Parse planned route from ride.route (JSON array of place names or coords)
       let plannedRoute: string | null = null;

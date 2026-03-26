@@ -1,16 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createNextRequest, parseResponse, mockSuperAdmin, mockRider, mockT2WRider } from '@/__tests__/helpers';
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
-    ride: {
-      findUnique: vi.fn(),
-    },
+vi.mock('@/lib/db', () => {
+  const mock: Record<string, unknown> = {
+    ride: { findUnique: vi.fn() },
     rideRegistration: {
       create: vi.fn(),
+      count: vi.fn(),
     },
-  },
-}));
+    $transaction: null,
+  };
+  mock.$transaction = vi.fn().mockImplementation(async (fn: (p: typeof mock) => unknown) => fn(mock));
+  return { prisma: mock };
+});
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
@@ -31,6 +33,7 @@ import { getCurrentUser } from '@/lib/auth';
 const mockGetCurrentUser = getCurrentUser as ReturnType<typeof vi.fn>;
 const mockFindUnique = prisma.ride.findUnique as ReturnType<typeof vi.fn>;
 const mockCreateRegistration = prisma.rideRegistration.create as ReturnType<typeof vi.fn>;
+const mockCountRegistration = prisma.rideRegistration.count as ReturnType<typeof vi.fn>;
 
 // Helper to call the route handler with params
 function callPOST(rideId: string, body: Record<string, unknown>) {
@@ -74,6 +77,12 @@ describe('POST /api/rides/[id]/register', () => {
     // Default: SMTP not configured (no email sending)
     delete process.env.SMTP_USER;
     delete process.env.SMTP_PASS;
+    // Default: 0 active registrations for the TOCTOU transaction count
+    mockCountRegistration.mockResolvedValue(0);
+    // Re-setup $transaction after clearAllMocks (routes through the same prisma mock)
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (p: typeof prisma) => unknown) => fn(prisma)
+    );
   });
 
   it('returns 401 for unauthenticated user', async () => {

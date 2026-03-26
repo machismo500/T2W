@@ -1,14 +1,18 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
+
+// Dev-only: unique random secret per server process (tokens invalidate on restart — acceptable in dev)
+const DEV_JWT_FALLBACK = randomBytes(32).toString("hex");
 
 function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
   if (!secret && process.env.NODE_ENV === "production") {
     throw new Error("JWT_SECRET environment variable is required in production");
   }
-  return new TextEncoder().encode(secret || "t2w-fallback-secret");
+  return new TextEncoder().encode(secret || DEV_JWT_FALLBACK);
 }
 
 const TOKEN_NAME = "t2w-token";

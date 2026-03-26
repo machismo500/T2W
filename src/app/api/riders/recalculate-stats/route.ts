@@ -15,11 +15,13 @@ export async function POST() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Load all rider profiles (non-merged)
-    const profiles = await prisma.riderProfile.findMany({
+    // Load all rider profiles (non-merged) with stats for both lookup and update
+    const allProfiles = await prisma.riderProfile.findMany({
       where: { mergedIntoId: null },
-      select: { id: true, name: true },
+      select: { id: true, name: true, pilotsDone: true, sweepsDone: true, ridesOrganized: true },
     });
+    // Alias for name-lookup phase
+    const profiles = allProfiles;
 
     // Known aliases: crew name in ride data → canonical profile name
     const nameAliases: Record<string, string> = {
@@ -88,12 +90,8 @@ export async function POST() {
       if (orgId) organizedCounts[orgId] = (organizedCounts[orgId] || 0) + 1;
     }
 
-    // Update all profiles
+    // Compute which profiles need updating
     const updates: Array<{ id: string; name: string; old: { p: number; s: number; o: number }; new: { p: number; s: number; o: number } }> = [];
-    const allProfiles = await prisma.riderProfile.findMany({
-      where: { mergedIntoId: null },
-      select: { id: true, name: true, pilotsDone: true, sweepsDone: true, ridesOrganized: true },
-    });
 
     for (const p of allProfiles) {
       const newPilots = pilotCounts[p.id] || 0;
@@ -107,16 +105,23 @@ export async function POST() {
           old: { p: p.pilotsDone, s: p.sweepsDone, o: p.ridesOrganized },
           new: { p: newPilots, s: newSweeps, o: newOrganized },
         });
-
-        await prisma.riderProfile.update({
-          where: { id: p.id },
-          data: {
-            pilotsDone: newPilots,
-            sweepsDone: newSweeps,
-            ridesOrganized: newOrganized,
-          },
-        });
       }
+    }
+
+    // Batch all updates in a single transaction
+    if (updates.length > 0) {
+      await prisma.$transaction(
+        updates.map((u) =>
+          prisma.riderProfile.update({
+            where: { id: u.id },
+            data: {
+              pilotsDone: u.new.p,
+              sweepsDone: u.new.s,
+              ridesOrganized: u.new.o,
+            },
+          })
+        )
+      );
     }
 
     // Report unmatched names for debugging
