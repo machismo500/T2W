@@ -182,36 +182,42 @@ export function ArenaLeaderboard({
             <h3 className="mb-3 text-sm font-semibold text-white">
               Arena Score Formula
             </h3>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mb-1 text-xs font-medium text-t2w-muted">Points Per Ride</div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
-                <p className="text-lg font-bold text-blue-400">
-                  {weights.ridesCompleted}
-                </p>
-                <p className="text-xs text-t2w-muted">pts / Ride</p>
+                <p className="text-lg font-bold text-blue-400">{weights.ptsDay}</p>
+                <p className="text-xs text-t2w-muted">Day Ride</p>
               </div>
               <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
-                <p className="text-lg font-bold text-t2w-accent">
-                  {weights.ridesOrganized}
-                </p>
+                <p className="text-lg font-bold text-blue-400">{weights.ptsWeekend}</p>
+                <p className="text-xs text-t2w-muted">Weekend</p>
+              </div>
+              <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
+                <p className="text-lg font-bold text-blue-400">{weights.ptsMultiDay}</p>
+                <p className="text-xs text-t2w-muted">Multi-Day</p>
+              </div>
+              <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
+                <p className="text-lg font-bold text-blue-400">{weights.ptsExpedition}</p>
+                <p className="text-xs text-t2w-muted">Expedition</p>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
+                <p className="text-lg font-bold text-t2w-accent">{weights.ridesOrganized}</p>
                 <p className="text-xs text-t2w-muted">pts / Organized</p>
               </div>
               <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
-                <p className="text-lg font-bold text-orange-400">
-                  {weights.sweepsDone}
-                </p>
+                <p className="text-lg font-bold text-orange-400">{weights.sweepsDone}</p>
                 <p className="text-xs text-t2w-muted">pts / Sweep</p>
               </div>
               <div className="rounded-lg bg-t2w-dark/60 p-3 text-center">
-                <p className="text-lg font-bold text-green-400">
-                  {weights.totalKm}
-                </p>
+                <p className="text-lg font-bold text-green-400">{weights.totalKm}</p>
                 <p className="text-xs text-t2w-muted">pts / KM</p>
               </div>
             </div>
             <p className="mt-3 text-xs text-t2w-muted">
-              Arena Score = (Rides x {weights.ridesCompleted}) +
-              (Organized x {weights.ridesOrganized}) + (Sweeps x{" "}
-              {weights.sweepsDone}) + (KM x {weights.totalKm})
+              Arena Score = (Day×{weights.ptsDay}) + (Weekend×{weights.ptsWeekend}) + (Multi-day×{weights.ptsMultiDay}) + (Expedition×{weights.ptsExpedition}) +
+              (Organised×{weights.ridesOrganized}) + (Sweeps×{weights.sweepsDone}) + (KM×{weights.totalKm})
             </p>
           </div>
         )}
