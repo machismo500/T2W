@@ -9,6 +9,8 @@ import {
   Twitter,
   Heart,
   ArrowUpRight,
+  Lock,
+  Shield,
 } from "lucide-react";
 
 const footerLinks = {
@@ -209,6 +211,70 @@ export function Footer() {
                 {route}
               </Link>
             ))}
+          </div>
+        </div>
+
+        {/* Security & Trust Badges */}
+        <div className="mt-8 border-t border-t2w-border pt-8">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-t2w-muted">
+            Security &amp; Trust
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Option 1: TrustLock SSL Badge */}
+            <a
+              href="https://trustlock.co"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="SSL Secured by TrustLock"
+              className="opacity-75 transition-opacity hover:opacity-100"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://trustlock.co/wp-content/uploads/2019/01/ssl-checkout-trust-seal.png"
+                alt="SSL Secured - TrustLock"
+                width={119}
+                height={22}
+              />
+            </a>
+
+            {/* Option 3: Vercel Deployment Badge */}
+            <a
+              href="https://vercel.com/taleson2wheels/talesontwowheels"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Vercel Deployment Status"
+              className="opacity-75 transition-opacity hover:opacity-100"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://vercelbadge.vercel.app/api/xploroshan/T2W"
+                alt="Vercel Deployment Status"
+                height={20}
+              />
+            </a>
+
+            {/* Option 4a: HTTPS Secured */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5">
+              <Lock className="h-3.5 w-3.5 text-green-400" />
+              <span className="text-xs font-medium text-green-400">
+                HTTPS Secured
+              </span>
+            </div>
+
+            {/* Option 4b: WAF Protected */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5">
+              <Shield className="h-3.5 w-3.5 text-blue-400" />
+              <span className="text-xs font-medium text-blue-400">
+                WAF Protected
+              </span>
+            </div>
+
+            {/* Option 4c: Hosted on Vercel */}
+            <div className="flex items-center gap-1.5 rounded-lg border border-t2w-border bg-t2w-surface px-3 py-1.5">
+              <span className="text-xs font-medium text-t2w-muted">
+                ▲ Hosted on Vercel
+              </span>
+            </div>
           </div>
         </div>
 
