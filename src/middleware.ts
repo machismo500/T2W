@@ -50,6 +50,7 @@ const ATTACK_PATTERNS: RegExp[] = [
   // SQL injection
   /(\b(select|union\s+select|insert\s+into|update\s+\w+\s+set|delete\s+from|drop\s+(table|database)|create\s+table|alter\s+table|exec\s*\(|execute\s*\(|xp_cmdshell)\b)/i,
   /('|\%27)\s*(or|and)\s+('|\%27|1|true|false)/i,
+  /\b(or|and)\b\s+\d+\s*[=<>!]+\s*\d+/i,               // boolean injection: OR 1=1, AND 2>1
   /(--|#)\s*$/,                                          // SQL comment terminator
   /\bwaitfor\s+delay\b|\bsleep\s*\(/i,                   // blind SQL time-based
   // XSS
@@ -74,7 +75,8 @@ const ATTACK_PATTERNS: RegExp[] = [
 
 function isAttack(url: URL): boolean {
   try {
-    const qs = decodeURIComponent(url.search);
+    // Replace + with space first (form-encoding), then decode %xx sequences
+    const qs = decodeURIComponent(url.search.replace(/\+/g, " "));
     return ATTACK_PATTERNS.some((p) => p.test(qs));
   } catch {
     return false; // malformed URI — let CSP/other layers handle it
