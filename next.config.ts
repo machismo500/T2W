@@ -29,6 +29,24 @@ const CSP = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      // Redirect all bangaloremotorcycleclub.com traffic to taleson2wheels.com
+      // Catches the root, /home, and any other paths on the old domain
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "bangaloremotorcycleclub.com" }],
+        destination: "https://www.taleson2wheels.com/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.bangaloremotorcycleclub.com" }],
+        destination: "https://www.taleson2wheels.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {
