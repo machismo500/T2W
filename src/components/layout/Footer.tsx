@@ -237,7 +237,7 @@ export function Footer() {
               />
             </a>
 
-            {/* Option 3: Vercel Deployment Badge */}
+            {/* Option 3: Vercel Deployment Badge (shields.io) */}
             <a
               href="https://vercel.com/taleson2wheels/talesontwowheels"
               target="_blank"
@@ -247,7 +247,7 @@ export function Footer() {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="https://vercelbadge.vercel.app/api/xploroshan/T2W"
+                src="https://img.shields.io/badge/vercel-deployed-000000?style=flat&logo=vercel&logoColor=white"
                 alt="Vercel Deployment Status"
                 height={20}
               />
