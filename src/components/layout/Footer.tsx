@@ -234,6 +234,7 @@ export function Footer() {
                 alt="SSL Secured - TrustLock"
                 width={119}
                 height={22}
+                loading="lazy"
               />
             </a>
 
@@ -250,6 +251,7 @@ export function Footer() {
                 src="https://img.shields.io/badge/vercel-deployed-000000?style=flat&logo=vercel&logoColor=white"
                 alt="Vercel Deployment Status"
                 height={20}
+                loading="lazy"
               />
             </a>
 
