@@ -28,7 +28,10 @@ import {
   FileText,
   XCircle,
   ChevronDown,
+  Copy,
+  Smartphone,
 } from "lucide-react";
+import QRCode from "react-qr-code";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import type { RidePost } from "@/types";
@@ -1438,25 +1441,70 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                             <IndianRupee className="h-5 w-5 text-t2w-accent" />
                             Payment Details
                           </h3>
-                          <div className="space-y-3">
+                          <div className="space-y-4">
+                            {/* Fee banner */}
                             <div className="flex items-center justify-between rounded-xl bg-t2w-accent/10 p-4">
                               <span className="text-sm text-t2w-muted">Registration Fee</span>
                               <span className="font-display text-2xl font-bold text-t2w-accent">₹{ride.fee.toLocaleString()}</span>
                             </div>
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                              {effectiveUpiIds.filter(u => u.id).map((upi, idx) => (
-                                <div key={idx} className="rounded-lg bg-t2w-surface-light p-3">
-                                  <p className="mb-1 text-sm font-medium text-gray-300">{upi.label ? `Pay via UPI (${upi.label})` : "Pay via UPI"}</p>
-                                  <p className="font-mono text-t2w-accent">{upi.id}</p>
+
+                            {/* UPI Payment Cards with QR + deep link */}
+                            {effectiveUpiIds.filter(u => u.id).map((upi, idx) => {
+                              const upiLink = `upi://pay?pa=${encodeURIComponent(upi.id)}&pn=${encodeURIComponent("Tales on 2 Wheels")}&am=${ride.fee}&cu=INR&tn=${encodeURIComponent(ride.title)}`;
+                              return (
+                                <div key={idx} className="rounded-xl border border-t2w-border bg-t2w-surface-light p-4">
+                                  <p className="mb-3 text-sm font-semibold text-white">
+                                    {upi.label ? `Pay via UPI — ${upi.label}` : "Pay via UPI"}
+                                  </p>
+                                  <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+                                    {/* QR Code */}
+                                    <div className="shrink-0 rounded-xl bg-white p-3">
+                                      <QRCode
+                                        value={upiLink}
+                                        size={160}
+                                        level="M"
+                                      />
+                                    </div>
+                                    <div className="flex flex-1 flex-col gap-3 w-full">
+                                      {/* UPI ID with copy */}
+                                      <div>
+                                        <p className="mb-1 text-xs text-t2w-muted">UPI ID</p>
+                                        <div className="flex items-center gap-2 rounded-lg bg-t2w-bg px-3 py-2">
+                                          <span className="flex-1 font-mono text-sm text-t2w-accent">{upi.id}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => navigator.clipboard.writeText(upi.id)}
+                                            className="text-t2w-muted transition-colors hover:text-white"
+                                            title="Copy UPI ID"
+                                          >
+                                            <Copy className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      {/* Pay via UPI App button */}
+                                      <a
+                                        href={upiLink}
+                                        className="flex items-center justify-center gap-2 rounded-xl bg-t2w-accent px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                                      >
+                                        <Smartphone className="h-4 w-4" />
+                                        Pay ₹{ride.fee.toLocaleString()} via UPI App
+                                      </a>
+                                      <p className="text-xs text-t2w-muted">
+                                        Scan QR with any UPI app (GPay, PhonePe, Paytm) or tap the button on your phone.
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
-                              ))}
-                              {effectiveBankAccounts.filter(b => b.details).map((bank, idx) => (
-                                <div key={idx} className="rounded-lg bg-t2w-surface-light p-3">
-                                  <p className="mb-1 text-sm font-medium text-gray-300">{bank.label ? `Bank Transfer (${bank.label})` : "Bank Transfer"}</p>
-                                  <p className="whitespace-pre-line text-xs text-t2w-muted">{bank.details}</p>
-                                </div>
-                              ))}
-                            </div>
+                              );
+                            })}
+
+                            {/* Bank transfer details (unchanged) */}
+                            {effectiveBankAccounts.filter(b => b.details).map((bank, idx) => (
+                              <div key={idx} className="rounded-lg bg-t2w-surface-light p-3">
+                                <p className="mb-1 text-sm font-medium text-gray-300">{bank.label ? `Bank Transfer (${bank.label})` : "Bank Transfer"}</p>
+                                <p className="whitespace-pre-line text-xs text-t2w-muted">{bank.details}</p>
+                              </div>
+                            ))}
 
                             {/* Screenshot upload */}
                             {(paymentMode === "screenshot" || paymentMode === "both") && (
@@ -1476,10 +1524,13 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                               </div>
                             )}
 
-                            {/* Transaction ID text input */}
+                            {/* Transaction ID input */}
                             {(paymentMode === "transaction_id" || paymentMode === "both") && (
                               <div>
-                                <label className="mb-1.5 block text-sm font-medium text-gray-300">UPI Transaction ID / Reference Number{paymentMode === "transaction_id" && <span className="text-red-400"> *</span>}</label>
+                                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                                  UPI Transaction ID / UTR Number
+                                  {paymentMode === "transaction_id" && <span className="text-red-400"> *</span>}
+                                </label>
                                 <input
                                   type="text"
                                   className="input-field"
@@ -1487,6 +1538,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                                   value={regForm.upiTransactionId}
                                   onChange={(e) => setRegForm({ ...regForm, upiTransactionId: e.target.value })}
                                 />
+                                <p className="mt-1 text-xs text-t2w-muted">Found in your UPI app under payment history after completing the payment.</p>
                               </div>
                             )}
 

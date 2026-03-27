@@ -231,6 +231,8 @@ export function AdminPage() {
   });
   const [rideFormUseCustomSettings, setRideFormUseCustomSettings] = useState(false);
   const [rideFormCustomSettings, setRideFormCustomSettings] = useState<string[]>([]); // hidden fields for this ride
+  const [rideFormUpiOverride, setRideFormUpiOverride] = useState(false);
+  const [rideFormUpiIds, setRideFormUpiIds] = useState<{ label: string; id: string }[]>([{ label: "", id: "" }]);
   const [rideFormRegSchedule, setRideFormRegSchedule] = useState({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
   const [publishingRide, setPublishingRide] = useState(false);
 
@@ -260,6 +262,8 @@ export function AdminPage() {
   // Per-ride form settings for edit
   const [editRideUseCustomSettings, setEditRideUseCustomSettings] = useState(false);
   const [editRideFormCustomSettings, setEditRideFormCustomSettings] = useState<string[]>([]);
+  const [editRideUpiOverride, setEditRideUpiOverride] = useState(false);
+  const [editRideUpiIds, setEditRideUpiIds] = useState<{ label: string; id: string }[]>([{ label: "", id: "" }]);
   const [editRideRegSchedule, setEditRideRegSchedule] = useState({ enabled: false, regOpenCore: "", regOpenT2w: "", regOpenRider: "" });
 
   // Registration management state
@@ -470,6 +474,9 @@ export function AdminPage() {
       const rideRegSettings = r.regFormSettings as Record<string, unknown> | null;
       setEditRideFormCustomSettings(rideRegSettings ? ((rideRegSettings.hiddenFields as string[]) || []) : []);
       setEditRideUseCustomSettings(!!rideRegSettings);
+      const perRideUpiIds = rideRegSettings?.upiIds as { label: string; id: string }[] | undefined;
+      setEditRideUpiOverride(!!perRideUpiIds?.length);
+      setEditRideUpiIds(perRideUpiIds?.length ? perRideUpiIds : [{ label: "", id: "" }]);
       // Load registration schedule
       const hasRegSchedule = !!(r.regOpenCore || r.regOpenT2w || r.regOpenRider);
       const toLocalDatetime = (iso: string | null | undefined) => {
@@ -583,7 +590,10 @@ export function AdminPage() {
         accountsBy: editForm.accountsBy,
         route: [editForm.startLocation, editForm.endLocation],
         highlights: editForm.highlights.split("\n").map((h) => h.trim()).filter(Boolean),
-        regFormSettings: editRideUseCustomSettings ? { hiddenFields: editRideFormCustomSettings } : null,
+        regFormSettings: (editRideUseCustomSettings || (editRideUpiOverride && editRideUpiIds.some(u => u.id.trim()))) ? {
+          ...(editRideUseCustomSettings ? { hiddenFields: editRideFormCustomSettings } : {}),
+          ...(editRideUpiOverride && editRideUpiIds.some(u => u.id.trim()) ? { upiIds: editRideUpiIds.filter(u => u.id.trim()) } : {}),
+        } : null,
         regOpenCore: editRideRegSchedule.enabled && editRideRegSchedule.regOpenCore ? new Date(editRideRegSchedule.regOpenCore).toISOString() : null,
         regOpenT2w: editRideRegSchedule.enabled && editRideRegSchedule.regOpenT2w ? new Date(editRideRegSchedule.regOpenT2w).toISOString() : null,
         regOpenRider: editRideRegSchedule.enabled && editRideRegSchedule.regOpenRider ? new Date(editRideRegSchedule.regOpenRider).toISOString() : null,
@@ -812,7 +822,10 @@ export function AdminPage() {
         organisedBy: rideForm.organisedBy || null,
         leadRider: rideForm.leadRider || "",
         sweepRider: rideForm.sweepRider || "",
-        regFormSettings: rideFormUseCustomSettings ? { hiddenFields: rideFormCustomSettings } : null,
+        regFormSettings: (rideFormUseCustomSettings || (rideFormUpiOverride && rideFormUpiIds.some(u => u.id.trim()))) ? {
+          ...(rideFormUseCustomSettings ? { hiddenFields: rideFormCustomSettings } : {}),
+          ...(rideFormUpiOverride && rideFormUpiIds.some(u => u.id.trim()) ? { upiIds: rideFormUpiIds.filter(u => u.id.trim()) } : {}),
+        } : null,
         regOpenCore: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenCore ? new Date(rideFormRegSchedule.regOpenCore).toISOString() : null,
         regOpenT2w: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenT2w ? new Date(rideFormRegSchedule.regOpenT2w).toISOString() : null,
         regOpenRider: rideFormRegSchedule.enabled && rideFormRegSchedule.regOpenRider ? new Date(rideFormRegSchedule.regOpenRider).toISOString() : null,
@@ -1450,6 +1463,41 @@ export function AdminPage() {
                         ))}
                       </div>
                     )}
+
+                    {/* Per-ride UPI ID override */}
+                    <div className="mt-3 border-t border-t2w-border pt-3">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={rideFormUpiOverride} onChange={(e) => setRideFormUpiOverride(e.target.checked)} className="h-4 w-4 rounded accent-t2w-accent" />
+                        <span className="text-sm font-medium text-white">Use a different UPI ID for this ride</span>
+                      </label>
+                      <p className="mt-1 ml-7 text-xs text-t2w-muted">Overrides the global UPI ID for this ride only. Riders will see this UPI ID + QR code in the registration form.</p>
+                      {rideFormUpiOverride && (
+                        <div className="mt-3 ml-7 space-y-2">
+                          {rideFormUpiIds.map((upi, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                className="input-field w-28 shrink-0 text-xs"
+                                placeholder="Label (e.g. GPay)"
+                                value={upi.label}
+                                onChange={(e) => { const u = [...rideFormUpiIds]; u[idx] = { ...u[idx], label: e.target.value }; setRideFormUpiIds(u); }}
+                              />
+                              <input
+                                type="text"
+                                className="input-field flex-1 text-xs font-mono"
+                                placeholder="UPI ID (e.g. name@upi)"
+                                value={upi.id}
+                                onChange={(e) => { const u = [...rideFormUpiIds]; u[idx] = { ...u[idx], id: e.target.value }; setRideFormUpiIds(u); }}
+                              />
+                              {rideFormUpiIds.length > 1 && (
+                                <button type="button" onClick={() => setRideFormUpiIds(rideFormUpiIds.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300 text-xs">✕</button>
+                              )}
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setRideFormUpiIds([...rideFormUpiIds, { label: "", id: "" }])} className="text-xs text-t2w-accent hover:underline">+ Add another UPI ID</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="sm:col-span-2 flex gap-3">
@@ -1783,6 +1831,41 @@ export function AdminPage() {
                                 ))}
                               </div>
                             )}
+
+                            {/* Per-ride UPI ID override */}
+                            <div className="mt-3 border-t border-t2w-border pt-3">
+                              <label className="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" checked={editRideUpiOverride} onChange={(e) => setEditRideUpiOverride(e.target.checked)} className="h-4 w-4 rounded accent-t2w-accent" />
+                                <span className="text-sm font-medium text-white">Use a different UPI ID for this ride</span>
+                              </label>
+                              <p className="mt-1 ml-7 text-xs text-t2w-muted">Overrides the global UPI ID for this ride only. Riders will see this UPI ID + QR code in the registration form.</p>
+                              {editRideUpiOverride && (
+                                <div className="mt-3 ml-7 space-y-2">
+                                  {editRideUpiIds.map((upi, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        className="input-field w-28 shrink-0 text-xs"
+                                        placeholder="Label (e.g. GPay)"
+                                        value={upi.label}
+                                        onChange={(e) => { const u = [...editRideUpiIds]; u[idx] = { ...u[idx], label: e.target.value }; setEditRideUpiIds(u); }}
+                                      />
+                                      <input
+                                        type="text"
+                                        className="input-field flex-1 text-xs font-mono"
+                                        placeholder="UPI ID (e.g. name@upi)"
+                                        value={upi.id}
+                                        onChange={(e) => { const u = [...editRideUpiIds]; u[idx] = { ...u[idx], id: e.target.value }; setEditRideUpiIds(u); }}
+                                      />
+                                      {editRideUpiIds.length > 1 && (
+                                        <button type="button" onClick={() => setEditRideUpiIds(editRideUpiIds.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300 text-xs">✕</button>
+                                      )}
+                                    </div>
+                                  ))}
+                                  <button type="button" onClick={() => setEditRideUpiIds([...editRideUpiIds, { label: "", id: "" }])} className="text-xs text-t2w-accent hover:underline">+ Add another UPI ID</button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
 

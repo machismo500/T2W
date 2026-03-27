@@ -9,7 +9,7 @@ export const revalidate = 60; // ISR: revalidate every 60 seconds
 
 export const metadata: Metadata = {
   title:
-    "Bangalore Motorcycle Club & Bike Group | Tales on 2 Wheels - T2W",
+    "Tales on 2 Wheels | Bike Group | Bangalore based Motorcycle Club",
   description:
     "Join T2W — Bangalore's most active motorcycle club & bike group. 500+ riders, 120+ rides. Group rides from Bengaluru to Ladakh, Goa, Coorg, Nepal & more. Register free today!",
   keywords: [
