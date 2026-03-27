@@ -13,8 +13,8 @@ const CSP = [
   "font-src 'self' https://fonts.gstatic.com",
   // Images: self, data URIs (base64 avatars), blob (canvas), any HTTPS CDN
   "img-src 'self' data: blob: https:",
-  // Fetch / XHR: self + GA telemetry
-  "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com",
+  // Fetch / XHR: self + GA telemetry + Vercel Speed Insights
+  "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://vitals.vercel-insights.com",
   // No plugins (Flash, Silverlight, etc.)
   "object-src 'none'",
   // No iframes from external origins
