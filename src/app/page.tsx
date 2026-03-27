@@ -9,10 +9,31 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title:
-    "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & India",
+    "Bangalore Motorcycle Club & Bike Group | Tales on 2 Wheels - T2W",
   description:
-    "Join India's #1 motorcycle riding community. Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan across India. 500+ riders, 120+ rides completed, 2.5 lakh km covered. Register for upcoming rides today!",
+    "Join T2W — Bangalore's most active motorcycle club & bike group. 500+ riders, 120+ rides. Group rides from Bengaluru to Ladakh, Goa, Coorg, Nepal & more. Register free today!",
   keywords: [
+    // Primary local targets
+    "motorcycle club in Bangalore",
+    "motorcycle club in Bengaluru",
+    "motorcycle club Bangalore",
+    "motorcycle club Bengaluru",
+    "motorcycle groups in Bangalore",
+    "motorcycle groups in Bengaluru",
+    "bike groups in Bangalore",
+    "bike groups in Bengaluru",
+    "bike club Bangalore",
+    "bike club Bengaluru",
+    "Bangalore motorcycle club",
+    "Bengaluru motorcycle club",
+    "biker club Bangalore",
+    "biker group Bangalore",
+    "bike riding group Bangalore",
+    "two wheeler club Bangalore",
+    "motorcycle riding group Bengaluru",
+    "join motorcycle club Bangalore",
+    "best motorcycle club Bangalore",
+    // Secondary
     "motorcycle rides Bangalore",
     "bike rides near Bangalore",
     "motorcycle group rides India",
@@ -26,9 +47,8 @@ export const metadata: Metadata = {
     "motorcycle tours Karnataka",
     "Bangalore bikers group",
     "Royal Enfield rides Bangalore",
-    "join motorcycle club Bangalore",
     "biker community registration India",
-    "upcoming motorcycle rides Bangalore 2025",
+    "upcoming motorcycle rides Bangalore",
     "bike group Bangalore Instagram",
     "Tales on 2 Wheels upcoming rides",
     "T2W registration",

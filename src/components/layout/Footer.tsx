@@ -156,8 +156,32 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Popular Routes - SEO keyword-rich section */}
+        {/* Club identity — on-page keyword anchor for local SEO */}
         <div className="mt-12 border-t border-t2w-border pt-8">
+          <p className="mb-6 max-w-3xl text-xs leading-relaxed text-t2w-muted">
+            <strong className="text-white">Tales on 2 Wheels (T2W)</strong> is
+            Bangalore&apos;s premier{" "}
+            <Link href="/" className="text-t2w-accent hover:underline">
+              motorcycle club
+            </Link>{" "}
+            and bike group, based in Bengaluru, Karnataka. As one of the most
+            active{" "}
+            <Link href="/rides" className="text-t2w-accent hover:underline">
+              motorcycle groups in Bangalore
+            </Link>
+            , T2W organises regular group rides — from weekend rides across
+            Karnataka to epic expeditions to Ladakh, Nepal &amp; Thailand. If
+            you&apos;re looking for a{" "}
+            <Link href="/register" className="text-t2w-accent hover:underline">
+              bike club in Bengaluru
+            </Link>{" "}
+            to join, T2W is open to all riders. Register free and ride with 500+
+            passionate motorcyclists.
+          </p>
+        </div>
+
+        {/* Popular Routes - SEO keyword-rich section */}
+        <div className="border-t border-t2w-border pt-8">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-white">
             Popular Motorcycle Routes from Bangalore
           </h3>

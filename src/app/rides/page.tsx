@@ -6,10 +6,12 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title:
-    "Motorcycle Rides & Tours in India | Upcoming Group Rides from Bangalore",
+    "Upcoming Motorcycle Rides | Bangalore Motorcycle Club - Tales on 2 Wheels",
   description:
-    "Browse all T2W motorcycle rides - day trips from Bangalore, weekend getaways to Coorg & Chikmagalur, multi-day tours to Hampi, Goa, Rajasthan & Spiti Valley. Register for upcoming rides now!",
+    "Upcoming group rides from T2W — Bangalore's premier motorcycle club. Day rides, weekend getaways, Ladakh expeditions & international tours. Open to all riders. Register now!",
   keywords: [
+    "motorcycle club rides Bangalore",
+    "bike group rides Bengaluru",
     "motorcycle rides Bangalore",
     "bike tours India",
     "upcoming motorcycle rides",
@@ -22,11 +24,13 @@ export const metadata: Metadata = {
     "Spiti Valley bike ride",
     "group motorcycle rides near me",
     "weekend bike rides from Bangalore",
+    "motorcycle club events Bangalore",
+    "bike club rides Bengaluru",
   ],
   openGraph: {
-    title: "Motorcycle Rides & Tours | Tales on 2 Wheels",
+    title: "Motorcycle Rides | Bangalore Motorcycle Club - Tales on 2 Wheels",
     description:
-      "Browse upcoming and past motorcycle rides from Bangalore & across India. Register for your next adventure with T2W.",
+      "Browse upcoming and past group rides from T2W — Bangalore's most active motorcycle club. Register for your next adventure.",
   },
   alternates: {
     canonical: "https://taleson2wheels.com/rides",
