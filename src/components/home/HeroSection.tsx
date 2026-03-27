@@ -80,7 +80,7 @@ export function HeroSection() {
         <img
           src="/logo.png"
           alt=""
-          className="w-[600px] h-[600px] object-contain opacity-[0.05] sm:w-[700px] sm:h-[700px] lg:w-[800px] lg:h-[800px]"
+          className="h-[280px] w-[280px] object-contain opacity-[0.05] sm:h-[600px] sm:w-[600px] md:h-[700px] md:w-[700px] lg:h-[800px] lg:w-[800px]"
         />
       </div>
 

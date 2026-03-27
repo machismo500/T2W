@@ -172,13 +172,14 @@ export function RidesPage() {
         </div>
 
         {/* Filters */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2">
+        <div className="mb-8 flex flex-col gap-4">
+          {/* Tab row — scrollable on very small screens */}
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {(["all", "upcoming", "ongoing", "completed"] as FilterTab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`rounded-xl px-5 py-2.5 text-sm font-medium capitalize transition-all ${
+                className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-medium capitalize transition-all ${
                   activeTab === tab
                     ? "bg-t2w-accent text-white shadow-lg shadow-t2w-accent/25"
                     : "bg-t2w-surface text-t2w-muted hover:text-white"
@@ -189,14 +190,15 @@ export function RidesPage() {
             ))}
           </div>
 
-          <div className="flex gap-3">
-            {/* Search */}
-            <div className="relative">
+          {/* Controls row */}
+          <div className="flex flex-wrap gap-3">
+            {/* Search — full-width on mobile, fixed on larger screens */}
+            <div className="relative min-w-0 flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
               <input
                 type="text"
                 placeholder="Search rides..."
-                className="input-field !py-2.5 !pl-10 !pr-4 w-64"
+                className="input-field w-full !py-2.5 !pl-10 !pr-4 sm:w-56"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />

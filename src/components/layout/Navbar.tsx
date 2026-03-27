@@ -58,7 +58,7 @@ export function Navbar() {
             <div className="relative h-10 w-10 shrink-0 transition-transform duration-300 group-hover:scale-110">
               <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
-            <span className="text-xl text-white" style={{ fontFamily: "'Courgette', cursive" }}>
+            <span className="hidden text-xl text-white sm:inline" style={{ fontFamily: "'Courgette', cursive" }}>
               Tales on 2 Wheels
             </span>
           </Link>
@@ -139,7 +139,7 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="rounded-lg p-2 text-gray-300 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-300 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
             aria-label="Toggle menu"
           >
             {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}

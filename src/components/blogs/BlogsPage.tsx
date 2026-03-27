@@ -186,8 +186,8 @@ export function BlogsPage() {
         </div>
 
         {/* Filters Bar */}
-        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-2">
+        <div className="mb-10 flex flex-col gap-4">
+          <div className="flex flex-wrap gap-2">
             {(
               [
                 { key: "all", label: "All" },
@@ -209,7 +209,7 @@ export function BlogsPage() {
             ))}
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <div className="flex rounded-xl border border-t2w-border bg-t2w-surface">
               {(
                 [
@@ -233,12 +233,12 @@ export function BlogsPage() {
               ))}
             </div>
 
-            <div className="relative">
+            <div className="relative min-w-0 flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-t2w-muted" />
               <input
                 type="text"
                 placeholder="Search posts..."
-                className="input-field !py-2 !pl-10 w-48"
+                className="input-field w-full !py-2 !pl-10 sm:w-48"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
