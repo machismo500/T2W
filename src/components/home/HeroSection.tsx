@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -20,7 +21,6 @@ interface HeroStats {
 }
 
 export function HeroSection() {
-  const [mounted, setMounted] = useState(false);
   const [nextRide, setNextRide] = useState<{ title: string; date: string } | null>(null);
   const [stats, setStats] = useState<HeroStats>({
     activeRiders: 0,
@@ -30,15 +30,13 @@ export function HeroSection() {
   });
 
   useEffect(() => {
-    setMounted(true);
-
-    // Fetch dynamic stats
+    // Fetch dynamic stats (non-blocking — stats show 0 then update)
     fetch("/api/stats")
       .then((res) => res.json())
       .then((data: HeroStats) => setStats(data))
       .catch(() => {});
 
-    // Fetch rides and find the next upcoming ride based on actual date
+    // Fetch next upcoming ride
     api.rides.list().then((data: unknown) => {
       const { rides } = data as { rides: Array<{ title: string; startDate: string; status: string }> };
       const today = new Date();
@@ -54,9 +52,7 @@ export function HeroSection() {
         });
         setNextRide({ title: ride.title, date: dateStr });
       }
-    }).catch(() => {
-      // Silently fail - badge just won't show
-    });
+    }).catch(() => {});
   }, []);
 
   return (
@@ -75,26 +71,26 @@ export function HeroSection() {
         }}
       />
 
-      {/* Background Logo Watermark */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <img
-          src="/logo.png"
-          alt=""
-          className="h-[280px] w-[280px] object-contain opacity-[0.05] sm:h-[600px] sm:w-[600px] md:h-[700px] md:w-[700px] lg:h-[800px] lg:w-[800px]"
-        />
+      {/* Background Logo Watermark — lazy, non-blocking */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[280px] w-[280px] opacity-[0.05] sm:h-[600px] sm:w-[600px] md:h-[700px] md:w-[700px] lg:h-[800px] lg:w-[800px]">
+          <Image
+            src="/logo.png"
+            alt=""
+            fill
+            className="object-contain"
+            loading="lazy"
+            priority={false}
+            sizes="(max-width: 640px) 280px, (max-width: 768px) 600px, (max-width: 1024px) 700px, 800px"
+          />
+        </div>
       </div>
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-32 sm:px-6 lg:px-8">
         <div className="max-w-4xl">
           {/* Badge - dynamically shows next upcoming ride */}
           {nextRide && (
-            <div
-              className={`mb-8 inline-flex items-center gap-2 rounded-full border border-t2w-accent/20 bg-t2w-accent/10 px-4 py-2 transition-all duration-700 ${
-                mounted
-                  ? "translate-y-0 opacity-100"
-                  : "translate-y-4 opacity-0"
-              }`}
-            >
+            <div className="mb-8 inline-flex animate-fade-in items-center gap-2 rounded-full border border-t2w-accent/20 bg-t2w-accent/10 px-4 py-2">
               <span className="h-2 w-2 animate-pulse rounded-full bg-t2w-accent" />
               <span className="text-sm font-medium text-t2w-accent">
                 Next Ride: {nextRide.title} &mdash; {nextRide.date}
@@ -102,13 +98,10 @@ export function HeroSection() {
             </div>
           )}
 
-          {/* Heading */}
+          {/* Heading — always visible, CSS animation only */}
           <h1
-            className={`font-display text-5xl font-bold leading-tight tracking-tight text-white transition-all duration-700 delay-100 sm:text-6xl md:text-7xl lg:text-8xl ${
-              mounted
-                ? "translate-y-0 opacity-100"
-                : "translate-y-8 opacity-0"
-            }`}
+            className="animate-slide-up font-display text-5xl font-bold leading-tight tracking-tight text-white sm:text-6xl md:text-7xl lg:text-8xl"
+            style={{ animationDelay: "100ms", animationFillMode: "both" }}
           >
             Every Road
             <br />
@@ -117,11 +110,8 @@ export function HeroSection() {
 
           {/* Subheading */}
           <p
-            className={`mt-6 max-w-2xl text-lg leading-relaxed text-gray-400 transition-all duration-700 delay-200 md:text-xl ${
-              mounted
-                ? "translate-y-0 opacity-100"
-                : "translate-y-8 opacity-0"
-            }`}
+            className="mt-6 max-w-2xl animate-slide-up text-lg leading-relaxed text-gray-400 md:text-xl"
+            style={{ animationDelay: "200ms", animationFillMode: "both" }}
           >
             India&apos;s premier motorcycle riding community, based in Bangalore.
             Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa &amp;
@@ -130,11 +120,8 @@ export function HeroSection() {
 
           {/* CTAs */}
           <div
-            className={`mt-10 flex flex-col gap-4 sm:flex-row transition-all duration-700 delay-300 ${
-              mounted
-                ? "translate-y-0 opacity-100"
-                : "translate-y-8 opacity-0"
-            }`}
+            className="mt-10 flex animate-slide-up flex-col gap-4 sm:flex-row"
+            style={{ animationDelay: "300ms", animationFillMode: "both" }}
           >
             <Link
               href="/register"
@@ -153,11 +140,8 @@ export function HeroSection() {
 
           {/* Stats */}
           <div
-            className={`mt-20 grid grid-cols-2 gap-6 sm:grid-cols-4 transition-all duration-700 delay-500 ${
-              mounted
-                ? "translate-y-0 opacity-100"
-                : "translate-y-8 opacity-0"
-            }`}
+            className="mt-20 grid animate-slide-up grid-cols-2 gap-6 sm:grid-cols-4"
+            style={{ animationDelay: "500ms", animationFillMode: "both" }}
           >
             {[
               { label: "Active Riders", value: stats.activeRiders, icon: Users },

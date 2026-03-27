@@ -5,7 +5,7 @@ import { NotificationBoard } from "@/components/home/NotificationBoard";
 import { AboutContact } from "@/components/home/AboutContact";
 import { prisma } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: revalidate every 60 seconds
 
 export const metadata: Metadata = {
   title:

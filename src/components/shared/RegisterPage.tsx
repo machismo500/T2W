@@ -186,7 +186,7 @@ export function RegisterPage() {
             <div className="h-12 w-12 shrink-0">
               <img src="/logo.png" alt="Tales on 2 Wheels" className="h-full w-full object-contain" />
             </div>
-            <span className="text-2xl text-white" style={{ fontFamily: "'Courgette', cursive" }}>
+            <span className="text-2xl text-white" style={{ fontFamily: "var(--font-courgette), cursive" }}>
               Tales on 2 Wheels
             </span>
           </Link>

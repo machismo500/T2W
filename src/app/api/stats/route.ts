@@ -59,12 +59,19 @@ export async function GET() {
 
     const totalKm = Math.round(totalKmResult._sum.distanceKm || 0);
 
-    return NextResponse.json({
-      activeRiders,
-      ridesCompleted: completedRides,
-      kmsCovered: totalKm,
-      countriesRidden: countryKeywords.size,
-    });
+    return NextResponse.json(
+      {
+        activeRiders,
+        ridesCompleted: completedRides,
+        kmsCovered: totalKm,
+        countriesRidden: countryKeywords.size,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
+        },
+      },
+    );
   } catch (error) {
     console.error("[stats] Error:", error);
     // Return fallback values so the homepage never breaks

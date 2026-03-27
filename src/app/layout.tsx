@@ -1,9 +1,23 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { Inter, Courgette } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AuthProvider } from "@/context/AuthContext";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const courgette = Courgette({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-courgette",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://taleson2wheels.com"),
@@ -375,19 +389,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-IN">
+    <html lang="en-IN" className={`${inter.variable} ${courgette.variable}`}>
       <head>
         <meta name="theme-color" content="#e94560" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Courgette&family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
-          rel="stylesheet"
-        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -419,7 +423,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-screen bg-t2w-dark font-sans antialiased">
+      <body className={`min-h-screen bg-t2w-dark font-sans antialiased ${inter.className}`}>
         <AuthProvider>
           <Navbar />
           <main className="min-h-screen">{children}</main>

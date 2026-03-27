@@ -20,6 +20,8 @@ vi.mock('lucide-react', () => ({
   Twitter: () => <span data-testid="icon-twitter" />,
   Heart: () => <span data-testid="icon-heart" />,
   ArrowUpRight: () => <span data-testid="icon-arrow" />,
+  Lock: () => <span data-testid="icon-lock" />,
+  Shield: () => <span data-testid="icon-shield" />,
 }));
 
 describe('Footer', () => {

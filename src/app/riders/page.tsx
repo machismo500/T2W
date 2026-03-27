@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { RiderArenaPage } from "@/components/riders/RiderArenaPage";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30; // ISR: revalidate every 30 seconds
 
 export const metadata: Metadata = {
   title: "Rider Arena | Leaderboard & Stats | Tales on 2 Wheels",
