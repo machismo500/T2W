@@ -343,10 +343,10 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   // Motorcycles from user profile
   const [userMotorcycles, setUserMotorcycles] = useState<{ id: string; make: string; model: string; year: number; cc: number; color: string; nickname?: string }[]>([]);
 
-  // Pre-fill registration form from user data and previously saved registration data
+  // Pre-fill registration form from rider profile, user data, and previously saved registration data
   useEffect(() => {
     if (user) {
-      // Load previously saved registration data for this user
+      // Load previously saved registration data for this user (most recent, highest priority)
       const savedKey = `t2w_reg_prefill_${user.id}`;
       let saved: Record<string, string> = {};
       try {
@@ -354,6 +354,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
         if (raw) saved = JSON.parse(raw);
       } catch { /* ignore */ }
 
+      // Step 1: prefill from user context + localStorage
       setRegForm((prev) => ({
         ...prev,
         riderName: prev.riderName || saved.riderName || user.name,
@@ -368,7 +369,24 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
         vehicleRegNumber: prev.vehicleRegNumber || saved.vehicleRegNumber || "",
       }));
 
-      // Fetch user's motorcycles
+      // Step 2: enrich from rider profile stored in DB (fills any fields still empty after step 1)
+      if (user.linkedRiderId) {
+        api.riders.get(user.linkedRiderId).then((data) => {
+          const profile = (data as { rider: { address?: string; emergencyContact?: string; emergencyPhone?: string; bloodGroup?: string; phone?: string } }).rider;
+          if (profile) {
+            setRegForm((prev) => ({
+              ...prev,
+              address: prev.address || profile.address || "",
+              phone: prev.phone || profile.phone || "",
+              emergencyContactName: prev.emergencyContactName || profile.emergencyContact || "",
+              emergencyContactPhone: prev.emergencyContactPhone || profile.emergencyPhone || "",
+              bloodGroup: prev.bloodGroup || profile.bloodGroup || "",
+            }));
+          }
+        }).catch(() => { /* silently ignore if profile unavailable */ });
+      }
+
+      // Step 3: fetch user's saved motorcycles for vehicle picker
       api.motorcycles.list().then((data) => {
         const motos = (data as { motorcycles: typeof userMotorcycles }).motorcycles || [];
         setUserMotorcycles(motos);
@@ -1201,6 +1219,14 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   </div>
 
                   <div className="space-y-6 p-6">
+                    {/* Pre-fill notice */}
+                    {user.linkedRiderId && (
+                      <div className="flex items-start gap-2 rounded-xl border border-blue-400/20 bg-blue-400/5 px-4 py-3 text-sm text-blue-300">
+                        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
+                        <span>Fields have been pre-filled from your rider profile. Review and update any details before submitting.</span>
+                      </div>
+                    )}
+
                     {/* ── Section 1: Personal Details ── */}
                     <div>
                       <h3 className="mb-4 flex items-center gap-2 font-display text-base font-bold text-white">
