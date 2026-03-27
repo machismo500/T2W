@@ -8,12 +8,28 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://taleson2wheels.com"),
   title: {
     default:
-      "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & India",
+      "T2W - Tales on 2 Wheels | Bangalore Motorcycle Club & Bike Group",
     template: "%s | T2W - Tales on 2 Wheels",
   },
   description:
-    "India’s premier motorcycle riding community based in Bangalore, Karnataka. Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa, Rajasthan across India. Every ride tells a story.. Tales on 2 Wheels - where every ride tells a story.",
+    "Tales on 2 Wheels (T2W) is Bangalore’s most active motorcycle club & bike group. 500+ riders, 120+ group rides across India. Join the best motorcycle club in Bengaluru, Karnataka. Register free and ride with us!",
   keywords: [
+    // Primary local target keywords
+    "motorcycle club in Bangalore",
+    "motorcycle club in Bengaluru",
+    "motorcycle club Bangalore",
+    "motorcycle club Bengaluru",
+    "motorcycle groups in Bangalore",
+    "motorcycle groups in Bengaluru",
+    "bike groups in Bangalore",
+    "bike groups in Bengaluru",
+    "bike club Bangalore",
+    "bike club Bengaluru",
+    "Bangalore motorcycle club",
+    "Bengaluru motorcycle club",
+    "biker club Bangalore",
+    "biker club Bengaluru",
+    // Secondary & long-tail
     "motorcycle rides Bangalore",
     "group riding Bangalore",
     "motorcycle rides India",
@@ -49,10 +65,11 @@ export const metadata: Metadata = {
     "ride with us India",
     "two wheeler tours Bangalore",
     "moto touring Karnataka",
-    "biker gang Bangalore",
     "motorcycle expedition India",
     "biker club registration India",
     "bike ride registration online",
+    "join motorcycle club Bangalore",
+    "how to join motorcycle group Bangalore",
   ],
   authors: [{ name: "Tales on 2 Wheels" }],
   creator: "T2W Team",
@@ -63,9 +80,9 @@ export const metadata: Metadata = {
     url: "https://taleson2wheels.com",
     siteName: "Tales on 2 Wheels",
     title:
-      "T2W - Tales on 2 Wheels | Motorcycle Rides in Bangalore & Across India",
+      "T2W - Tales on 2 Wheels | Bangalore Motorcycle Club & Bike Group",
     description:
-      "Join India's premier motorcycle riding community. Discover epic group rides from Bangalore & across India. Register for upcoming tours and connect with passionate riders.",
+      "Bangalore's premier motorcycle club. 500+ riders, group rides to Ladakh, Goa, Thailand & across India. Join the best bike group in Bengaluru — register free!",
     images: [
       {
         url: "/og-image.jpg",
@@ -123,11 +140,12 @@ export const metadata: Metadata = {
 
 const organizationSchema = {
   "@context": "https://schema.org",
-  "@type": "Organization",
+  "@type": ["Organization", "SportsOrganization"],
   "@id": "https://taleson2wheels.com/#organization",
   name: "Tales on 2 Wheels",
-  alternateName: ["T2W", "Tales on Two Wheels", "T2W Rides"],
+  alternateName: ["T2W", "Tales on Two Wheels", "T2W Rides", "T2W Motorcycle Club"],
   url: "https://taleson2wheels.com",
+  sport: "Motorcycling",
   logo: {
     "@type": "ImageObject",
     url: "https://taleson2wheels.com/logo.png",
@@ -136,7 +154,7 @@ const organizationSchema = {
   },
   image: "https://taleson2wheels.com/og-image.jpg",
   description:
-    "India's premier motorcycle riding community based in Bangalore. Organizing group rides, motorcycle tours, and building a passionate riding community across India since 2023.",
+    "Tales on 2 Wheels (T2W) is Bangalore's most active motorcycle club and bike group. Founded in 2023, we organise group rides across India — from weekend rides in Karnataka to expeditions to Ladakh, Nepal, Thailand and beyond. Join 500+ riders in the best motorcycle club in Bengaluru.",
   foundingDate: "2023",
   foundingLocation: {
     "@type": "Place",
@@ -168,6 +186,8 @@ const organizationSchema = {
   knowsAbout: [
     "Motorcycle touring",
     "Group motorcycle rides",
+    "Motorcycle club Bangalore",
+    "Bike group Bengaluru",
     "Motorcycle safety",
     "Adventure motorcycling",
     "Motorcycle travel India",
@@ -186,7 +206,15 @@ const organizationSchema = {
         itemOffered: {
           "@type": "Service",
           name: "Group Motorcycle Rides",
-          description: "Organised group motorcycle rides across India",
+          description: "Organised group motorcycle rides across India from Bangalore",
+        },
+      },
+      {
+        "@type": "Offer",
+        itemOffered: {
+          "@type": "Service",
+          name: "Motorcycle Club Membership",
+          description: "Join Bangalore's premier motorcycle club — Tales on 2 Wheels",
         },
       },
     ],
@@ -224,11 +252,12 @@ const websiteSchema = {
 
 const localBusinessSchema = {
   "@context": "https://schema.org",
-  "@type": "SportsActivityLocation",
+  "@type": ["SportsActivityLocation", "SportsClub"],
   "@id": "https://taleson2wheels.com/#localbusiness",
-  name: "Tales on 2 Wheels - Bangalore",
+  name: "Tales on 2 Wheels",
+  alternateName: "T2W Motorcycle Club Bangalore",
   description:
-    "Motorcycle riding community organizing group rides from Bangalore to destinations across Karnataka and India. Weekly rides, weekend getaways, and multi-day expeditions.",
+    "Bangalore's best motorcycle club and bike group. Tales on 2 Wheels (T2W) organises weekly rides, weekend getaways, and multi-day expeditions across India. Join our bike group in Bengaluru and ride with 500+ passionate motorcyclists.",
   url: "https://taleson2wheels.com",
   email: "taleson2wheels.official@gmail.com",
   address: {
@@ -245,9 +274,66 @@ const localBusinessSchema = {
   openingHours: "Sa 06:00-18:00",
   priceRange: "₹300 - ₹25,000",
   sport: "Motorcycling",
+  keywords:
+    "motorcycle club Bangalore, bike club Bengaluru, motorcycle group Bangalore, bike group Bengaluru, motorcycle riding club Karnataka",
   sameAs: [
     "https://instagram.com/taleson2wheels",
     "https://facebook.com/taleson2wheels",
+  ],
+};
+
+const localFaqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "What is the best motorcycle club in Bangalore?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Tales on 2 Wheels (T2W) is widely regarded as Bangalore's best motorcycle club. Founded in 2023, T2W has over 500 active riders and organises regular group rides across India — from day rides to Nandi Hills and Coorg, to epic expeditions to Ladakh, Nepal, and Thailand. You can register and join at taleson2wheels.com.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Are there motorcycle clubs in Bengaluru?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes! Tales on 2 Wheels (T2W) is one of the most active motorcycle clubs in Bengaluru, Karnataka. T2W organises group bike rides every weekend — short day rides as well as multi-day tours and international expeditions. Visit taleson2wheels.com to see upcoming rides and register.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How do I join a motorcycle group in Bangalore?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "To join a motorcycle group in Bangalore, visit taleson2wheels.com, create a free account, and register for any upcoming ride. Tales on 2 Wheels (T2W) is open to all motorcycle enthusiasts — beginners and experienced riders alike. No annual membership fee; you simply pay a per-ride fee that covers logistics and accommodation for overnight rides.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What bike groups are active in Bangalore?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Tales on 2 Wheels (T2W) is one of the most active bike groups in Bangalore. The group rides every weekend and organises special rides to destinations like Nandi Hills, Coorg, Hampi, Ladakh, Goa, and international routes in Nepal and Thailand. Join at taleson2wheels.com.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Which motorcycle club in Bengaluru is best for beginners?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Tales on 2 Wheels (T2W) is beginner-friendly. The club has experienced lead riders and sweep riders on every group ride, detailed safety guidelines, and a welcoming community. New riders in Bengaluru can start with day rides to nearby destinations and gradually progress to longer tours.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How to find bike clubs near me in Bangalore?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Tales on 2 Wheels is one of the top bike clubs based in Bangalore, Karnataka. You can register for free at taleson2wheels.com and join upcoming group rides. The club is active on Instagram (@TalesOn2Wheels) and Facebook where they announce ride dates and routes.",
+      },
+    },
   ],
 };
 
@@ -323,6 +409,12 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(breadcrumbSchema),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(localFaqSchema),
           }}
         />
       </head>
