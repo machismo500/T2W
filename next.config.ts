@@ -31,8 +31,13 @@ const CSP = [
 const nextConfig: NextConfig = {
   async redirects() {
     return [
-      // Redirect all bangaloremotorcycleclub.com traffic to taleson2wheels.com
-      // Catches the root, /home, and any other paths on the old domain
+      // /home → / on any host (fixes taleson2wheels.com/home 404 too)
+      {
+        source: "/home",
+        destination: "/",
+        permanent: true,
+      },
+      // Redirect all bangaloremotorcycleclub.com traffic → taleson2wheels.com
       {
         source: "/:path*",
         has: [{ type: "host", value: "bangaloremotorcycleclub.com" }],
