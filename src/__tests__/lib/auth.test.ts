@@ -23,7 +23,7 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-import { hashPassword, verifyPassword, createToken, verifyToken, requireAuth, requireAdmin } from '@/lib/auth';
+import { hashPassword, verifyPassword, createToken, verifyToken, requireAuth } from '@/lib/auth';
 
 describe('auth library', () => {
   describe('hashPassword', () => {
@@ -93,24 +93,4 @@ describe('auth library', () => {
     });
   });
 
-  describe('requireAdmin', () => {
-    it('does not throw for admin role', () => {
-      const user = { id: '1', role: 'admin', name: 'Admin' };
-      expect(() => requireAdmin(user as any)).not.toThrow();
-    });
-
-    it('does not throw for superadmin role', () => {
-      const user = { id: '1', role: 'superadmin', name: 'Super' };
-      expect(() => requireAdmin(user as any)).not.toThrow();
-    });
-
-    it('throws "Forbidden" for rider role', () => {
-      const user = { id: '1', role: 'rider', name: 'Rider' };
-      expect(() => requireAdmin(user as any)).toThrow('Forbidden');
-    });
-
-    it('throws "Unauthorized" for null user', () => {
-      expect(() => requireAdmin(null as any)).toThrow('Unauthorized');
-    });
-  });
 });

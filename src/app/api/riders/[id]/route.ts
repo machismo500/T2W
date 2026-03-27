@@ -8,6 +8,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
 
     const profile = await prisma.riderProfile.findUnique({
@@ -102,7 +107,9 @@ export async function PUT(
     }
 
     const data = await req.json();
-    const allowedFields = ["name", "email", "phone", "address", "emergencyContact", "emergencyPhone", "bloodGroup", "avatarUrl", "ridesOrganized", "sweepsDone", "pilotsDone"];
+    const userFields = ["name", "email", "phone", "address", "emergencyContact", "emergencyPhone", "bloodGroup", "avatarUrl"];
+    const adminOnlyFields = ["ridesOrganized", "sweepsDone", "pilotsDone"];
+    const allowedFields = isSuperAdmin ? [...userFields, ...adminOnlyFields] : userFields;
     const updateData: Record<string, unknown> = {};
     for (const field of allowedFields) {
       if (data[field] !== undefined) {

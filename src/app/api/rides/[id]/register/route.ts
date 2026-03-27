@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { computeRideStatus } from "@/lib/ride-status";
@@ -135,7 +136,7 @@ export async function POST(
       );
     }
 
-    // Check capacity — only count active registrations (pending + confirmed)
+    // Early capacity check (from cached ride data loaded with the ride)
     const activeRegistrations = ride.registrations.filter(
       (r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed"
     );
@@ -146,10 +147,7 @@ export async function POST(
       );
     }
 
-    // Generate confirmation code
-    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const confirmationCode = `T2W-${rideId.toUpperCase().slice(0, 10)}-${randomPart}`;
-
+    // Snapshot registration fields before the transaction
     const riderName = String(data.riderName || user.name || "");
     const riderEmail = String(data.email || user.email || "");
     const riderPhone = String(data.phone || "");
@@ -164,30 +162,47 @@ export async function POST(
     const vehicleRegNumber = String(data.vehicleRegNumber || "");
     const tshirtSize = String(data.tshirtSize || "");
 
-    const registration = await prisma.rideRegistration.create({
-      data: {
-        userId: user.id,
-        rideId,
-        riderName,
-        address: riderAddress,
-        email: riderEmail,
-        phone: riderPhone,
-        emergencyContactName,
-        emergencyContactPhone,
-        bloodGroup,
-        referredBy,
-        foodPreference,
-        ridingType,
-        vehicleModel,
-        vehicleRegNumber,
-        tshirtSize,
-        agreedCancellationTerms: Boolean(data.agreedCancellationTerms),
-        agreedIndemnity: Boolean(data.agreedIndemnity),
-        paymentScreenshot: String(data.paymentScreenshot || ""),
-        upiTransactionId: String(data.upiTransactionId || ""),
-        confirmationCode,
-        approvalStatus: "pending",
-      },
+    // Generate a cryptographically random confirmation code
+    const randomPart = randomBytes(4).toString("hex").toUpperCase();
+    const confirmationCode = `T2W-${rideId.toUpperCase().slice(0, 10)}-${randomPart}`;
+
+    // Wrap capacity re-check + insert in a transaction to prevent TOCTOU race conditions
+    const registration = await prisma.$transaction(async (tx) => {
+      const activeCount = await tx.rideRegistration.count({
+        where: {
+          rideId,
+          approvalStatus: { in: ["pending", "confirmed"] },
+        },
+      });
+      if (activeCount >= ride.maxRiders) {
+        throw Object.assign(new Error("RIDE_FULL"), { code: "RIDE_FULL" });
+      }
+
+      return tx.rideRegistration.create({
+        data: {
+          userId: user.id,
+          rideId,
+          riderName,
+          address: riderAddress,
+          email: riderEmail,
+          phone: riderPhone,
+          emergencyContactName,
+          emergencyContactPhone,
+          bloodGroup,
+          referredBy,
+          foodPreference,
+          ridingType,
+          vehicleModel,
+          vehicleRegNumber,
+          tshirtSize,
+          agreedCancellationTerms: Boolean(data.agreedCancellationTerms),
+          agreedIndemnity: Boolean(data.agreedIndemnity),
+          paymentScreenshot: String(data.paymentScreenshot || ""),
+          upiTransactionId: String(data.upiTransactionId || ""),
+          confirmationCode,
+          approvalStatus: "pending",
+        },
+      });
     });
 
     // Send registration confirmation emails (best-effort, don't block response)
@@ -251,6 +266,12 @@ export async function POST(
       confirmationCode,
     });
   } catch (error: unknown) {
+    if (error instanceof Error && error.message === "RIDE_FULL") {
+      return NextResponse.json(
+        { error: "This ride is full — no spots available" },
+        { status: 400 }
+      );
+    }
     // Handle duplicate registration (unique constraint on userId + rideId)
     if (
       error &&

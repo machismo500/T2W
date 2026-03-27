@@ -38,33 +38,34 @@ export async function GET(
     }
     const breakMinutes = Math.round(breakMs / 60000);
 
-    // Distance from lead rider's path
-    let distanceKm = 0;
-    if (session.leadRiderId) {
-      const leadPoints = await prisma.liveRideLocation.findMany({
-        where: { sessionId: session.id, userId: session.leadRiderId },
-        orderBy: { recordedAt: "asc" },
-        select: { lat: true, lng: true },
-      });
-      distanceKm = Math.round(pathDistanceKm(leadPoints) * 10) / 10;
-    }
+    // Run all location queries in parallel
+    const [leadPoints, speedStats, riderCountRows] = await Promise.all([
+      session.leadRiderId
+        ? prisma.liveRideLocation.findMany({
+            where: { sessionId: session.id, userId: session.leadRiderId },
+            orderBy: { recordedAt: "asc" },
+            select: { lat: true, lng: true },
+          })
+        : Promise.resolve([]),
+      prisma.liveRideLocation.aggregate({
+        where: {
+          sessionId: session.id,
+          speed: { not: null, gt: 0 },
+        },
+        _avg: { speed: true },
+        _max: { speed: true },
+      }),
+      prisma.liveRideLocation.findMany({
+        where: { sessionId: session.id },
+        distinct: ["userId"],
+        select: { userId: true },
+      }),
+    ]);
 
-    // Speed stats from all locations
-    const speedStats = await prisma.liveRideLocation.aggregate({
-      where: {
-        sessionId: session.id,
-        speed: { not: null, gt: 0 },
-      },
-      _avg: { speed: true },
-      _max: { speed: true },
-    });
-
-    // Unique rider count
-    const riderCount = await prisma.liveRideLocation.findMany({
-      where: { sessionId: session.id },
-      distinct: ["userId"],
-      select: { userId: true },
-    });
+    const distanceKm = session.leadRiderId
+      ? Math.round(pathDistanceKm(leadPoints) * 10) / 10
+      : 0;
+    const riderCount = riderCountRows;
 
     return NextResponse.json({
       elapsedMinutes,
@@ -73,7 +74,7 @@ export async function GET(
       maxSpeedKmh: Math.round((speedStats._max.speed || 0) * 10) / 10,
       breakCount: session.breaks.length,
       breakMinutes,
-      riderCount: riderCount.length,
+      riderCount: riderCountRows.length,
     });
   } catch (error) {
     console.error("[T2W] Metrics error:", error);

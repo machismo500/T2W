@@ -68,7 +68,18 @@ export async function PUT(
     if (data.name !== undefined) updateData.name = String(data.name);
     if (data.email !== undefined) updateData.email = String(data.email).toLowerCase().trim();
     if (data.phone !== undefined) updateData.phone = String(data.phone);
-    if (data.role !== undefined) updateData.role = String(data.role);
+    if (data.role !== undefined) {
+      const validRoles = ["rider", "t2w_rider", "core_member", "superadmin"];
+      if (!validRoles.includes(String(data.role))) {
+        return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+      }
+      // Only superadmins can grant core_member or superadmin roles
+      const privilegedRoles = ["core_member", "superadmin"];
+      if (privilegedRoles.includes(String(data.role)) && currentUser.role !== "superadmin") {
+        return NextResponse.json({ error: "Only superadmins can grant elevated roles" }, { status: 403 });
+      }
+      updateData.role = String(data.role);
+    }
     if (data.isApproved !== undefined) updateData.isApproved = Boolean(data.isApproved);
 
     // Try updating User record first

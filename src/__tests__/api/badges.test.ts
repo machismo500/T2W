@@ -10,6 +10,7 @@ vi.mock('@/lib/db', () => ({
     userBadge: {
       findMany: vi.fn(),
       create: vi.fn(),
+      upsert: vi.fn(),
     },
   },
 }));
@@ -27,6 +28,7 @@ const mockBadgeFindMany = prisma.badge.findMany as ReturnType<typeof vi.fn>;
 const mockBadgeUpdate = prisma.badge.update as ReturnType<typeof vi.fn>;
 const mockUserBadgeFindMany = prisma.userBadge.findMany as ReturnType<typeof vi.fn>;
 const mockUserBadgeCreate = prisma.userBadge.create as ReturnType<typeof vi.fn>;
+const mockUserBadgeUpsert = prisma.userBadge.upsert as ReturnType<typeof vi.fn>;
 
 const sampleBadges = [
   { id: 'b-1', tier: 'SILVER', name: 'Silver Rider', description: 'Completed 1,000 km', minKm: 1000, icon: 'shield', color: '#C0C0C0' },
@@ -98,14 +100,14 @@ describe('POST /api/badges', () => {
     ];
     mockBadgeFindMany.mockResolvedValue(badges);
     mockUserBadgeFindMany.mockResolvedValue([]); // no existing badges
-    mockUserBadgeCreate.mockResolvedValue({});
+    mockUserBadgeUpsert.mockResolvedValue({});
 
     const { status, data } = await parseResponse(await POST());
 
     expect(status).toBe(200);
     // Rider has 100km, should earn Beginner (50km) and Explorer (100km) but not Veteran (5000km)
     expect(data.awarded).toEqual(['Beginner', 'Explorer']);
-    expect(mockUserBadgeCreate).toHaveBeenCalledTimes(2);
+    expect(mockUserBadgeUpsert).toHaveBeenCalledTimes(2);
   });
 
   it('awards no badges if user totalKm is below all thresholds', async () => {
@@ -304,14 +306,16 @@ describe('awardBadgesForUser', () => {
     ];
     mockBadgeFindMany.mockResolvedValue(badges);
     mockUserBadgeFindMany.mockResolvedValue([{ badgeId: 'b-1' }]); // already has Beginner
-    mockUserBadgeCreate.mockResolvedValue({});
+    mockUserBadgeUpsert.mockResolvedValue({});
 
     const awarded = await awardBadgesForUser('user-3', 200);
 
     expect(awarded).toEqual(['Explorer']);
-    expect(mockUserBadgeCreate).toHaveBeenCalledTimes(1);
-    expect(mockUserBadgeCreate).toHaveBeenCalledWith({
-      data: { userId: 'user-3', badgeId: 'b-2' },
+    expect(mockUserBadgeUpsert).toHaveBeenCalledTimes(1);
+    expect(mockUserBadgeUpsert).toHaveBeenCalledWith({
+      where: { userId_badgeId: { userId: 'user-3', badgeId: 'b-2' } },
+      update: {},
+      create: { userId: 'user-3', badgeId: 'b-2' },
     });
   });
 
@@ -340,12 +344,12 @@ describe('awardBadgesForUser', () => {
     ];
     mockBadgeFindMany.mockResolvedValue(badges);
     mockUserBadgeFindMany.mockResolvedValue([]);
-    mockUserBadgeCreate.mockResolvedValue({});
+    mockUserBadgeUpsert.mockResolvedValue({});
 
     const awarded = await awardBadgesForUser('user-1', 20000);
 
     expect(awarded).toEqual(['Silver', 'Gold', 'Platinum']);
-    expect(mockUserBadgeCreate).toHaveBeenCalledTimes(3);
+    expect(mockUserBadgeUpsert).toHaveBeenCalledTimes(3);
   });
 
   it('does not award badges when totalKm is exactly below threshold', async () => {
@@ -367,11 +371,11 @@ describe('awardBadgesForUser', () => {
     ];
     mockBadgeFindMany.mockResolvedValue(badges);
     mockUserBadgeFindMany.mockResolvedValue([]);
-    mockUserBadgeCreate.mockResolvedValue({});
+    mockUserBadgeUpsert.mockResolvedValue({});
 
     const awarded = await awardBadgesForUser('user-3', 1000);
 
     expect(awarded).toEqual(['Silver']);
-    expect(mockUserBadgeCreate).toHaveBeenCalledTimes(1);
+    expect(mockUserBadgeUpsert).toHaveBeenCalledTimes(1);
   });
 });

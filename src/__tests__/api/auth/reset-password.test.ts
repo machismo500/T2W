@@ -27,7 +27,7 @@ describe('POST /api/auth/reset-password', () => {
   it('returns 400 when email is missing', async () => {
     const req = createNextRequest('http://localhost:3000/api/auth/reset-password', {
       method: 'POST',
-      body: { newPassword: 'newpass123' },
+      body: { newPassword: 'newpassword123' },
     });
     const res = await POST(req);
     const { status } = await parseResponse(res);
@@ -52,7 +52,7 @@ describe('POST /api/auth/reset-password', () => {
     const res = await POST(req);
     const { status, data } = await parseResponse(res);
     expect(status).toBe(400);
-    expect(data.error).toContain('at least 6');
+    expect(data.error).toContain('at least 12');
   });
 
   it('returns 403 when reset session expired', async () => {
@@ -60,7 +60,7 @@ describe('POST /api/auth/reset-password', () => {
 
     const req = createNextRequest('http://localhost:3000/api/auth/reset-password', {
       method: 'POST',
-      body: { email: 'test@example.com', newPassword: 'newpass123' },
+      body: { email: 'test@example.com', newPassword: 'newpassword123' },
     });
     const res = await POST(req);
     const { status, data } = await parseResponse(res);
@@ -74,7 +74,7 @@ describe('POST /api/auth/reset-password', () => {
 
     const req = createNextRequest('http://localhost:3000/api/auth/reset-password', {
       method: 'POST',
-      body: { email: 'noone@example.com', newPassword: 'newpass123' },
+      body: { email: 'noone@example.com', newPassword: 'newpassword123' },
     });
     const res = await POST(req);
     const { status, data } = await parseResponse(res);
@@ -89,13 +89,13 @@ describe('POST /api/auth/reset-password', () => {
 
     const req = createNextRequest('http://localhost:3000/api/auth/reset-password', {
       method: 'POST',
-      body: { email: 'test@example.com', newPassword: 'newpass123' },
+      body: { email: 'test@example.com', newPassword: 'newpassword123' },
     });
     const res = await POST(req);
     const { status, data } = await parseResponse(res);
     expect(status).toBe(200);
     expect(data.success).toBe(true);
-    expect(hashPassword).toHaveBeenCalledWith('newpass123');
+    expect(hashPassword).toHaveBeenCalledWith('newpassword123');
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { email: 'test@example.com' },
@@ -112,7 +112,7 @@ describe('POST /api/auth/reset-password', () => {
 
     const req = createNextRequest('http://localhost:3000/api/auth/reset-password', {
       method: 'POST',
-      body: { email: 'TEST@EXAMPLE.COM', newPassword: 'newpass123' },
+      body: { email: 'TEST@EXAMPLE.COM', newPassword: 'newpassword123' },
     });
     await POST(req);
 

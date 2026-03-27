@@ -1,14 +1,10 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { RideDetailPage } from "@/components/rides/RideDetailPage";
+import { safeJsonParse } from "@/lib/json-utils";
 
 // All ride pages are dynamic (data from DB)
 export const dynamic = "force-dynamic";
-
-function safeJsonParse(value: string | null | undefined, fallback: unknown): unknown {
-  if (!value) return fallback;
-  try { return JSON.parse(value); } catch { return fallback; }
-}
 
 export async function generateMetadata({
   params,

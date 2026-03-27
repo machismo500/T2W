@@ -1,10 +1,11 @@
 // Database-backed OTP store for email verification and password reset
 // Works correctly on serverless platforms (Vercel) where in-memory state is not shared
 
+import { randomInt } from "crypto";
 import { prisma } from "@/lib/db";
 
 function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
 
 // ── Email verification OTPs (registration) ──

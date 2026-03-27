@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createNextRequest, parseResponse, mockSuperAdmin, mockCoreMember, mockRider } from '@/__tests__/helpers';
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
+vi.mock('@/lib/db', () => {
+  const mock: Record<string, unknown> = {
     rideParticipation: {
       deleteMany: vi.fn(),
       upsert: vi.fn(),
@@ -12,8 +12,11 @@ vi.mock('@/lib/db', () => ({
     user: { findMany: vi.fn(), update: vi.fn() },
     rideRegistration: { findMany: vi.fn() },
     ride: { update: vi.fn() },
-  },
-}));
+    $transaction: null,
+  };
+  mock.$transaction = vi.fn().mockImplementation(async (fn: (p: typeof mock) => unknown) => fn(mock));
+  return { prisma: mock };
+});
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),

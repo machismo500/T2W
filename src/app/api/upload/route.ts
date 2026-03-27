@@ -27,6 +27,14 @@ export async function POST(req: NextRequest) {
     let url: string;
 
     if (dataUrl) {
+      // Validate dataUrl format
+      if (!dataUrl.startsWith("data:image/")) {
+        return NextResponse.json({ error: "Invalid image format" }, { status: 400 });
+      }
+      // 2MB limit: base64 overhead is ~4/3, so 2MB binary ≈ 2.73MB string
+      if (dataUrl.length > 2 * 1024 * 1024 * 1.4) {
+        return NextResponse.json({ error: "Image must be under 2MB" }, { status: 400 });
+      }
       // Client already compressed and sent as data URL
       url = dataUrl;
     } else if (file) {

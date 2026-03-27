@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { computeRideStatus } from "@/lib/ride-status";
+import { safeJsonParse } from "@/lib/json-utils";
 
 // GET /api/rides - list all rides
 export async function GET(req: NextRequest) {
@@ -134,11 +135,3 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function safeJsonParse(value: string | null | undefined, fallback: unknown): unknown {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}

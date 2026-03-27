@@ -2,44 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 
-// Name normalization for matching crew names to rider profile names
-function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z\s]/g, "").replace(/\s+/g, " ").trim();
-}
-
-const crewNameAliases: Record<string, string> = {
-  "suren": "surendar p velu",
-  "surendar": "surendar p velu",
-  "surendar velu": "surendar p velu",
-};
-
-function crewNameMatchesRider(crewName: string, riderName: string): boolean {
-  const crewLower = crewName.toLowerCase().trim();
-  const riderLower = riderName.toLowerCase().trim();
-  if (crewLower === riderLower) return true;
-  if (normalizeName(crewName) === normalizeName(riderName)) return true;
-  const alias = crewNameAliases[crewLower];
-  if (alias && normalizeName(alias) === normalizeName(riderName)) return true;
-  if (!crewLower.includes(" ")) {
-    const riderFirstName = riderLower.split(/\s+/)[0];
-    if (crewLower === riderFirstName) return true;
-  }
-  return false;
-}
-
-function computeRideRoleStats(
-  riderName: string,
-  allRides: Array<{ leadRider: string; sweepRider: string; organisedBy: string | null }>
-): { pilotsDone: number; sweepsDone: number; ridesOrganized: number } {
-  let pilotsDone = 0, sweepsDone = 0, ridesOrganized = 0;
-  for (const ride of allRides) {
-    if (ride.leadRider && crewNameMatchesRider(ride.leadRider, riderName)) pilotsDone++;
-    if (ride.sweepRider && crewNameMatchesRider(ride.sweepRider, riderName)) sweepsDone++;
-    if (ride.organisedBy && crewNameMatchesRider(ride.organisedBy, riderName)) ridesOrganized++;
-  }
-  return { pilotsDone, sweepsDone, ridesOrganized };
-}
-
 // Compute a cutoff date from period string (e.g., "6m", "1y")
 function periodCutoffDate(period: string | null): Date | null {
   if (!period || period === "all") return null;
@@ -55,9 +17,14 @@ function periodCutoffDate(period: string | null): Date | null {
   return null;
 }
 
-// GET /api/riders - list all rider profiles with participation stats
+// GET /api/riders - list all rider profiles with participation stats (admin only)
 export async function GET(req: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user || (user.role !== "superadmin" && user.role !== "core_member")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const searchParams = req.nextUrl.searchParams;
     const search = searchParams.get("search") || "";
     const includemerged = searchParams.get("includemerged") === "true";
@@ -89,56 +56,48 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
     });
 
-    // Load all rides from DB for role stats computation
-    const allRidesRaw = await prisma.ride.findMany({
-      select: { leadRider: true, sweepRider: true, organisedBy: true, startDate: true },
-    });
-    // Filter rides by period cutoff if specified
-    const allRides = cutoff
-      ? allRidesRaw.filter((r) => r.startDate >= cutoff)
-      : allRidesRaw;
-
     const riders = profiles.map((p: typeof profiles[number]) => {
-      const stats = computeRideRoleStats(p.name, allRides);
       // Exclude dropped-out riders from active stats, and filter by period
       const activeParticipations = p.participations.filter(
         (pp: typeof p.participations[number]) =>
           !pp.droppedOut && (!cutoff || pp.ride.startDate >= cutoff)
       );
       return {
-      id: p.id,
-      name: p.name,
-      email: p.email,
-      phone: p.phone,
-      address: p.address,
-      emergencyContact: p.emergencyContact,
-      emergencyPhone: p.emergencyPhone,
-      bloodGroup: p.bloodGroup,
-      joinDate: p.joinDate.toISOString(),
-      avatarUrl: p.avatarUrl,
-      ...stats,
-      mergedIntoId: p.mergedIntoId,
-      userRole: p.role !== "rider" ? p.role : (p.linkedUsers[0]?.role || null),
-      ridesCompleted: activeParticipations.length,
-      dayRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "day").length,
-      weekendRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "weekend").length,
-      multiDayRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "multi-day").length,
-      expeditionRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "expedition").length,
-      totalKm: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
-      totalPoints: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
-      ridesParticipated: activeParticipations.map((pp: typeof p.participations[number]) => ({
-        rideId: pp.ride.id,
-        rideNumber: pp.ride.rideNumber,
-        rideTitle: pp.ride.title,
-        rideDate: pp.ride.startDate.toISOString(),
-        distanceKm: pp.ride.distanceKm,
-        points: pp.points,
-        droppedOut: pp.droppedOut,
-      })),
-      participationMap: Object.fromEntries(
-        activeParticipations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
-      ),
-    };
+        id: p.id,
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        address: p.address,
+        emergencyContact: p.emergencyContact,
+        emergencyPhone: p.emergencyPhone,
+        bloodGroup: p.bloodGroup,
+        joinDate: p.joinDate.toISOString(),
+        avatarUrl: p.avatarUrl,
+        ridesOrganized: p.ridesOrganized,
+        sweepsDone: p.sweepsDone,
+        pilotsDone: p.pilotsDone,
+        mergedIntoId: p.mergedIntoId,
+        userRole: p.role !== "rider" ? p.role : (p.linkedUsers[0]?.role || null),
+        ridesCompleted: activeParticipations.length,
+        dayRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "day").length,
+        weekendRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "weekend").length,
+        multiDayRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "multi-day").length,
+        expeditionRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "expedition").length,
+        totalKm: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
+        totalPoints: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
+        ridesParticipated: activeParticipations.map((pp: typeof p.participations[number]) => ({
+          rideId: pp.ride.id,
+          rideNumber: pp.ride.rideNumber,
+          rideTitle: pp.ride.title,
+          rideDate: pp.ride.startDate.toISOString(),
+          distanceKm: pp.ride.distanceKm,
+          points: pp.points,
+          droppedOut: pp.droppedOut,
+        })),
+        participationMap: Object.fromEntries(
+          activeParticipations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
+        ),
+      };
     });
 
     return NextResponse.json({ riders });

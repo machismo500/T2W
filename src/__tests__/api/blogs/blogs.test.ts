@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createNextRequest, parseResponse } from '@/__tests__/helpers';
+import { createNextRequest, parseResponse, mockSuperAdmin } from '@/__tests__/helpers';
 
 vi.mock('@/lib/db', () => ({
   prisma: {
@@ -10,9 +10,15 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
+vi.mock('@/lib/auth', () => ({
+  getCurrentUser: vi.fn(),
+}));
+
 import { GET, POST } from '@/app/api/blogs/route';
 import { prisma } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 
+const mockGetCurrentUser = getCurrentUser as ReturnType<typeof vi.fn>;
 const mockFindMany = prisma.blogPost.findMany as ReturnType<typeof vi.fn>;
 const mockCreate = prisma.blogPost.create as ReturnType<typeof vi.fn>;
 
@@ -56,6 +62,7 @@ describe('GET /api/blogs', () => {
 describe('POST /api/blogs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
   });
 
   it('creates blog with stringified tags', async () => {

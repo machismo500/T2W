@@ -66,22 +66,27 @@ export async function POST(req: NextRequest) {
     const affectedRideIds = new Set<string>();
 
     for (const change of changes) {
-      const { riderProfileId, rideId, points } = change;
-      affectedRiderIds.add(riderProfileId);
-      affectedRideIds.add(rideId);
-
-      if (points <= 0) {
-        await prisma.rideParticipation.deleteMany({
-          where: { riderProfileId, rideId },
-        });
-      } else {
-        await prisma.rideParticipation.upsert({
-          where: { riderProfileId_rideId: { riderProfileId, rideId } },
-          update: { points },
-          create: { riderProfileId, rideId, points },
-        });
-      }
+      affectedRiderIds.add(change.riderProfileId);
+      affectedRideIds.add(change.rideId);
     }
+
+    // Wrap all writes in a transaction for consistency
+    await prisma.$transaction(async (tx) => {
+      for (const change of changes) {
+        const { riderProfileId, rideId, points } = change;
+        if (points <= 0) {
+          await tx.rideParticipation.deleteMany({
+            where: { riderProfileId, rideId },
+          });
+        } else {
+          await tx.rideParticipation.upsert({
+            where: { riderProfileId_rideId: { riderProfileId, rideId } },
+            update: { points },
+            create: { riderProfileId, rideId, points },
+          });
+        }
+      }
+    });
 
     // Sync stats for all affected riders
     for (const riderId of affectedRiderIds) {

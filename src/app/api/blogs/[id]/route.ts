@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -39,22 +40,36 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || (currentUser.role !== "superadmin" && currentUser.role !== "core_member")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await params;
     const data = await req.json();
 
+    // Build update from allowlist to prevent mass-assignment
+    const ALLOWED = ["title", "excerpt", "content", "authorName", "authorAvatar",
+      "publishDate", "coverImage", "tags", "type", "isVlog", "videoUrl",
+      "readTime", "approvalStatus"] as const;
+    const updateData: Record<string, unknown> = {};
+    for (const key of ALLOWED) {
+      if (data[key] !== undefined) updateData[key] = data[key];
+    }
+
     // If tags is provided as an array, stringify it for storage
-    if (data.tags && Array.isArray(data.tags)) {
-      data.tags = JSON.stringify(data.tags);
+    if (updateData.tags && Array.isArray(updateData.tags)) {
+      updateData.tags = JSON.stringify(updateData.tags);
     }
 
     // If publishDate is provided as a string, convert to Date
-    if (data.publishDate) {
-      data.publishDate = new Date(data.publishDate);
+    if (updateData.publishDate) {
+      updateData.publishDate = new Date(updateData.publishDate as string);
     }
 
     const blog = await prisma.blogPost.update({
       where: { id },
-      data,
+      data: updateData,
     });
 
     return NextResponse.json({ blog });
@@ -73,6 +88,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || (currentUser.role !== "superadmin" && currentUser.role !== "core_member")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const { id } = await params;
     await prisma.blogPost.delete({
       where: { id },

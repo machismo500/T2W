@@ -15,13 +15,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check that user exists
+    // Check that user exists — always return success to prevent account enumeration
     const user = await prisma.user.findUnique({ where: { email: emailLower } });
     if (!user) {
-      return NextResponse.json(
-        { error: "No account found with this email" },
-        { status: 404 }
-      );
+      return NextResponse.json({ success: true, emailSent: false });
     }
 
     const otpCode = await createResetOtp(emailLower);
@@ -32,7 +29,6 @@ export async function POST(req: NextRequest) {
 
     if (!smtpUser || !smtpPass) {
       console.error("[T2W] SMTP credentials not configured. Set SMTP_USER and SMTP_PASS environment variables.");
-      console.info(`[T2W] OTP for ${emailLower}: ${otpCode}`);
       return NextResponse.json(
         { error: "Email service is not configured. Please contact support." },
         { status: 503 }
@@ -77,7 +73,6 @@ export async function POST(req: NextRequest) {
     } catch (emailErr) {
       const errMsg = emailErr instanceof Error ? emailErr.message : String(emailErr);
       console.error("[T2W] Email send error:", errMsg);
-      console.info(`[T2W] OTP for ${emailLower}: ${otpCode}`);
       return NextResponse.json(
         { error: `Failed to send email: ${errMsg}` },
         { status: 502 }
