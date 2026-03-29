@@ -408,6 +408,28 @@ export function AdminPage() {
     }
   };
 
+  const updateRideStatus = async (rideId: string, newStatus: string) => {
+    const ride = rides.find((r) => r.id === rideId);
+    if (!ride) return;
+    const previousStatus = ride.status;
+    // Optimistic update
+    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, status: newStatus } : r));
+    try {
+      await api.rides.update(rideId, { status: newStatus });
+      api.activityLog.add({
+        action: "ride_edited",
+        performedBy: user!.id,
+        performedByName: user!.name,
+        targetId: rideId,
+        targetName: ride.title,
+        details: `Changed ride status from "${previousStatus}" to "${newStatus}"`,
+      });
+    } catch {
+      // Revert on failure
+      setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, status: previousStatus } : r));
+    }
+  };
+
   const confirmDeleteRide = (ride: AdminRide) => {
     setDeleteConfirm({ type: "ride", id: ride.id, name: ride.title });
   };
@@ -1518,9 +1540,24 @@ export function AdminPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h4 className="font-semibold text-white truncate">{ride.title}</h4>
-                        <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium capitalize ${
-                          ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "ongoing" ? "bg-yellow-400/10 text-yellow-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : ride.status === "cancelled" ? "bg-red-400/10 text-red-400" : "bg-gray-400/10 text-gray-400"
-                        }`}>{ride.status === "ongoing" ? "Ongoing Ride" : ride.status}</span>
+                        {isCoreOrAbove ? (
+                          <select
+                            value={ride.status}
+                            onChange={(e) => updateRideStatus(ride.id, e.target.value)}
+                            className={`shrink-0 cursor-pointer rounded-lg border-0 px-2 py-0.5 text-xs font-medium capitalize outline-none ${
+                              ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "ongoing" ? "bg-yellow-400/10 text-yellow-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : ride.status === "cancelled" ? "bg-red-400/10 text-red-400" : "bg-gray-400/10 text-gray-400"
+                            }`}
+                          >
+                            <option value="upcoming">Upcoming</option>
+                            <option value="ongoing">Ongoing</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        ) : (
+                          <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium capitalize ${
+                            ride.status === "upcoming" ? "bg-blue-400/10 text-blue-400" : ride.status === "ongoing" ? "bg-yellow-400/10 text-yellow-400" : ride.status === "completed" ? "bg-green-400/10 text-green-400" : ride.status === "cancelled" ? "bg-red-400/10 text-red-400" : "bg-gray-400/10 text-gray-400"
+                          }`}>{ride.status === "ongoing" ? "Ongoing Ride" : ride.status}</span>
+                        )}
                       </div>
                       <p className="mt-1 text-sm text-t2w-muted">
                         {ride.rideNumber} &middot; {ride.startLocation} &rarr; {ride.endLocation} &middot; {ride.distanceKm} km &middot; {ride.registeredRiders} registered
