@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getRolePermissions } from "@/lib/role-permissions";
 
 // GET /api/ride-posts?rideId=xxx&status=approved|pending
 export async function GET(req: NextRequest) {
@@ -56,6 +57,15 @@ export async function POST(req: NextRequest) {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rolePerms = await getRolePermissions();
+    const canPost =
+      user.role === "superadmin" ||
+      user.role === "core_member" ||
+      (user.role === "t2w_rider" && rolePerms.t2w_rider.canPostRideTales);
+    if (!canPost) {
+      return NextResponse.json({ error: "Your role does not have permission to post ride tales" }, { status: 403 });
     }
 
     const data = await req.json();

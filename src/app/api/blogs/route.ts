@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getRolePermissions } from "@/lib/role-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,16 @@ export async function POST(req: NextRequest) {
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check role-based permission to post blogs
+    const rolePerms = await getRolePermissions();
+    const canPost =
+      currentUser.role === "superadmin" ||
+      currentUser.role === "core_member" ||
+      (currentUser.role === "t2w_rider" && rolePerms.t2w_rider.canPostBlog);
+    if (!canPost) {
+      return NextResponse.json({ error: "Your role does not have permission to post blogs" }, { status: 403 });
     }
 
     const data = await req.json();

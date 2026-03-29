@@ -87,6 +87,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    if (user.role === "core_member") {
+      const { getRolePermissions } = await import("@/lib/role-permissions");
+      const rolePerms = await getRolePermissions();
+      if (!rolePerms.core_member.canCreateRide) {
+        return NextResponse.json({ error: "Core members do not have permission to create rides" }, { status: 403 });
+      }
+    }
+
     const data = await req.json();
 
     // Auto-generate ride number based on total ride count

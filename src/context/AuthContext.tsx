@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import type { UserRole } from "@/types";
+import { type RolePermissions, DEFAULT_ROLE_PERMISSIONS } from "@/lib/role-permissions";
 
 interface UserData {
   id: string;
@@ -64,7 +65,15 @@ interface AuthContextType {
   canDeleteRide: boolean;
   canApproveContent: boolean;
   canPostBlog: boolean;
+  canPostRideTales: boolean;
   canManageRoles: boolean;
+  canManageRegistrations: boolean;
+  canExportRegistrations: boolean;
+  canControlLiveTracking: boolean;
+  canApproveUsers: boolean;
+  canRegisterForRides: boolean;
+  resolvedRolePerms: import("@/lib/role-permissions").RolePermissions;
+  refreshRolePerms: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -84,6 +93,22 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rolePerms, setRolePerms] = useState<RolePermissions>(DEFAULT_ROLE_PERMISSIONS);
+
+  useEffect(() => {
+    fetch("/api/site-settings?key=role_permissions")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.value) {
+          setRolePerms({
+            rider:       { ...DEFAULT_ROLE_PERMISSIONS.rider,       ...data.value.rider },
+            t2w_rider:   { ...DEFAULT_ROLE_PERMISSIONS.t2w_rider,   ...data.value.t2w_rider },
+            core_member: { ...DEFAULT_ROLE_PERMISSIONS.core_member, ...data.value.core_member },
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const refreshUser = useCallback(async () => {
     try {
@@ -168,15 +193,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canEditProfile = (profileRiderId: string) => {
     if (isSuperAdmin) return true;
     if (!user) return false;
+    if (role === "rider" && !rolePerms.rider.canEditOwnProfile) return false;
     return user.id === profileRiderId || user.linkedRiderId === profileRiderId;
   };
 
-  const canEditRide = isCoreOrAbove;
-  const canCreateRide = isCoreOrAbove;
-  const canDeleteRide = isSuperAdmin;
-  const canApproveContent = isCoreOrAbove;
-  const canPostBlog = isT2WRiderOrAbove;
-  const canManageRoles = isSuperAdmin;
+  // Core member permissions — gated by dynamic toggles (superadmin always has full access)
+  const canCreateRide    = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canCreateRide);
+  const canEditRide      = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canEditRide);
+  const canDeleteRide    = isSuperAdmin;
+  const canApproveContent = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canApproveContent);
+  const canManageRoles   = isSuperAdmin;
+  const canManageRegistrations = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canManageRegistrations);
+  const canExportRegistrations = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canExportRegistrations);
+  const canControlLiveTracking = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canControlLiveTracking);
+  const canApproveUsers  = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canApproveUsers);
+
+  // T2W Rider permissions
+  const canPostBlog =
+    isSuperAdmin ||
+    (role === "core_member") ||
+    (role === "t2w_rider" && rolePerms.t2w_rider.canPostBlog);
+  const canPostRideTales =
+    isSuperAdmin ||
+    (role === "core_member") ||
+    (role === "t2w_rider" && rolePerms.t2w_rider.canPostRideTales);
+
+  // Rider permissions
+  const canRegisterForRides = isLoggedIn && (isCoreOrAbove || isT2WRiderOrAbove || rolePerms.rider.canRegisterForRides);
+
+  // Expose current resolved permissions for the admin UI
+  const resolvedRolePerms = rolePerms;
+  const refreshRolePerms = () => {
+    fetch("/api/site-settings?key=role_permissions")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.value) {
+          setRolePerms({
+            rider:       { ...DEFAULT_ROLE_PERMISSIONS.rider,       ...data.value.rider },
+            t2w_rider:   { ...DEFAULT_ROLE_PERMISSIONS.t2w_rider,   ...data.value.t2w_rider },
+            core_member: { ...DEFAULT_ROLE_PERMISSIONS.core_member, ...data.value.core_member },
+          });
+        }
+      })
+      .catch(() => {});
+  };
 
   return (
     <AuthContext.Provider
@@ -202,7 +262,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canDeleteRide,
         canApproveContent,
         canPostBlog,
+        canPostRideTales,
         canManageRoles,
+        canManageRegistrations,
+        canExportRegistrations,
+        canControlLiveTracking,
+        canApproveUsers,
+        canRegisterForRides,
+        resolvedRolePerms,
+        refreshRolePerms,
       }}
     >
       {children}

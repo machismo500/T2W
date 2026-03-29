@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createNextRequest, parseResponse, mockSuperAdmin, mockRider } from '@/__tests__/helpers';
+import { createNextRequest, parseResponse, mockSuperAdmin, mockRider, mockT2WRider } from '@/__tests__/helpers';
 
 vi.mock('@/lib/db', () => ({
   prisma: {
@@ -12,6 +12,14 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
+}));
+
+vi.mock('@/lib/role-permissions', () => ({
+  getRolePermissions: vi.fn().mockResolvedValue({
+    rider: { canRegisterForRides: true, canEditOwnProfile: true },
+    t2w_rider: { canPostBlog: true, canPostRideTales: true, earlyRegistrationAccess: true },
+    core_member: { canCreateRide: true, canEditRide: true, canManageRegistrations: true, canExportRegistrations: true, canControlLiveTracking: true, canApproveContent: true, canApproveUsers: true },
+  }),
 }));
 
 import { GET, POST } from '@/app/api/ride-posts/route';
@@ -162,8 +170,8 @@ describe('POST /api/ride-posts', () => {
     );
   });
 
-  it('creates pending post for regular users', async () => {
-    mockGetCurrentUser.mockResolvedValue(mockRider);
+  it('creates pending post for T2W Rider users', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockT2WRider);
     mockCreate.mockResolvedValue({
       ...mockPost,
       approvalStatus: 'pending',
@@ -172,7 +180,7 @@ describe('POST /api/ride-posts', () => {
 
     const req = createNextRequest('http://localhost:3000/api/ride-posts', {
       method: 'POST',
-      body: { rideId: 'ride-1', content: 'Rider post' },
+      body: { rideId: 'ride-1', content: 'T2W Rider post' },
     });
     await POST(req);
 
@@ -185,8 +193,21 @@ describe('POST /api/ride-posts', () => {
     );
   });
 
-  it('stringifies images array', async () => {
+  it('returns 403 for rider role (cannot post ride tales)', async () => {
     mockGetCurrentUser.mockResolvedValue(mockRider);
+
+    const req = createNextRequest('http://localhost:3000/api/ride-posts', {
+      method: 'POST',
+      body: { rideId: 'ride-1', content: 'Rider post' },
+    });
+    const { status } = await parseResponse(await POST(req));
+
+    expect(status).toBe(403);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('stringifies images array', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockT2WRider);
     mockCreate.mockResolvedValue(mockPost);
 
     const req = createNextRequest('http://localhost:3000/api/ride-posts', {

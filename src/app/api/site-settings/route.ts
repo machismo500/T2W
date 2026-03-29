@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { invalidateRolePermissionsCache } from "@/lib/role-permissions";
 
-const PUBLIC_KEYS = new Set(["arena_weights", "achievement_settings"]);
+const PUBLIC_KEYS = new Set(["arena_weights", "achievement_settings", "role_permissions"]);
 
 // GET /api/site-settings?key=xxx - get a setting by key
 export async function GET(req: NextRequest) {
@@ -59,6 +60,8 @@ export async function PUT(req: NextRequest) {
       update: { value: JSON.stringify(value) },
       create: { key, value: JSON.stringify(value) },
     });
+
+    if (key === "role_permissions") invalidateRolePermissionsCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {

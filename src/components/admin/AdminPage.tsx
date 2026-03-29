@@ -46,10 +46,11 @@ import { api } from "@/lib/api-client";
 import { ParticipationMatrix } from "./ParticipationMatrix";
 import { MergeProfiles } from "./MergeProfiles";
 import { ArenaSettingsTab } from "./ArenaSettingsTab";
+import { PermissionsTab } from "./PermissionsTab";
 import type { ActivityLogEntry } from "@/lib/api-client";
 import type { UserRole } from "@/types";
 
-type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "badges" | "content" | "approvals" | "form-settings" | "activity" | "arena";
+type AdminTab = "dashboard" | "users" | "rides" | "matrix" | "merge" | "badges" | "content" | "approvals" | "form-settings" | "activity" | "arena" | "permissions";
 
 type PendingUser = {
   id: string;
@@ -203,7 +204,7 @@ function CrewAutocomplete({ label, value, onChange, placeholder }: { label: stri
 }
 
 export function AdminPage() {
-  const { user, loading: authLoading, isSuperAdmin, isCoreOrAbove, canManageRoles, canDeleteRide, canCreateRide, canApproveContent } = useAuth();
+  const { user, loading: authLoading, isSuperAdmin, isCoreOrAbove, canManageRoles, canDeleteRide, canCreateRide, canApproveContent, resolvedRolePerms, refreshRolePerms } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [allUsers, setAllUsers] = useState<AllUser[]>([]);
@@ -984,6 +985,9 @@ export function AdminPage() {
       : []),
     ...(isSuperAdmin
       ? [{ key: "arena" as const, label: "Arena Settings", icon: Trophy }]
+      : []),
+    ...(isSuperAdmin
+      ? [{ key: "permissions" as const, label: "Permissions", icon: Shield }]
       : []),
   ];
 
@@ -2585,6 +2589,11 @@ export function AdminPage() {
         {/* Arena Settings Tab - Super Admin only */}
         {activeTab === "arena" && isSuperAdmin && (
           <ArenaSettingsTab />
+        )}
+
+        {/* ── Permissions Tab ───────────────────────────────────────────── */}
+        {activeTab === "permissions" && isSuperAdmin && (
+          <PermissionsTab resolvedRolePerms={resolvedRolePerms} onSaved={refreshRolePerms} />
         )}
       </div>
 

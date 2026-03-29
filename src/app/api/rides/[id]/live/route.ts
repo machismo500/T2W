@@ -132,6 +132,14 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    if (user.role === "core_member") {
+      const { getRolePermissions } = await import("@/lib/role-permissions");
+      const rolePerms = await getRolePermissions();
+      if (!rolePerms.core_member.canControlLiveTracking) {
+        return NextResponse.json({ error: "Core members do not have permission to control live tracking" }, { status: 403 });
+      }
+    }
+
     const { id: rideId } = await params;
     const { action } = await req.json();
 
