@@ -49,14 +49,16 @@ export async function GET(
       (p: typeof profile.participations[number]) => !p.droppedOut
     );
 
+    const isPrivileged = user.role === "superadmin" || user.role === "core_member";
+
     const rider = {
       id: profile.id,
       name: profile.name,
       email: profile.email,
       phone: profile.phone,
       address: profile.address,
-      emergencyContact: profile.emergencyContact,
-      emergencyPhone: profile.emergencyPhone,
+      emergencyContact: isPrivileged ? profile.emergencyContact : undefined,
+      emergencyPhone: isPrivileged ? profile.emergencyPhone : undefined,
       bloodGroup: profile.bloodGroup,
       joinDate: profile.joinDate.toISOString(),
       avatarUrl: profile.avatarUrl,

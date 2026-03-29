@@ -54,6 +54,8 @@ export async function GET(req: NextRequest) {
       ];
     }
 
+    const isPrivileged = user.role === "superadmin" || user.role === "core_member";
+
     const profiles = await prisma.riderProfile.findMany({
       where,
       include: {
@@ -80,8 +82,8 @@ export async function GET(req: NextRequest) {
         email: p.email,
         phone: p.phone,
         address: p.address,
-        emergencyContact: p.emergencyContact,
-        emergencyPhone: p.emergencyPhone,
+        emergencyContact: isPrivileged ? p.emergencyContact : undefined,
+        emergencyPhone: isPrivileged ? p.emergencyPhone : undefined,
         bloodGroup: p.bloodGroup,
         joinDate: p.joinDate.toISOString(),
         avatarUrl: p.avatarUrl,
