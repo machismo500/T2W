@@ -15,6 +15,11 @@ vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
 }));
 
+const mockGetRolePermissions = vi.fn();
+vi.mock('@/lib/role-permissions', () => ({
+  getRolePermissions: mockGetRolePermissions,
+}));
+
 import { GET, POST } from '@/app/api/rides/route';
 import { prisma } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
@@ -283,9 +288,16 @@ describe('GET /api/rides', () => {
   });
 });
 
+const defaultRolePerms = {
+  rider: { canRegisterForRides: true, canEditOwnProfile: true },
+  t2w_rider: { canPostBlog: true, canPostRideTales: true, earlyRegistrationAccess: true },
+  core_member: { canCreateRide: true, canEditRide: true, canManageRegistrations: true, canExportRegistrations: true, canControlLiveTracking: true, canApproveContent: true, canApproveUsers: true },
+};
+
 describe('POST /api/rides', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
   });
 
   it('returns 403 for non-admin', async () => {
@@ -355,6 +367,54 @@ describe('POST /api/rides', () => {
         endDate: '2025-06-01',
         startLocation: 'Chennai',
         endLocation: 'Pondicherry',
+      },
+    });
+    const { status } = await parseResponse(await POST(req));
+
+    expect(status).toBe(200);
+  });
+
+  it('blocks core_member when canCreateRide permission is disabled', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockCoreMember);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      core_member: { ...defaultRolePerms.core_member, canCreateRide: false },
+    });
+
+    const req = createNextRequest('http://localhost:3000/api/rides', {
+      method: 'POST',
+      body: {
+        title: 'Blocked Ride',
+        startDate: '2025-06-01',
+        endDate: '2025-06-01',
+        startLocation: 'Bangalore',
+        endLocation: 'Mysore',
+      },
+    });
+    const { status, data } = await parseResponse(await POST(req));
+
+    expect(status).toBe(403);
+    expect(data.error).toContain('permission');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('superadmin can always create rides regardless of permission toggle', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      core_member: { ...defaultRolePerms.core_member, canCreateRide: false },
+    });
+    mockCount.mockResolvedValue(0);
+    mockCreate.mockResolvedValue({ id: 'ride-3', title: 'Admin Ride', rideNumber: '#001' });
+
+    const req = createNextRequest('http://localhost:3000/api/rides', {
+      method: 'POST',
+      body: {
+        title: 'Admin Ride',
+        startDate: '2025-06-01',
+        endDate: '2025-06-01',
+        startLocation: 'Bangalore',
+        endLocation: 'Coorg',
       },
     });
     const { status } = await parseResponse(await POST(req));
