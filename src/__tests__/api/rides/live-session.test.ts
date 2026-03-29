@@ -30,6 +30,11 @@ vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
 }));
 
+const mockGetRolePermissions = vi.fn();
+vi.mock('@/lib/role-permissions', () => ({
+  getRolePermissions: mockGetRolePermissions,
+}));
+
 import { GET, POST } from '@/app/api/rides/[id]/live/route';
 import { prisma } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
@@ -179,7 +184,16 @@ describe('GET /api/rides/[id]/live', () => {
 });
 
 describe('POST /api/rides/[id]/live', () => {
-  beforeEach(() => vi.clearAllMocks());
+  const defaultRolePerms = {
+    rider: { canRegisterForRides: true, canEditOwnProfile: true },
+    t2w_rider: { canPostBlog: true, canPostRideTales: true, earlyRegistrationAccess: true },
+    core_member: { canCreateRide: true, canEditRide: true, canManageRegistrations: true, canExportRegistrations: true, canControlLiveTracking: true, canApproveContent: true, canApproveUsers: true },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+  });
 
   it('returns 403 for regular rider', async () => {
     mockGetCurrentUser.mockResolvedValue(mockRider);
@@ -465,5 +479,70 @@ describe('POST /api/rides/[id]/live', () => {
     expect(status).toBe(200);
     expect(data.action).toBe('restarted');
     expect(data.session.status).toBe('live');
+  });
+});
+
+describe('POST /api/rides/[id]/live — permission gating', () => {
+  const defaultRolePerms = {
+    rider: { canRegisterForRides: true, canEditOwnProfile: true },
+    t2w_rider: { canPostBlog: true, canPostRideTales: true, earlyRegistrationAccess: true },
+    core_member: { canCreateRide: true, canEditRide: true, canManageRegistrations: true, canExportRegistrations: true, canControlLiveTracking: true, canApproveContent: true, canApproveUsers: true },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+  });
+
+  it('blocks core_member when canControlLiveTracking is disabled', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockCoreMember);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      core_member: { ...defaultRolePerms.core_member, canControlLiveTracking: false },
+    });
+
+    const res = await callPOST('ride-1', { action: 'start' });
+    const { status, data } = await parseResponse(res);
+
+    expect(status).toBe(403);
+    expect(data.error).toContain('permission');
+  });
+
+  it('allows core_member to control live tracking when permission is enabled', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockCoreMember);
+    mockRideFindUnique.mockResolvedValue({ id: 'ride-1', status: 'ongoing', leadRider: null, sweepRider: null });
+    mockSessionFindUnique.mockResolvedValue(null);
+    mockUserFindFirst.mockResolvedValue(null);
+    mockRiderProfileFindFirst.mockResolvedValue(null);
+    mockSessionCreate.mockResolvedValue({
+      id: 'sess-1', rideId: 'ride-1', status: 'live', startedAt: new Date(), endedAt: null,
+    });
+    mockRideUpdate.mockResolvedValue({});
+
+    const res = await callPOST('ride-1', { action: 'start' });
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
+  });
+
+  it('superadmin can always control live tracking regardless of permission toggle', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      core_member: { ...defaultRolePerms.core_member, canControlLiveTracking: false },
+    });
+    mockRideFindUnique.mockResolvedValue({ id: 'ride-1', status: 'ongoing', leadRider: null, sweepRider: null });
+    mockSessionFindUnique.mockResolvedValue(null);
+    mockUserFindFirst.mockResolvedValue(null);
+    mockRiderProfileFindFirst.mockResolvedValue(null);
+    mockSessionCreate.mockResolvedValue({
+      id: 'sess-1', rideId: 'ride-1', status: 'live', startedAt: new Date(), endedAt: null,
+    });
+    mockRideUpdate.mockResolvedValue({});
+
+    const res = await callPOST('ride-1', { action: 'start' });
+    const { status } = await parseResponse(res);
+
+    expect(status).toBe(200);
   });
 });

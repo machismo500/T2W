@@ -14,6 +14,14 @@ vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
 }));
 
+const { mockInvalidateCache } = vi.hoisted(() => ({
+  mockInvalidateCache: vi.fn(),
+}));
+
+vi.mock('@/lib/role-permissions', () => ({
+  invalidateRolePermissionsCache: mockInvalidateCache,
+}));
+
 import { GET, PUT } from '@/app/api/site-settings/route';
 import { prisma } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
@@ -157,5 +165,51 @@ describe('PUT /api/site-settings', () => {
         create: { key: 'hero_stats', value: JSON.stringify({ riders: 600 }) },
       })
     );
+  });
+});
+
+describe('role_permissions public key', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns role_permissions without authentication', async () => {
+    (getCurrentUser as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.siteSettings.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      key: 'role_permissions',
+      value: JSON.stringify({ rider: { canRegisterForRides: false } }),
+    });
+
+    const req = createNextRequest('http://localhost:3000/api/site-settings?key=role_permissions');
+    const { status, data } = await parseResponse(await GET(req));
+
+    expect(status).toBe(200);
+    expect(data.value.rider.canRegisterForRides).toBe(false);
+  });
+
+  it('invalidates role permissions cache when role_permissions key is saved', async () => {
+    (getCurrentUser as ReturnType<typeof vi.fn>).mockResolvedValue(mockSuperAdmin);
+    (prisma.siteSettings.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const req = createNextRequest('http://localhost:3000/api/site-settings', {
+      method: 'PUT',
+      body: { key: 'role_permissions', value: { rider: { canRegisterForRides: false } } },
+    });
+    await PUT(req);
+
+    expect(mockInvalidateCache).toHaveBeenCalled();
+  });
+
+  it('does NOT invalidate cache when saving a different key', async () => {
+    (getCurrentUser as ReturnType<typeof vi.fn>).mockResolvedValue(mockSuperAdmin);
+    (prisma.siteSettings.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const req = createNextRequest('http://localhost:3000/api/site-settings', {
+      method: 'PUT',
+      body: { key: 'arena_weights', value: { ptsDay: 5 } },
+    });
+    await PUT(req);
+
+    expect(mockInvalidateCache).not.toHaveBeenCalled();
   });
 });

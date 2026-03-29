@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getRolePermissions } from "@/lib/role-permissions";
 
-// PUT /api/users/role - change a user/rider's role (superadmin only)
-// Persists on BOTH User.role (if User account exists) AND RiderProfile.role
+// PUT /api/users/role - change a user/rider's role
+// Super admins can set any role. Core members with canManageRoles can promote to rider/t2w_rider only.
 export async function PUT(req: NextRequest) {
   try {
     const currentUser = await getCurrentUser();
-    if (!currentUser || currentUser.role !== "superadmin") {
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const isSuperAdmin = currentUser.role === "superadmin";
+    let isCoreMemberWithPermission = false;
+    if (currentUser.role === "core_member") {
+      const perms = await getRolePermissions();
+      isCoreMemberWithPermission = perms.core_member.canManageRoles;
+    }
+
+    if (!isSuperAdmin && !isCoreMemberWithPermission) {
       return NextResponse.json({ error: "Only super admins can change roles" }, { status: 403 });
     }
 
@@ -19,6 +31,14 @@ export async function PUT(req: NextRequest) {
     const validRoles = ["superadmin", "core_member", "t2w_rider", "rider", "guest"];
     if (!validRoles.includes(newRole)) {
       return NextResponse.json({ error: `Invalid role. Must be one of: ${validRoles.join(", ")}` }, { status: 400 });
+    }
+
+    // Core members can only assign rider or t2w_rider — not core_member/superadmin
+    if (isCoreMemberWithPermission && !isSuperAdmin) {
+      const coreMemberAllowed = ["rider", "t2w_rider"];
+      if (!coreMemberAllowed.includes(newRole)) {
+        return NextResponse.json({ error: "Core members can only assign rider or t2w_rider roles" }, { status: 403 });
+      }
     }
 
     let updatedUser = false;

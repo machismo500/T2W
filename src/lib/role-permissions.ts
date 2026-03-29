@@ -8,11 +8,14 @@ export type RolePermissions = {
   rider: {
     canRegisterForRides: boolean;
     canEditOwnProfile: boolean;
+    canViewLiveTracking: boolean;
+    canDownloadRideDocuments: boolean;
   };
   t2w_rider: {
     canPostBlog: boolean;
     canPostRideTales: boolean;
     earlyRegistrationAccess: boolean;
+    canViewMemberDirectory: boolean;
   };
   core_member: {
     canCreateRide: boolean;
@@ -22,6 +25,9 @@ export type RolePermissions = {
     canControlLiveTracking: boolean;
     canApproveContent: boolean;
     canApproveUsers: boolean;
+    canViewActivityLog: boolean;
+    canManageRoles: boolean;
+    canManageBadges: boolean;
   };
 };
 
@@ -29,11 +35,14 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   rider: {
     canRegisterForRides: true,
     canEditOwnProfile: true,
+    canViewLiveTracking: true,
+    canDownloadRideDocuments: false,
   },
   t2w_rider: {
     canPostBlog: true,
     canPostRideTales: true,
     earlyRegistrationAccess: true,
+    canViewMemberDirectory: false,
   },
   core_member: {
     canCreateRide: true,
@@ -43,6 +52,9 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
     canControlLiveTracking: true,
     canApproveContent: true,
     canApproveUsers: true,
+    canViewActivityLog: true,
+    canManageRoles: false,
+    canManageBadges: false,
   },
 };
 

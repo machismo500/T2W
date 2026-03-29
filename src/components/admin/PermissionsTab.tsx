@@ -30,6 +30,8 @@ const SECTIONS: Section[] = [
     features: [
       { key: "canRegisterForRides", label: "Register for Rides", description: "Can sign up for upcoming rides" },
       { key: "canEditOwnProfile", label: "Edit Own Profile", description: "Can update name, phone, emergency contact, etc." },
+      { key: "canViewLiveTracking", label: "View Live Tracking", description: "Can open the live ride map and see rider locations during an ongoing ride" },
+      { key: "canDownloadRideDocuments", label: "Download Ride Documents", description: "Can download GPX files and route documents attached to rides" },
     ],
   },
   {
@@ -43,6 +45,7 @@ const SECTIONS: Section[] = [
       { key: "canPostBlog", label: "Write Blog Posts", description: "Can submit blog posts (requires mod approval)" },
       { key: "canPostRideTales", label: "Post Ride Tales", description: "Can post ride stories on completed rides (requires mod approval)" },
       { key: "earlyRegistrationAccess", label: "Early Registration Access", description: "Can register before the general public when a ride has a T2W-specific open date" },
+      { key: "canViewMemberDirectory", label: "View Member Directory", description: "Can browse the full member list including contact details and ride history" },
     ],
   },
   {
@@ -60,6 +63,9 @@ const SECTIONS: Section[] = [
       { key: "canControlLiveTracking", label: "Control Live Tracking", description: "Can start, pause, call breaks, and end live ride sessions" },
       { key: "canApproveContent", label: "Approve Content", description: "Can approve/reject blog posts and ride tales" },
       { key: "canApproveUsers", label: "Approve New Members", description: "Can approve or reject pending user sign-ups" },
+      { key: "canViewActivityLog", label: "View Activity Log", description: "Can access the admin activity log showing all recent actions" },
+      { key: "canManageRoles", label: "Manage Member Roles", description: "Can promote Riders to T2W Rider status (Super Admin handles Core Member and above)" },
+      { key: "canManageBadges", label: "Manage Badges", description: "Can create and edit badge tiers and kilometre thresholds" },
     ],
   },
 ];

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getRolePermissions } from "@/lib/role-permissions";
 
 // Compute a cutoff date from period string (e.g., "6m", "1y")
 function periodCutoffDate(period: string | null): Date | null {
@@ -17,12 +18,23 @@ function periodCutoffDate(period: string | null): Date | null {
   return null;
 }
 
-// GET /api/riders - list all rider profiles with participation stats (admin only)
+// GET /api/riders - list all rider profiles with participation stats
+// Access: superadmin + core_member always; t2w_rider when canViewMemberDirectory is enabled
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
-    if (!user || (user.role !== "superadmin" && user.role !== "core_member")) {
+    if (!user) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (user.role !== "superadmin" && user.role !== "core_member") {
+      if (user.role === "t2w_rider") {
+        const perms = await getRolePermissions();
+        if (!perms.t2w_rider.canViewMemberDirectory) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      } else {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const searchParams = req.nextUrl.searchParams;

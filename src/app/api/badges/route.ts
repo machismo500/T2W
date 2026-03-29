@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getRolePermissions } from "@/lib/role-permissions";
 
 // GET /api/badges - list all badge tiers
 export async function GET() {
@@ -31,12 +32,22 @@ export async function POST() {
   }
 }
 
-// PUT /api/badges - update a badge tier (superadmin only)
+// PUT /api/badges - update a badge tier (superadmin, or core_member with canManageBadges)
 export async function PUT(request: Request) {
   try {
     const user = await getCurrentUser();
-    if (!user || user.role !== "superadmin") {
+    if (!user) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (user.role !== "superadmin") {
+      if (user.role === "core_member") {
+        const perms = await getRolePermissions();
+        if (!perms.core_member.canManageBadges) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+      } else {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const body = await request.json();

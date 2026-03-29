@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getRolePermissions } from "@/lib/role-permissions";
 
 // GET /api/activity-log - list activity log entries (admin only)
 export async function GET() {
   try {
     const user = await getCurrentUser();
-    if (
-      !user ||
-      (user.role !== "superadmin" && user.role !== "core_member")
-    ) {
+    if (!user || (user.role !== "superadmin" && user.role !== "core_member")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (user.role === "core_member") {
+      const perms = await getRolePermissions();
+      if (!perms.core_member.canViewActivityLog) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const entries = await prisma.activityLog.findMany({
