@@ -6,6 +6,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AuthProvider } from "@/context/AuthContext";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -426,6 +427,7 @@ export default function RootLayout({
       </head>
       <body className={`min-h-screen bg-t2w-dark font-sans antialiased ${inter.className}`}>
         <AuthProvider>
+          <ServiceWorkerRegistrar />
           <Navbar />
           <main className="min-h-screen">{children}</main>
           <Footer />
