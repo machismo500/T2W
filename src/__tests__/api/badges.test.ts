@@ -19,6 +19,20 @@ vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
 }));
 
+const { mockGetRolePermissions } = vi.hoisted(() => ({
+  mockGetRolePermissions: vi.fn(),
+}));
+
+vi.mock('@/lib/role-permissions', () => ({
+  getRolePermissions: mockGetRolePermissions,
+}));
+
+const defaultRolePerms = {
+  rider: { canRegisterForRides: true, canEditOwnProfile: true, canViewLiveTracking: true, canDownloadRideDocuments: false },
+  t2w_rider: { canPostBlog: true, canPostRideTales: true, earlyRegistrationAccess: true, canViewMemberDirectory: false },
+  core_member: { canCreateRide: true, canEditRide: true, canManageRegistrations: true, canExportRegistrations: true, canControlLiveTracking: true, canApproveContent: true, canApproveUsers: true, canViewActivityLog: true, canManageRoles: false, canManageBadges: false },
+};
+
 import { GET, POST, PUT, awardBadgesForUser } from '@/app/api/badges/route';
 import { prisma } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
@@ -130,6 +144,7 @@ describe('POST /api/badges', () => {
 describe('PUT /api/badges', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
   });
 
   it('returns 403 for unauthenticated users', async () => {
@@ -377,5 +392,54 @@ describe('awardBadgesForUser', () => {
 
     expect(awarded).toEqual(['Silver']);
     expect(mockUserBadgeUpsert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PUT /api/badges — canManageBadges permission gating', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+  });
+
+  it('returns 403 for core_member when canManageBadges is disabled (default)', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockCoreMember);
+
+    const req = createNextRequest('http://localhost:3000/api/badges', {
+      method: 'PUT',
+      body: { id: 'b-1', name: 'Updated' },
+    });
+    const { status } = await parseResponse(await PUT(req));
+    expect(status).toBe(403);
+  });
+
+  it('allows core_member to update badge when canManageBadges is enabled', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockCoreMember);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      core_member: { ...defaultRolePerms.core_member, canManageBadges: true },
+    });
+    mockBadgeUpdate.mockResolvedValue({ id: 'b-1', name: 'Updated', minKm: 1000 });
+
+    const req = createNextRequest('http://localhost:3000/api/badges', {
+      method: 'PUT',
+      body: { id: 'b-1', name: 'Updated' },
+    });
+    const { status, data } = await parseResponse(await PUT(req));
+    expect(status).toBe(200);
+    expect(data.badge.name).toBe('Updated');
+  });
+
+  it('superadmin can always update badges regardless of permission setting', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+    mockBadgeUpdate.mockResolvedValue({ id: 'b-1', name: 'Super Updated', minKm: 1000 });
+
+    const req = createNextRequest('http://localhost:3000/api/badges', {
+      method: 'PUT',
+      body: { id: 'b-1', name: 'Super Updated' },
+    });
+    const { status } = await parseResponse(await PUT(req));
+    expect(status).toBe(200);
+    // getRolePermissions should NOT be called for superadmin
+    expect(mockGetRolePermissions).not.toHaveBeenCalled();
   });
 });

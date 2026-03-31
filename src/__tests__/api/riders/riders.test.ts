@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createNextRequest, parseResponse, mockSuperAdmin, mockCoreMember, mockRider } from '@/__tests__/helpers';
+import { createNextRequest, parseResponse, mockSuperAdmin, mockCoreMember, mockRider, mockT2WRider } from '@/__tests__/helpers';
 
 vi.mock('@/lib/db', () => ({
   prisma: {
@@ -11,12 +11,27 @@ vi.mock('@/lib/db', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    siteSettings: { findUnique: vi.fn() },
   },
 }));
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
 }));
+
+const { mockGetRolePermissions } = vi.hoisted(() => ({
+  mockGetRolePermissions: vi.fn(),
+}));
+
+vi.mock('@/lib/role-permissions', () => ({
+  getRolePermissions: mockGetRolePermissions,
+}));
+
+const defaultRolePerms = {
+  rider: { canRegisterForRides: true, canEditOwnProfile: true, canViewLiveTracking: true, canDownloadRideDocuments: false },
+  t2w_rider: { canPostBlog: true, canPostRideTales: true, earlyRegistrationAccess: true, canViewMemberDirectory: false },
+  core_member: { canCreateRide: true, canEditRide: true, canManageRegistrations: true, canExportRegistrations: true, canControlLiveTracking: true, canApproveContent: true, canApproveUsers: true, canViewActivityLog: true, canManageRoles: false, canManageBadges: false },
+};
 
 import { GET, POST } from '@/app/api/riders/route';
 import { prisma } from '@/lib/db';
@@ -62,6 +77,7 @@ const mockProfile = {
 describe('GET /api/riders', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
     mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
   });
 
@@ -254,5 +270,86 @@ describe('POST /api/riders', () => {
         data: { linkedRiderId: 'rider-new' },
       })
     );
+  });
+});
+
+describe('GET /api/riders — emergency contact visibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+    mockProfileFindMany.mockResolvedValue([mockProfile]);
+  });
+
+  it('includes emergency contact for superadmin', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockSuperAdmin);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { status, data } = await parseResponse(await GET(req));
+
+    expect(status).toBe(200);
+    expect(data.riders[0].emergencyContact).toBe('Emergency Person');
+    expect(data.riders[0].emergencyPhone).toBe('1234567890');
+  });
+
+  it('includes emergency contact for core_member', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockCoreMember);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { status, data } = await parseResponse(await GET(req));
+
+    expect(status).toBe(200);
+    expect(data.riders[0].emergencyContact).toBe('Emergency Person');
+    expect(data.riders[0].emergencyPhone).toBe('1234567890');
+  });
+
+  it('strips emergency contact for t2w_rider even with canViewMemberDirectory enabled', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockT2WRider);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      t2w_rider: { ...defaultRolePerms.t2w_rider, canViewMemberDirectory: true },
+    });
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { status, data } = await parseResponse(await GET(req));
+
+    expect(status).toBe(200);
+    expect(data.riders[0].emergencyContact).toBeUndefined();
+    expect(data.riders[0].emergencyPhone).toBeUndefined();
+  });
+});
+
+describe('GET /api/riders — canViewMemberDirectory gating for t2w_rider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+  });
+
+  it('returns 403 for t2w_rider when canViewMemberDirectory is disabled', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockT2WRider);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { status } = await parseResponse(await GET(req));
+    expect(status).toBe(403);
+  });
+
+  it('allows t2w_rider when canViewMemberDirectory is enabled', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockT2WRider);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      t2w_rider: { ...defaultRolePerms.t2w_rider, canViewMemberDirectory: true },
+    });
+    mockProfileFindMany.mockResolvedValue([mockProfile]);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { status } = await parseResponse(await GET(req));
+    expect(status).toBe(200);
+  });
+
+  it('returns 403 for plain rider regardless of permissions', async () => {
+    mockGetCurrentUser.mockResolvedValue(mockRider);
+
+    const req = createNextRequest('http://localhost:3000/api/riders');
+    const { status } = await parseResponse(await GET(req));
+    expect(status).toBe(403);
   });
 });
