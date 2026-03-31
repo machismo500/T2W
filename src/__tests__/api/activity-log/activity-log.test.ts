@@ -7,12 +7,29 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(),
       create: vi.fn(),
     },
+    siteSettings: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
 }));
+
+const { mockGetRolePermissions } = vi.hoisted(() => ({
+  mockGetRolePermissions: vi.fn(),
+}));
+
+vi.mock('@/lib/role-permissions', () => ({
+  getRolePermissions: mockGetRolePermissions,
+}));
+
+const defaultRolePerms = {
+  rider: { canRegisterForRides: true, canEditOwnProfile: true, canViewLiveTracking: true, canDownloadRideDocuments: false },
+  t2w_rider: { canPostBlog: true, canPostRideTales: true, earlyRegistrationAccess: true, canViewMemberDirectory: false },
+  core_member: { canCreateRide: true, canEditRide: true, canManageRegistrations: true, canExportRegistrations: true, canControlLiveTracking: true, canApproveContent: true, canApproveUsers: true, canViewActivityLog: true, canManageRoles: false, canManageBadges: false },
+};
 
 import { GET, POST } from '@/app/api/activity-log/route';
 import { prisma } from '@/lib/db';
@@ -37,6 +54,7 @@ const mockEntry = {
 describe('GET /api/activity-log', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
   });
 
   it('returns 403 for unauthenticated users', async () => {
@@ -194,5 +212,45 @@ describe('POST /api/activity-log', () => {
         }),
       })
     );
+  });
+});
+
+describe('GET /api/activity-log — canViewActivityLog permission gating', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+  });
+
+  it('returns 403 for core_member when canViewActivityLog is disabled', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(mockCoreMember as any);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      core_member: { ...defaultRolePerms.core_member, canViewActivityLog: false },
+    });
+
+    const { status } = await parseResponse(await GET());
+    expect(status).toBe(403);
+  });
+
+  it('allows core_member when canViewActivityLog is enabled', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(mockCoreMember as any);
+    (prisma.activityLog.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const { status } = await parseResponse(await GET());
+    expect(status).toBe(200);
+  });
+
+  it('superadmin always has access regardless of permission setting', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(mockSuperAdmin as any);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      core_member: { ...defaultRolePerms.core_member, canViewActivityLog: false },
+    });
+    (prisma.activityLog.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const { status } = await parseResponse(await GET());
+    expect(status).toBe(200);
+    // getRolePermissions should NOT have been called for superadmin
+    expect(mockGetRolePermissions).not.toHaveBeenCalled();
   });
 });

@@ -2,9 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, WifiOff, Wifi } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
+import { useOnlineStatus } from "@/hooks/use-online-status";
+import {
+  enqueueLocation,
+  flushLocationQueue,
+  getPendingCount,
+} from "@/lib/location-queue";
 import { LiveRideMap } from "./LiveRideMap";
 import { LiveRideControls } from "./LiveRideControls";
 import { LiveRideMetrics } from "./LiveRideMetrics";
@@ -35,6 +41,10 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   const [loading, setLoading] = useState(true);
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isOnline = useOnlineStatus();
+  const [queuedCount, setQueuedCount] = useState(0);
+  const [justReconnected, setJustReconnected] = useState(false);
 
   const watchIdRef = useRef<number | null>(null);
   const locationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -120,6 +130,41 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
     }
   }, [session?.status, metrics, fetchMetrics]);
 
+  // Submit a single GPS ping — queue it locally if the network is down
+  const submitLocationOrQueue = useCallback(
+    async (coords: { lat: number; lng: number; speed?: number | null; heading?: number | null; accuracy?: number | null }) => {
+      try {
+        await api.liveSession.submitLocation(rideId, {
+          lat: coords.lat,
+          lng: coords.lng,
+          speed: coords.speed ?? undefined,
+          heading: coords.heading ?? undefined,
+          accuracy: coords.accuracy ?? undefined,
+        });
+      } catch {
+        // Network failed — queue the ping for later replay
+        await enqueueLocation({
+          rideId,
+          lat: coords.lat,
+          lng: coords.lng,
+          speed: coords.speed,
+          heading: coords.heading,
+          accuracy: coords.accuracy,
+          timestamp: Date.now(),
+        });
+        setQueuedCount((c) => c + 1);
+
+        // Register a Background Sync event so the SW can flush when online
+        if ("serviceWorker" in navigator && "SyncManager" in window) {
+          navigator.serviceWorker.ready
+            .then((reg) => (reg as ServiceWorkerRegistration & { sync?: { register: (tag: string) => Promise<void> } }).sync?.register("flush-locations"))
+            .catch(() => {});
+        }
+      }
+    },
+    [rideId]
+  );
+
   // GPS tracking
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
@@ -127,13 +172,13 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
       return;
     }
 
-    // Watch position for continuous updates
+    // Watch position for continuous updates (GPS works without network)
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         lastCoordsRef.current = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-          speed: position.coords.speed ? position.coords.speed * 3.6 : null, // m/s to km/h
+          speed: position.coords.speed ? position.coords.speed * 3.6 : null, // m/s → km/h
           heading: position.coords.heading,
           accuracy: position.coords.accuracy,
         };
@@ -149,26 +194,16 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
     );
     watchIdRef.current = watchId;
 
-    // Send location to server every LOCATION_INTERVAL
+    // Send (or queue) location every LOCATION_INTERVAL
     const timer = setInterval(async () => {
       if (lastCoordsRef.current) {
-        try {
-          await api.liveSession.submitLocation(rideId, {
-            lat: lastCoordsRef.current.lat,
-            lng: lastCoordsRef.current.lng,
-            speed: lastCoordsRef.current.speed ?? undefined,
-            heading: lastCoordsRef.current.heading ?? undefined,
-            accuracy: lastCoordsRef.current.accuracy ?? undefined,
-          });
-        } catch (err) {
-          console.error("Failed to send location:", err);
-        }
+        await submitLocationOrQueue(lastCoordsRef.current);
       }
     }, LOCATION_INTERVAL);
     locationTimerRef.current = timer;
 
     setIsTracking(true);
-  }, [rideId]);
+  }, [submitLocationOrQueue]);
 
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
@@ -189,6 +224,33 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
       stopTracking();
     };
   }, [stopTracking]);
+
+  // Refresh queued count on mount and after re-render
+  useEffect(() => {
+    getPendingCount(rideId).then(setQueuedCount).catch(() => {});
+  }, [rideId]);
+
+  // When connectivity is restored, flush the offline queue
+  useEffect(() => {
+    if (!isOnline) return;
+    flushLocationQueue(rideId, (coords) =>
+      api.liveSession.submitLocation(rideId, {
+        lat: coords.lat,
+        lng: coords.lng,
+        speed: coords.speed ?? undefined,
+        heading: coords.heading ?? undefined,
+        accuracy: coords.accuracy ?? undefined,
+      })
+    )
+      .then((flushed) => {
+        if (flushed > 0) {
+          setQueuedCount(0);
+          setJustReconnected(true);
+          setTimeout(() => setJustReconnected(false), 4000);
+        }
+      })
+      .catch(() => {});
+  }, [isOnline, rideId]);
 
   // Handlers
   const handleStart = async () => {
@@ -344,7 +406,33 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
             {riders.length} rider{riders.length !== 1 ? "s" : ""} on map
           </p>
         </div>
+        {/* Online/offline pill */}
+        {!isOnline && (
+          <div className="flex items-center gap-1.5 rounded-full bg-orange-500/20 px-2.5 py-1 text-xs font-medium text-orange-400">
+            <WifiOff className="h-3.5 w-3.5" />
+            Offline{queuedCount > 0 ? ` · ${queuedCount} queued` : ""}
+          </div>
+        )}
+        {isOnline && justReconnected && (
+          <div className="flex items-center gap-1.5 rounded-full bg-green-500/20 px-2.5 py-1 text-xs font-medium text-green-400">
+            <Wifi className="h-3.5 w-3.5" />
+            Back online · synced
+          </div>
+        )}
       </div>
+
+      {/* Offline notice banner — shown when tracking but no network */}
+      {!isOnline && isTracking && (
+        <div className="flex items-start gap-2 bg-orange-500/10 border-b border-orange-500/20 px-4 py-2.5 text-xs text-orange-300">
+          <WifiOff className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            No network — GPS is still running.{" "}
+            {queuedCount > 0
+              ? `${queuedCount} location ping${queuedCount !== 1 ? "s" : ""} saved on device and will upload automatically when signal returns.`
+              : "Your location will be saved on device and uploaded when signal returns."}
+          </span>
+        </div>
+      )}
 
       {/* Map */}
       <div className="flex-1 relative">

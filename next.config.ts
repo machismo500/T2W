@@ -6,15 +6,17 @@ const CSP = [
   "default-src 'self'",
   // Next.js requires 'unsafe-inline' for its inline runtime scripts.
   // JSON-LD <script> blocks also need it. We scope to known origins.
-  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://maps.googleapis.com",
   // Google Fonts CSS + Next.js style injection
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com",
   // Google Fonts woff2 files
   "font-src 'self' https://fonts.gstatic.com",
   // Images: self, data URIs (base64 avatars), blob (canvas), any HTTPS CDN
   "img-src 'self' data: blob: https:",
-  // Fetch / XHR: self + GA telemetry + Vercel Speed Insights
-  "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://vitals.vercel-insights.com",
+  // Fetch / XHR: self + GA telemetry + Google Maps API + Vercel Speed Insights
+  "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://maps.googleapis.com https://maps.gstatic.com https://vitals.vercel-insights.com",
+  // Service workers (offline support + Background Sync)
+  "worker-src 'self'",
   // No plugins (Flash, Silverlight, etc.)
   "object-src 'none'",
   // No iframes from external origins
