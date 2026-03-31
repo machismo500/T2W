@@ -97,7 +97,7 @@ export const metadata: Metadata = {
     url: "https://taleson2wheels.com",
     siteName: "Tales on 2 Wheels",
     title:
-      "T2W - Tales on 2 Wheels | Bangalore Motorcycle Club & Bike Group",
+      "T2W - Tales on 2 Wheels | Motorcycle Club from Bangalore & Bike Group",
     description:
       "Bangalore's premier motorcycle club. 500+ riders, group rides to Ladakh, Goa, Thailand & across India. Join the best bike group in Bengaluru — register free!",
     images: [
