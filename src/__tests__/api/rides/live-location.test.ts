@@ -110,6 +110,46 @@ describe('POST /api/rides/[id]/live/location', () => {
     );
   });
 
+  it('handles invalid plannedRoute JSON gracefully (isDeviated stays false)', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'live', plannedRoute: 'NOT_VALID_JSON',
+    } as any);
+    vi.mocked(prisma.liveRideLocation.create).mockResolvedValue({} as any);
+
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/location', {
+      method: 'POST',
+      body: { lat: 12.9, lng: 77.6 },
+    });
+    const res = await POST(req, makeParams());
+    const { status, data } = await parseResponse(res);
+    // Should succeed and not throw, isDeviated defaults to false
+    expect(status).toBe(200);
+    expect(data.isDeviated).toBe(false);
+    expect(isOnRoute).not.toHaveBeenCalled();
+  });
+
+  it('stores null for optional fields when not provided', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'live', plannedRoute: null,
+    } as any);
+    vi.mocked(prisma.liveRideLocation.create).mockResolvedValue({} as any);
+
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/location', {
+      method: 'POST',
+      body: { lat: 12.9, lng: 77.6 }, // no speed/heading/accuracy
+    });
+    const res = await POST(req, makeParams());
+    const { status } = await parseResponse(res);
+    expect(status).toBe(200);
+    expect(prisma.liveRideLocation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ speed: null, heading: null, accuracy: null }),
+      })
+    );
+  });
+
   it('checks deviation against planned route', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
     const route = JSON.stringify([{ lat: 12.9, lng: 77.6 }, { lat: 13.0, lng: 77.7 }]);

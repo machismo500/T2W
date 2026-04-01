@@ -16,6 +16,17 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    if (user.role === "core_member") {
+      const { getRolePermissions } = await import("@/lib/role-permissions");
+      const rolePerms = await getRolePermissions();
+      if (!rolePerms.core_member.canControlLiveTracking) {
+        return NextResponse.json(
+          { error: "Core members do not have permission to control live tracking" },
+          { status: 403 }
+        );
+      }
+    }
+
     const { id: rideId } = await params;
     const { action, reason } = await req.json();
 
@@ -31,6 +42,17 @@ export async function POST(
     }
 
     if (action === "start") {
+      // Prevent overlapping breaks
+      const existingOpenBreak = await prisma.liveRideBreak.findFirst({
+        where: { sessionId: session.id, endedAt: null },
+      });
+      if (existingOpenBreak) {
+        return NextResponse.json(
+          { error: "A break is already active" },
+          { status: 400 }
+        );
+      }
+
       const breakRecord = await prisma.liveRideBreak.create({
         data: {
           sessionId: session.id,
@@ -73,11 +95,17 @@ export async function POST(
         data: { endedAt: new Date() },
       });
 
-      // Resume the session
-      await prisma.liveRideSession.update({
-        where: { id: session.id },
-        data: { status: "live" },
+      // Only resume the session if no other open breaks remain
+      const nextOpenBreak = await prisma.liveRideBreak.findFirst({
+        where: { sessionId: session.id, endedAt: null },
       });
+
+      if (!nextOpenBreak) {
+        await prisma.liveRideSession.update({
+          where: { id: session.id },
+          data: { status: "live" },
+        });
+      }
 
       return NextResponse.json({
         success: true,

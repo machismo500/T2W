@@ -159,8 +159,10 @@ async function flushLocationQueue() {
         }),
       });
 
-      // 200 = success; 400 = session ended (no point retrying), also discard
-      if (res.ok || res.status === 400) {
+      // 2xx = success; 4xx = permanent client error (session ended, auth failed,
+      // invalid data) — discard so the queue doesn't grow forever.
+      // 5xx = server error — stop and retry on next sync.
+      if (res.ok || (res.status >= 400 && res.status < 500)) {
         sentIds.push(loc.id);
       } else {
         break; // server error — stop, retry on next sync

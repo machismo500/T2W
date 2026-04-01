@@ -91,6 +91,59 @@ describe('GET /api/rides/[id]/live/metrics', () => {
     expect(data.riderCount).toBe(3);
   });
 
+  it('falls back to createdAt when startedAt is null', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60000);
+
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'ended',
+      startedAt: null, // missing — should fall back to createdAt
+      createdAt: oneHourAgo,
+      endedAt: now,
+      leadRiderId: null, sweepRiderId: null,
+      breaks: [],
+    } as any);
+
+    vi.mocked(prisma.liveRideLocation.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.liveRideLocation.aggregate).mockResolvedValue({
+      _avg: { speed: null }, _max: { speed: null },
+    } as any);
+
+    const res = await GET(makeReq(), makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(200);
+    expect(data.elapsedMinutes).toBe(60);
+  });
+
+  it('calculates open break duration using current time for live sessions', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+
+    const now = new Date();
+    const twoHoursAgo = new Date(now.getTime() - 120 * 60000);
+    const thirtyMinsAgo = new Date(now.getTime() - 30 * 60000);
+
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'live',
+      startedAt: twoHoursAgo, createdAt: twoHoursAgo, endedAt: null,
+      leadRiderId: null, sweepRiderId: null,
+      breaks: [{ startedAt: thirtyMinsAgo, endedAt: null }], // open break
+    } as any);
+
+    vi.mocked(prisma.liveRideLocation.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.liveRideLocation.aggregate).mockResolvedValue({
+      _avg: { speed: null }, _max: { speed: null },
+    } as any);
+
+    const res = await GET(makeReq(), makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(200);
+    // Break started 30 mins ago and is still open — should be ~30 minutes
+    expect(data.breakMinutes).toBeGreaterThanOrEqual(29);
+    expect(data.breakMinutes).toBeLessThanOrEqual(31);
+  });
+
   it('handles session with no lead rider', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
 

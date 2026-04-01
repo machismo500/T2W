@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createNextRequest, parseResponse } from '@/__tests__/helpers';
 
+const { mockGetRolePermissions } = vi.hoisted(() => ({
+  mockGetRolePermissions: vi.fn(),
+}));
+
+vi.mock('@/lib/role-permissions', () => ({
+  getRolePermissions: mockGetRolePermissions,
+}));
+
 vi.mock('@/lib/db', () => ({
   prisma: {
     liveRideSession: { findUnique: vi.fn(), update: vi.fn() },
@@ -18,8 +26,21 @@ import { getCurrentUser } from '@/lib/auth';
 
 const makeParams = () => ({ params: Promise.resolve({ id: 'ride-1' }) });
 
+const defaultRolePerms = {
+  rider: { canRegisterForRides: true, canEditOwnProfile: true, canViewLiveTracking: true, canDownloadRideDocuments: false },
+  t2w_rider: { canPostBlog: true, canPostRideTales: true, earlyRegistrationAccess: true, canViewMemberDirectory: false },
+  core_member: {
+    canCreateRide: true, canEditRide: true, canManageRegistrations: true,
+    canExportRegistrations: true, canControlLiveTracking: true, canApproveContent: true,
+    canApproveUsers: true, canViewActivityLog: true, canManageRoles: false, canManageBadges: false,
+  },
+};
+
 describe('POST /api/rides/[id]/live/break', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+  });
 
   it('returns 403 when not authenticated', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(null);
@@ -45,6 +66,42 @@ describe('POST /api/rides/[id]/live/break', () => {
     expect(status).toBe(403);
   });
 
+  it('returns 403 for core_member without canControlLiveTracking', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'core_member' } as any);
+    mockGetRolePermissions.mockResolvedValue({
+      ...defaultRolePerms,
+      core_member: { ...defaultRolePerms.core_member, canControlLiveTracking: false },
+    });
+
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/break', {
+      method: 'POST',
+      body: { action: 'start' },
+    });
+    const res = await POST(req, makeParams());
+    const { status } = await parseResponse(res);
+    expect(status).toBe(403);
+  });
+
+  it('allows core_member with canControlLiveTracking', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'core_member' } as any);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'live',
+    } as any);
+    vi.mocked(prisma.liveRideBreak.findFirst).mockResolvedValue(null); // no existing open break
+    vi.mocked(prisma.liveRideBreak.create).mockResolvedValue({
+      id: 'break-1', startedAt: new Date('2024-06-01T10:00:00Z'), reason: null,
+    } as any);
+    vi.mocked(prisma.liveRideSession.update).mockResolvedValue({} as any);
+
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/break', {
+      method: 'POST',
+      body: { action: 'start' },
+    });
+    const res = await POST(req, makeParams());
+    const { status } = await parseResponse(res);
+    expect(status).toBe(200);
+  });
+
   it('returns 400 when no active session', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'superadmin' } as any);
     vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue(null);
@@ -58,11 +115,28 @@ describe('POST /api/rides/[id]/live/break', () => {
     expect(status).toBe(400);
   });
 
+  it('returns 400 when session is ended', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'superadmin' } as any);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'ended',
+    } as any);
+
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/break', {
+      method: 'POST',
+      body: { action: 'start' },
+    });
+    const res = await POST(req, makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(400);
+    expect(data.error).toContain('No active session');
+  });
+
   it('starts a break and pauses session', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'core_member' } as any);
     vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
       id: 'sess-1', status: 'live',
     } as any);
+    vi.mocked(prisma.liveRideBreak.findFirst).mockResolvedValue(null); // no existing open break
     vi.mocked(prisma.liveRideBreak.create).mockResolvedValue({
       id: 'break-1', startedAt: new Date('2024-06-01T10:00:00Z'), reason: 'Fuel stop',
     } as any);
@@ -82,14 +156,33 @@ describe('POST /api/rides/[id]/live/break', () => {
     );
   });
 
-  it('ends a break and resumes session', async () => {
+  it('returns 400 when trying to start a break while one is already active', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'superadmin' } as any);
     vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
       id: 'sess-1', status: 'paused',
     } as any);
     vi.mocked(prisma.liveRideBreak.findFirst).mockResolvedValue({
-      id: 'break-1', startedAt: new Date(), endedAt: null,
+      id: 'break-existing', startedAt: new Date(), endedAt: null,
     } as any);
+
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/break', {
+      method: 'POST',
+      body: { action: 'start', reason: 'Another stop' },
+    });
+    const res = await POST(req, makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(400);
+    expect(data.error).toContain('already active');
+  });
+
+  it('ends a break and resumes session when no open breaks remain', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'superadmin' } as any);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'paused',
+    } as any);
+    vi.mocked(prisma.liveRideBreak.findFirst)
+      .mockResolvedValueOnce({ id: 'break-1', startedAt: new Date(), endedAt: null } as any) // the open break
+      .mockResolvedValueOnce(null); // no remaining open breaks after closing
     vi.mocked(prisma.liveRideBreak.update).mockResolvedValue({
       id: 'break-1', startedAt: new Date(), endedAt: new Date(), reason: null,
     } as any);
@@ -106,6 +199,30 @@ describe('POST /api/rides/[id]/live/break', () => {
     expect(prisma.liveRideSession.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: 'live' } })
     );
+  });
+
+  it('does not resume session when another open break still exists', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1', role: 'superadmin' } as any);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'paused',
+    } as any);
+    vi.mocked(prisma.liveRideBreak.findFirst)
+      .mockResolvedValueOnce({ id: 'break-1', startedAt: new Date(), endedAt: null } as any) // the open break to end
+      .mockResolvedValueOnce({ id: 'break-2', startedAt: new Date(), endedAt: null } as any); // another still open
+    vi.mocked(prisma.liveRideBreak.update).mockResolvedValue({
+      id: 'break-1', startedAt: new Date(), endedAt: new Date(), reason: null,
+    } as any);
+
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/break', {
+      method: 'POST',
+      body: { action: 'end' },
+    });
+    const res = await POST(req, makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(200);
+    expect(data.success).toBe(true);
+    // Session should NOT be resumed
+    expect(prisma.liveRideSession.update).not.toHaveBeenCalled();
   });
 
   it('returns 400 when ending break but no active break exists', async () => {
