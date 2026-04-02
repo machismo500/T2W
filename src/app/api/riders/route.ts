@@ -19,23 +19,17 @@ function periodCutoffDate(period: string | null): Date | null {
 }
 
 // GET /api/riders - list all rider profiles with participation stats
-// Access: superadmin + core_member always; t2w_rider when canViewMemberDirectory is enabled
+// Access: public for leaderboard data (PII stripped); privileged users get full data
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (user.role !== "superadmin" && user.role !== "core_member") {
-      if (user.role === "t2w_rider") {
-        const perms = await getRolePermissions();
-        if (!perms.t2w_rider.canViewMemberDirectory) {
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
-      } else {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
+
+    // Determine privilege level
+    const isPrivileged = user?.role === "superadmin" || user?.role === "core_member";
+
+    // For non-privileged non-admin access: previously required t2w_rider + canViewMemberDirectory.
+    // Now we allow public read for leaderboard stats (names, scores, avatars — no PII).
+    // PII fields (email, phone, address, emergency*) are stripped for non-privileged callers.
 
     const searchParams = req.nextUrl.searchParams;
     const search = searchParams.get("search") || "";
@@ -53,8 +47,6 @@ export async function GET(req: NextRequest) {
         { email: { contains: search, mode: "insensitive" } },
       ];
     }
-
-    const isPrivileged = user.role === "superadmin" || user.role === "core_member";
 
     const profiles = await prisma.riderProfile.findMany({
       where,
@@ -79,12 +71,13 @@ export async function GET(req: NextRequest) {
       return {
         id: p.id,
         name: p.name,
-        email: p.email,
-        phone: p.phone,
-        address: p.address,
+        // PII: only expose to privileged callers
+        email: isPrivileged ? p.email : undefined,
+        phone: isPrivileged ? p.phone : undefined,
+        address: isPrivileged ? p.address : undefined,
         emergencyContact: isPrivileged ? p.emergencyContact : undefined,
         emergencyPhone: isPrivileged ? p.emergencyPhone : undefined,
-        bloodGroup: p.bloodGroup,
+        bloodGroup: isPrivileged ? p.bloodGroup : undefined,
         joinDate: p.joinDate.toISOString(),
         avatarUrl: p.avatarUrl,
         ridesOrganized: p.ridesOrganized,
@@ -99,7 +92,7 @@ export async function GET(req: NextRequest) {
         expeditionRides: activeParticipations.filter((pp: typeof p.participations[number]) => pp.ride.type === "expedition").length,
         totalKm: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.ride.distanceKm, 0),
         totalPoints: activeParticipations.reduce((sum: number, pp: typeof p.participations[number]) => sum + pp.points, 0),
-        ridesParticipated: activeParticipations.map((pp: typeof p.participations[number]) => ({
+        ridesParticipated: isPrivileged ? activeParticipations.map((pp: typeof p.participations[number]) => ({
           rideId: pp.ride.id,
           rideNumber: pp.ride.rideNumber,
           rideTitle: pp.ride.title,
@@ -107,10 +100,10 @@ export async function GET(req: NextRequest) {
           distanceKm: pp.ride.distanceKm,
           points: pp.points,
           droppedOut: pp.droppedOut,
-        })),
-        participationMap: Object.fromEntries(
+        })) : undefined,
+        participationMap: isPrivileged ? Object.fromEntries(
           activeParticipations.map((pp: typeof p.participations[number]) => [pp.ride.id, pp.points])
-        ),
+        ) : undefined,
       };
     });
 

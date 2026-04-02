@@ -26,6 +26,8 @@ export type ArenaView = "leaderboard" | "achievements";
 
 export function RiderArenaPage() {
   const { user } = useAuth();
+  // Registered users (any role) can navigate to rider profiles; guests see plain names
+  const canLinkProfiles = !!user;
   const [riders, setRiders] = useState<ArenaRider[]>([]);
   const [badgeTiers, setBadgeTiers] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,12 +119,13 @@ export function RiderArenaPage() {
       />
       {view === "leaderboard" && (
         <>
-          <ArenaPodium riders={riders} />
+          <ArenaPodium riders={riders} canLinkProfiles={canLinkProfiles} />
           <ArenaLeaderboard
             riders={riders}
             currentUserId={user?.linkedRiderId}
             badgeTiers={badgeTiers}
             weights={weights}
+            canLinkProfiles={canLinkProfiles}
           />
         </>
       )}

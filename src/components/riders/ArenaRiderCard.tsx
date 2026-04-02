@@ -53,6 +53,7 @@ interface ArenaRiderCardProps {
   maxKm: number;
   maxRides: number;
   isCurrentUser: boolean;
+  canLinkProfiles?: boolean;
 }
 
 export function ArenaRiderCard({
@@ -61,6 +62,7 @@ export function ArenaRiderCard({
   maxKm,
   maxRides,
   isCurrentUser,
+  canLinkProfiles = false,
 }: ArenaRiderCardProps) {
   const BadgeIcon = rider.badgeIcon ? badgeIcons[rider.badgeIcon] : null;
 
@@ -73,15 +75,14 @@ export function ArenaRiderCard({
           ? "text-orange-400"
           : "text-t2w-muted";
 
-  return (
-    <Link
-      href={`/rider/${rider.id}`}
-      className={`group relative block rounded-2xl border bg-t2w-surface/80 p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-t2w-accent/5 ${
-        isCurrentUser
-          ? "border-t2w-gold/40 shadow-[0_0_20px_rgba(245,166,35,0.1)]"
-          : "border-t2w-border hover:border-t2w-accent/30"
-      }`}
-    >
+  const cardClassName = `group relative block rounded-2xl border bg-t2w-surface/80 p-5 transition-all duration-300 ${canLinkProfiles ? "hover:-translate-y-1 hover:shadow-lg hover:shadow-t2w-accent/5" : ""} ${
+    isCurrentUser
+      ? "border-t2w-gold/40 shadow-[0_0_20px_rgba(245,166,35,0.1)]"
+      : `border-t2w-border ${canLinkProfiles ? "hover:border-t2w-accent/30" : ""}`
+  }`;
+
+  const cardContent = (
+    <>
       {/* Rank */}
       <span
         className={`absolute right-4 top-4 text-2xl font-black opacity-25 ${rankColor}`}
@@ -112,7 +113,7 @@ export function ArenaRiderCard({
           )}
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white group-hover:text-t2w-accent transition-colors">
+          <p className={`truncate text-sm font-semibold text-white ${canLinkProfiles ? "group-hover:text-t2w-accent transition-colors" : ""}`}>
             {rider.name}
           </p>
           {rider.userRole && (
@@ -173,8 +174,23 @@ export function ArenaRiderCard({
           color="bg-t2w-accent"
         />
       </div>
-    </Link>
+    </>
   );
+
+  return (
+    <>
+      {canLinkProfiles ? (
+        <Link href={`/rider/${rider.id}`} className={cardClassName}>
+          {cardContent}
+        </Link>
+      ) : (
+        <div className={cardClassName}>
+          {cardContent}
+        </div>
+      )}
+    </>
+  );
+
 }
 
 function StatBar({

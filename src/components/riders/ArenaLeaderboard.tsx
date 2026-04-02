@@ -70,6 +70,7 @@ interface ArenaLeaderboardProps {
   currentUserId?: string | null;
   badgeTiers: Badge[];
   weights?: ArenaWeights;
+  canLinkProfiles?: boolean;
 }
 
 export function ArenaLeaderboard({
@@ -77,6 +78,7 @@ export function ArenaLeaderboard({
   currentUserId,
   badgeTiers,
   weights = DEFAULT_ARENA_WEIGHTS,
+  canLinkProfiles = false,
 }: ArenaLeaderboardProps) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("arenaScore");
@@ -417,32 +419,53 @@ export function ArenaLeaderboard({
                       {idx + 1}
                     </td>
                     <td className="px-3 py-3">
-                      <Link
-                        href={`/rider/${rider.id}`}
-                        className="flex items-center gap-2.5 hover:opacity-80"
-                      >
-                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-t2w-surface-light">
-                          {rider.avatarUrl ? (
-                            <img
-                              src={rider.avatarUrl}
-                              alt={rider.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-xs font-bold text-t2w-muted">
-                              {getInitials(rider.name)}
-                            </div>
-                          )}
+                      {canLinkProfiles ? (
+                        <Link
+                          href={`/rider/${rider.id}`}
+                          className="flex items-center gap-2.5 hover:opacity-80"
+                        >
+                          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-t2w-surface-light">
+                            {rider.avatarUrl ? (
+                              <img
+                                src={rider.avatarUrl}
+                                alt={rider.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs font-bold text-t2w-muted">
+                                {getInitials(rider.name)}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-sm font-medium text-white">
+                            {rider.name}
+                            {isMe && (
+                              <span className="ml-1.5 text-[10px] text-t2w-gold">
+                                (You)
+                              </span>
+                            )}
+                          </span>
+                        </Link>
+                      ) : (
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-t2w-surface-light">
+                            {rider.avatarUrl ? (
+                              <img
+                                src={rider.avatarUrl}
+                                alt={rider.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs font-bold text-t2w-muted">
+                                {getInitials(rider.name)}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-sm font-medium text-white">
+                            {rider.name}
+                          </span>
                         </div>
-                        <span className="text-sm font-medium text-white">
-                          {rider.name}
-                          {isMe && (
-                            <span className="ml-1.5 text-[10px] text-t2w-gold">
-                              (You)
-                            </span>
-                          )}
-                        </span>
-                      </Link>
+                      )}
                     </td>
                     <td className="hidden px-3 py-3 sm:table-cell">
                       <span
@@ -517,6 +540,7 @@ export function ArenaLeaderboard({
               maxKm={maxKm}
               maxRides={maxRides}
               isCurrentUser={currentUserId === rider.id}
+              canLinkProfiles={canLinkProfiles}
             />
           ))}
           {sorted.length === 0 && (

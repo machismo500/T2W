@@ -46,11 +46,6 @@ export async function generateMetadata({
   const description = `${ride.description} ${ride.distanceKm} km ${ride.type} ride from ${ride.startLocation} to ${ride.endLocation}. ${ride.status === "upcoming" ? `Register now - only ${ride.maxRiders - registeredRiders} spots left! Fee: ₹${ride.fee}` : `${registeredRiders} riders participated.`} Organised by Tales on 2 Wheels.`;
   const url = `${BASE_URL}/ride/${ride.id}`;
 
-  // Use ride poster as OG image if available; fall back to default OG image
-  const ogImageUrl = ride.posterUrl
-    ? (ride.posterUrl.startsWith("http") ? ride.posterUrl : `${BASE_URL}${ride.posterUrl}`)
-    : `${BASE_URL}/og-image.jpg`;
-
   return {
     title,
     description,
@@ -69,21 +64,12 @@ export async function generateMetadata({
       title: `${ride.rideNumber} ${ride.title} | Tales on 2 Wheels`,
       description: `${ride.distanceKm} km ${ride.type} ride: ${ride.startLocation} → ${ride.endLocation}. ${ride.status === "upcoming" ? "Register now!" : "View ride details."}`,
       url,
-      images: [
-        {
-          url: ogImageUrl,
-          width: 1200,
-          height: 630,
-          alt: `${ride.rideNumber} ${ride.title} — Tales on 2 Wheels`,
-        },
-      ],
     },
     twitter: {
       card: "summary_large_image",
       site: "@TalesOn2Wheels",
       title: `${ride.rideNumber} ${ride.title} | T2W`,
       description: `${ride.distanceKm} km ${ride.type} ride: ${ride.startLocation} → ${ride.endLocation}`,
-      images: [ogImageUrl],
     },
     alternates: { canonical: url },
   };

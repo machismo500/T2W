@@ -68,7 +68,7 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-export function ArenaPodium({ riders }: { riders: ArenaRider[] }) {
+export function ArenaPodium({ riders, canLinkProfiles = false }: { riders: ArenaRider[]; canLinkProfiles?: boolean }) {
   const top3 = riders.slice(0, 3);
   if (top3.length === 0) return null;
 
@@ -83,12 +83,8 @@ export function ArenaPodium({ riders }: { riders: ArenaRider[] }) {
           const BadgeIcon =
             rider.badgeIcon ? badgeIcons[rider.badgeIcon] : null;
 
-          return (
-            <Link
-              key={rider.id}
-              href={`/rider/${rider.id}`}
-              className="group flex w-1/3 flex-col items-center"
-            >
+          const podiumContent = (
+            <>
               {/* Rank number */}
               <span
                 className={`mb-2 font-bold opacity-30 ${style.rankSize} ${style.label}`}
@@ -98,7 +94,7 @@ export function ArenaPodium({ riders }: { riders: ArenaRider[] }) {
 
               {/* Avatar */}
               <div
-                className={`relative mb-3 overflow-hidden rounded-full ${style.avatar} ${style.ring} ${style.glow} transition-transform duration-300 group-hover:scale-105`}
+                className={`relative mb-3 overflow-hidden rounded-full ${style.avatar} ${style.ring} ${style.glow} transition-transform duration-300 ${canLinkProfiles ? "group-hover:scale-105" : ""}`}
               >
                 {rider.avatarUrl ? (
                   <img
@@ -140,7 +136,21 @@ export function ArenaPodium({ riders }: { riders: ArenaRider[] }) {
               <div
                 className={`mt-3 w-full rounded-t-xl ${style.bg} ${style.height} border-t border-l border-r border-white/5`}
               />
+            </>
+          );
+
+          return canLinkProfiles ? (
+            <Link
+              key={rider.id}
+              href={`/rider/${rider.id}`}
+              className="group flex w-1/3 flex-col items-center"
+            >
+              {podiumContent}
             </Link>
+          ) : (
+            <div key={rider.id} className="flex w-1/3 flex-col items-center">
+              {podiumContent}
+            </div>
           );
         })}
       </div>
