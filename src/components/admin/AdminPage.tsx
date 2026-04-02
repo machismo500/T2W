@@ -340,13 +340,15 @@ export function AdminPage() {
       })
       .finally(() => setLoading(false));
 
-    // Load activity log + auto-sync roles/dropouts for superadmin
+    // Load activity log + badge tiers for superadmin
     if (isSuperAdmin) {
       api.activityLog.list().then((data) => {
         setActivityLog(data.entries);
       });
-      // Auto-clear dropouts and sync roles on admin page load
-      api.participation.syncRoles().catch(() => {});
+      // NOTE: syncRoles is intentionally NOT called automatically here.
+      // It would override manual role changes (e.g. T2W Rider → Rider) by
+      // re-upgrading any user who has ride participations. Use the explicit
+      // "Sync Roles" action when a full participation-based sync is needed.
       // Load badge tiers for badge management
       api.badges.list().then((data: { badges: typeof adminBadges }) => {
         setAdminBadges(data.badges || []);
@@ -1587,10 +1589,12 @@ export function AdminPage() {
                       <Link href={`/ride/${ride.id}`} className="flex items-center gap-1.5 rounded-lg bg-t2w-surface-light px-3 py-2 text-xs text-t2w-muted transition-colors hover:text-white">
                         <Eye className="h-3.5 w-3.5" />View
                       </Link>
-                      {isCoreOrAbove && (
+                      {isSuperAdmin && (
                         <button
                           onClick={() => toggleRideDetailsVisible(ride.id)}
-                          title={ride.detailsVisible ? "Details visible to confirmed riders — click to hide" : "Details hidden — click to show to confirmed riders"}
+                          title={ride.detailsVisible
+                            ? "Details ON — confirmed registered riders can see Route, Quick Info, and Riders List. Click to hide."
+                            : "Details OFF — Route, Quick Info, and Riders List are hidden from everyone except Core Members and Super Admins. Click to enable for confirmed registered riders."}
                           className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition-colors ${ride.detailsVisible ? "bg-green-400/20 text-green-400 hover:bg-green-400/30" : "bg-t2w-surface-light text-t2w-muted hover:text-white"}`}
                         >
                           {ride.detailsVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
