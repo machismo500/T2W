@@ -465,6 +465,18 @@ export function AdminPage() {
     }
   };
 
+  const toggleUserNotifyRides = async (userId: string) => {
+    const u = allUsers.find((u) => u.id === userId);
+    if (!u || !u.hasAccount) return;
+    const newValue = !(u.notifyRides ?? true);
+    setAllUsers((prev) => prev.map((x) => x.id === userId ? { ...x, notifyRides: newValue } : x));
+    try {
+      await api.users.update(userId, { notifyRides: newValue });
+    } catch {
+      setAllUsers((prev) => prev.map((x) => x.id === userId ? { ...x, notifyRides: !newValue } : x));
+    }
+  };
+
   const confirmDeleteRide = (ride: AdminRide) => {
     setDeleteConfirm({ type: "ride", id: ride.id, name: ride.title });
   };
@@ -1307,7 +1319,7 @@ export function AdminPage() {
                           <ArrowUpDown className={`h-3 w-3 ${userSort === "joined" ? "text-t2w-accent" : ""}`} />
                         </button>
                       </th>
-                      <th className="pb-3 text-center text-xs font-semibold uppercase tracking-wider text-t2w-muted" title="Include in Notify Selected emails">Notify</th>
+                      <th className="pb-3 text-center text-xs font-semibold uppercase tracking-wider text-t2w-muted" title="Enable or disable ride announcement emails for this user">Notifications</th>
                       <th className="pb-3 text-right text-xs font-semibold uppercase tracking-wider text-t2w-muted">Actions</th>
                     </tr>
                   </thead>
@@ -1371,15 +1383,17 @@ export function AdminPage() {
                         <td className="py-3 text-center">
                           {u.hasAccount ? (
                             <button
-                              onClick={() => toggleAdminNotifySelected(u.id)}
-                              title={(u.adminNotifySelected ?? true) ? "In Notify Selected group — click to remove" : "Not in Notify Selected group — click to add"}
-                              className={`inline-flex h-6 w-6 items-center justify-center rounded transition-colors ${
-                                (u.adminNotifySelected ?? true)
-                                  ? "text-t2w-accent hover:text-white"
-                                  : "text-t2w-muted hover:text-t2w-accent"
+                              onClick={() => toggleUserNotifyRides(u.id)}
+                              title={(u.notifyRides ?? true) ? "Notifications ON — click to disable" : "Notifications OFF — click to enable"}
+                              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                                (u.notifyRides ?? true) ? "bg-t2w-accent" : "bg-t2w-surface-light"
                               }`}
                             >
-                              <Mail className="h-3.5 w-3.5" />
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform ${
+                                  (u.notifyRides ?? true) ? "translate-x-4" : "translate-x-0"
+                                }`}
+                              />
                             </button>
                           ) : (
                             <span className="text-t2w-muted/30 text-xs">—</span>
