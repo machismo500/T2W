@@ -246,6 +246,8 @@ interface Ride {
   difficulty: string;
   description: string;
   fee: number;
+  extraBedSlots?: number;
+  extraBedFee?: number;
   leadRider: string;
   sweepRider: string;
   registrations: unknown[];
@@ -344,7 +346,6 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     vehicleModel: "",
     vehicleRegNumber: "",
     tshirtSize: "" as "XS" | "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "",
-    accommodationType: "bed" as "bed" | "extra-bed",
     agreedCancellationTerms: false,
     agreedIndemnity: false,
     paymentScreenshot: "",
@@ -444,7 +445,6 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const effectiveBankAccounts = bankAccounts.length > 0 ? bankAccounts : [{ label: "", details: (formSettings.bankDetails as string) || "Contact admin for details" }];
   const hiddenFields = (formSettings.hiddenFields as string[]) || [];
   const enableTshirtSize = Boolean(formSettings.enableTshirtSize);
-  const enableAccommodation = Boolean(formSettings.enableAccommodation);
   const paymentMode = (formSettings.paymentMode as string) || "screenshot";
 
   const [posterUploading, setPosterUploading] = useState(false);
@@ -691,7 +691,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     );
   }
 
-  const spotsLeft = ride.maxRiders - (ride.activeRegistrations ?? ride.registeredRiders);
+  const totalCapacity = ride.maxRiders + (ride.extraBedSlots ?? 0);
+  const spotsLeft = totalCapacity - (ride.activeRegistrations ?? ride.registeredRiders);
+  const confirmedBedCount = (ride.confirmedRiders ?? []).filter((r) => r.accommodationType !== "extra-bed").length;
+  const isExtraBedSlot = (ride.extraBedSlots ?? 0) > 0 && confirmedBedCount >= ride.maxRiders;
+  const displayFee = isExtraBedSlot ? (ride.extraBedFee ?? ride.fee) : ride.fee;
   const difficultyColors: Record<string, string> = {
     easy: "text-green-400 bg-green-400/10",
     moderate: "text-yellow-400 bg-yellow-400/10",
@@ -1291,8 +1295,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         <div className="mb-4 rounded-xl bg-t2w-accent/10 p-4">
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-t2w-muted">Registration Fee</span>
-                            <span className="font-display text-2xl font-bold text-t2w-accent">₹{ride.fee.toLocaleString()}</span>
+                            <span className="font-display text-2xl font-bold text-t2w-accent">₹{displayFee.toLocaleString()}</span>
                           </div>
+                          {isExtraBedSlot && (
+                            <p className="mt-0.5 text-xs italic text-amber-400">Extra-bed registration</p>
+                          )}
                           <p className="mt-1 text-xs text-t2w-muted">{spotsLeft} spots remaining</p>
                         </div>
                         <button onClick={() => setShowRegistration(true)} className="btn-primary w-full">Register Now</button>
@@ -1501,29 +1508,6 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                               <option value="XXL">Extra Extra Large (XXL)</option>
                               <option value="XXXL">Extra Extra Extra Large (XXXL)</option>
                             </select>
-                          </div>
-                        )}
-                        {enableAccommodation && (
-                          <div className="sm:col-span-2">
-                            <label className="mb-1.5 block text-sm font-medium text-gray-300">
-                              Accommodation <span className="text-red-400">*</span>
-                            </label>
-                            <div className="flex gap-3">
-                              {(["bed", "extra-bed"] as const).map((opt) => (
-                                <button
-                                  type="button"
-                                  key={opt}
-                                  onClick={() => setRegForm((p) => ({ ...p, accommodationType: opt }))}
-                                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
-                                    regForm.accommodationType === opt
-                                      ? "border-t2w-accent bg-t2w-accent/10 text-t2w-accent"
-                                      : "border-t2w-border bg-t2w-surface-light text-t2w-muted hover:border-t2w-accent/40 hover:text-white"
-                                  }`}
-                                >
-                                  🛏 {opt === "bed" ? "Bed" : "Extra-Bed"}
-                                </button>
-                              ))}
-                            </div>
                           </div>
                         )}
                       </div>

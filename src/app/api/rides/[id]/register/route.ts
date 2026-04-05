@@ -99,7 +99,11 @@ export async function POST(
     // Verify ride exists
     const ride = await prisma.ride.findUnique({
       where: { id: rideId },
-      include: { registrations: { select: { id: true, approvalStatus: true } } },
+      include: {
+        registrations: {
+          select: { id: true, approvalStatus: true, accommodationType: true },
+        },
+      },
     });
 
     if (!ride) {
@@ -140,12 +144,20 @@ export async function POST(
     const activeRegistrations = ride.registrations.filter(
       (r) => r.approvalStatus === "pending" || r.approvalStatus === "confirmed"
     );
-    if (activeRegistrations.length >= ride.maxRiders) {
+    const totalCapacity = ride.maxRiders + (ride.extraBedSlots ?? 0);
+    if (activeRegistrations.length >= totalCapacity) {
       return NextResponse.json(
         { error: "This ride is full — no spots available" },
         { status: 400 }
       );
     }
+
+    // Auto-assign accommodation type: first maxRiders slots are "bed", overflow slots are "extra-bed"
+    const confirmedBeds = activeRegistrations.filter(
+      (r) => r.accommodationType !== "extra-bed"
+    ).length;
+    const autoAccommodationType: "bed" | "extra-bed" =
+      confirmedBeds < ride.maxRiders ? "bed" : "extra-bed";
 
     // Snapshot registration fields before the transaction
     const riderName = String(data.riderName || user.name || "");
@@ -161,7 +173,6 @@ export async function POST(
     const vehicleModel = String(data.vehicleModel || "");
     const vehicleRegNumber = String(data.vehicleRegNumber || "");
     const tshirtSize = String(data.tshirtSize || "");
-    const accommodationType = data.accommodationType === "extra-bed" ? "extra-bed" : "bed";
 
     // Generate a cryptographically random confirmation code
     const randomPart = randomBytes(4).toString("hex").toUpperCase();
@@ -175,7 +186,7 @@ export async function POST(
           approvalStatus: { in: ["pending", "confirmed"] },
         },
       });
-      if (activeCount >= ride.maxRiders) {
+      if (activeCount >= totalCapacity) {
         throw Object.assign(new Error("RIDE_FULL"), { code: "RIDE_FULL" });
       }
 
@@ -196,7 +207,7 @@ export async function POST(
           vehicleModel,
           vehicleRegNumber,
           tshirtSize,
-          accommodationType,
+          accommodationType: autoAccommodationType,
           agreedCancellationTerms: Boolean(data.agreedCancellationTerms),
           agreedIndemnity: Boolean(data.agreedIndemnity),
           paymentScreenshot: String(data.paymentScreenshot || ""),

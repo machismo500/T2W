@@ -123,6 +123,8 @@ export async function POST(req: NextRequest) {
         highlights: JSON.stringify(data.highlights || []),
         posterUrl: data.posterUrl || null,
         fee: data.fee || 0,
+        extraBedSlots: data.extraBedSlots ?? 0,
+        extraBedFee: data.extraBedFee ?? 0,
         leadRider: data.leadRider || "",
         sweepRider: data.sweepRider || "",
         organisedBy: data.organisedBy || null,

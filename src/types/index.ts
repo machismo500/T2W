@@ -56,6 +56,8 @@ export interface Ride {
   highlights: string[];
   posterUrl?: string;
   fee: number;
+  extraBedSlots?: number;
+  extraBedFee?: number;
   leadRider: string;
   sweepRider: string;
   riders?: string[];
