@@ -913,12 +913,14 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
               {[
                 {
                   icon: Gauge,
-                  label: "Distance",
+                  label: "Total Distance",
+                  sublabel: "Both ways",
                   value: `${ride.distanceKm} km`,
                 },
                 {
                   icon: Calendar,
                   label: "Date",
+                  sublabel: undefined,
                   value: new Date(ride.startDate).toLocaleDateString("en-IN", {
                     day: "numeric",
                     month: "short",
@@ -927,14 +929,16 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 {
                   icon: Users,
                   label: "Riders",
+                  sublabel: undefined,
                   value: `${ride.registeredRiders}/${ride.maxRiders}`,
                 },
                 {
                   icon: IndianRupee,
                   label: "Fee",
+                  sublabel: undefined,
                   value: `₹${ride.fee.toLocaleString()}`,
                 },
-              ].map(({ icon: Icon, label, value }) => (
+              ].map(({ icon: Icon, label, sublabel, value }) => (
                 <div
                   key={label}
                   className="rounded-xl border border-t2w-border bg-t2w-surface p-4 text-center"
@@ -944,6 +948,9 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                     {value}
                   </div>
                   <div className="text-xs text-t2w-muted">{label}</div>
+                  {sublabel && (
+                    <div className="text-[10px] italic text-gray-600">{sublabel}</div>
+                  )}
                 </div>
               ))}
             </div>
