@@ -148,6 +148,8 @@ model Ride {
   highlights       String   // JSON array stored as string
   posterUrl        String?
   fee              Float
+  extraBedSlots    Int    @default(0)   // 0 = no extra beds; set > 0 to open extra-bed registrations
+  extraBedFee      Float  @default(0)   // price for extra-bed registrants
   leadRider        String
   sweepRider       String
   organisedBy      String?

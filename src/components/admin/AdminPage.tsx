@@ -248,7 +248,7 @@ export function AdminPage() {
   const [editForm, setEditForm] = useState({
     title: "", rideNumber: "", type: "day", status: "upcoming",
     startDate: "", endDate: "", startLocation: "", startLocationUrl: "", endLocation: "", endLocationUrl: "",
-    distanceKm: "", maxRiders: "20", fee: "0", difficulty: "easy",
+    distanceKm: "", maxRiders: "20", fee: "0", extraBedSlots: "0", extraBedFee: "0", difficulty: "easy",
     description: "", leadRider: "", sweepRider: "", meetupTime: "",
     rideStartTime: "", startingPoint: "", organisedBy: "", accountsBy: "",
     highlights: "",
@@ -319,7 +319,6 @@ export function AdminPage() {
     bankDetails: "Contact admin for details",
     hiddenFields: [] as string[],
     enableTshirtSize: false,
-    enableAccommodation: false,
     paymentMode: "screenshot" as "screenshot" | "transaction_id" | "both",
   });
 
@@ -527,6 +526,8 @@ export function AdminPage() {
         distanceKm: String(r.distanceKm || ""),
         maxRiders: String(r.maxRiders || "20"),
         fee: String(r.fee || "0"),
+        extraBedSlots: String((r.extraBedSlots as number) ?? 0),
+        extraBedFee: String((r.extraBedFee as number) ?? 0),
         difficulty: String(r.difficulty || "easy"),
         description: String(r.description || ""),
         leadRider: String(r.leadRider || ""),
@@ -650,6 +651,8 @@ export function AdminPage() {
         distanceKm: Number(editForm.distanceKm) || 0,
         maxRiders: Number(editForm.maxRiders) || 20,
         fee: Number(editForm.fee) || 0,
+        extraBedSlots: Number(editForm.extraBedSlots) || 0,
+        extraBedFee: Number(editForm.extraBedFee) || 0,
         difficulty: editForm.difficulty,
         description: editForm.description,
         leadRider: editForm.leadRider,
@@ -1841,8 +1844,10 @@ export function AdminPage() {
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">End Location Map Link</label><input type="url" className="input-field" placeholder="Google Maps URL" value={editForm.endLocationUrl} onChange={(e) => setEditForm({ ...editForm, endLocationUrl: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Starting Point</label><input type="text" className="input-field" placeholder="Meetup location" value={editForm.startingPoint} onChange={(e) => setEditForm({ ...editForm, startingPoint: e.target.value })} /></div>
                         <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Distance (km)</label><input type="number" className="input-field" value={editForm.distanceKm} onChange={(e) => setEditForm({ ...editForm, distanceKm: e.target.value })} /></div>
-                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders</label><input type="number" className="input-field" value={editForm.maxRiders} onChange={(e) => setEditForm({ ...editForm, maxRiders: e.target.value })} /></div>
-                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee (₹)</label><input type="number" className="input-field" value={editForm.fee} onChange={(e) => setEditForm({ ...editForm, fee: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Max Riders <span className="text-xs text-t2w-muted">(bed slots)</span></label><input type="number" min="1" className="input-field" value={editForm.maxRiders} onChange={(e) => setEditForm({ ...editForm, maxRiders: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Registration Fee (₹)</label><input type="number" min="0" className="input-field" value={editForm.fee} onChange={(e) => setEditForm({ ...editForm, fee: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Extra-Bed Slots <span className="text-xs text-t2w-muted">(0 = disabled)</span></label><input type="number" min="0" className="input-field" placeholder="0" value={editForm.extraBedSlots} onChange={(e) => setEditForm({ ...editForm, extraBedSlots: e.target.value })} /></div>
+                        <div><label className="mb-1.5 block text-sm font-medium text-gray-300">Extra-Bed Fee (₹)</label><input type="number" min="0" className="input-field" placeholder="0" value={editForm.extraBedFee} onChange={(e) => setEditForm({ ...editForm, extraBedFee: e.target.value })} /></div>
                         <CrewAutocomplete label="Lead Rider" placeholder="Search by name, phone, or email" value={editForm.leadRider} onChange={(v) => setEditForm({ ...editForm, leadRider: v })} />
                         <CrewAutocomplete label="Sweep Rider" placeholder="Search by name, phone, or email" value={editForm.sweepRider} onChange={(v) => setEditForm({ ...editForm, sweepRider: v })} />
                         <CrewAutocomplete label="Organised By" placeholder="Search by name, phone, or email" value={editForm.organisedBy} onChange={(v) => setEditForm({ ...editForm, organisedBy: v })} />
@@ -2439,19 +2444,6 @@ export function AdminPage() {
                       </div>
                       <button onClick={() => setFormSettings({ ...formSettings, enableTshirtSize: !formSettings.enableTshirtSize })} className="text-t2w-accent">
                         {formSettings.enableTshirtSize ? (
-                          <ToggleRight className="h-8 w-8 text-t2w-accent" />
-                        ) : (
-                          <ToggleLeft className="h-8 w-8 text-t2w-muted" />
-                        )}
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-t2w-border bg-t2w-bg px-4 py-3">
-                      <div>
-                        <p className="text-sm font-medium text-white">Accommodation Preference</p>
-                        <p className="text-xs text-t2w-muted">Enable to collect accommodation type (Bed / Extra-Bed) during registration — useful for overnight and multi-day rides</p>
-                      </div>
-                      <button onClick={() => setFormSettings({ ...formSettings, enableAccommodation: !formSettings.enableAccommodation })} className="text-t2w-accent">
-                        {formSettings.enableAccommodation ? (
                           <ToggleRight className="h-8 w-8 text-t2w-accent" />
                         ) : (
                           <ToggleLeft className="h-8 w-8 text-t2w-muted" />

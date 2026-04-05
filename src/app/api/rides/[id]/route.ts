@@ -133,7 +133,7 @@ export async function PUT(
     const allowedFields = [
       "title", "type", "status", "startLocation", "startLocationUrl", "endLocation", "endLocationUrl",
       "distanceKm", "maxRiders", "difficulty", "description",
-      "posterUrl", "fee", "leadRider", "sweepRider",
+      "posterUrl", "fee", "extraBedSlots", "extraBedFee", "leadRider", "sweepRider",
       "organisedBy", "accountsBy", "meetupTime", "rideStartTime", "startingPoint",
       "detailsVisible",
     ];
