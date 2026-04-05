@@ -1556,15 +1556,18 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
 
                             {/* UPI Payment Cards with QR + deep link */}
                             {effectiveUpiIds.filter(u => u.id).map((upi, idx) => {
-                              const upiLink = `upi://pay?pa=${encodeURIComponent(upi.id)}&pn=${encodeURIComponent("Tales on 2 Wheels")}&am=${ride.fee}&cu=INR&tn=${encodeURIComponent(ride.title)}`;
+                              const upiParams = `pa=${encodeURIComponent(upi.id)}&pn=${encodeURIComponent("Tales on 2 Wheels")}&am=${ride.fee}&cu=INR&tn=${encodeURIComponent(ride.title)}`;
+                              const upiLink = `upi://pay?${upiParams}`;
+                              const gpayLink = `tez://upi/pay?${upiParams}`;
+                              const phonepeLink = `phonepe://pay?${upiParams}`;
                               return (
                                 <div key={idx} className="rounded-xl border border-t2w-border bg-t2w-surface-light p-4">
                                   <p className="mb-3 text-sm font-semibold text-white">
                                     {upi.label ? `Pay via UPI — ${upi.label}` : "Pay via UPI"}
                                   </p>
                                   <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-                                    {/* QR Code */}
-                                    <div className="shrink-0 rounded-xl bg-white p-3">
+                                    {/* QR Code — pointer-events-none prevents browser auto-open on tap */}
+                                    <div className="shrink-0 rounded-xl bg-white p-3 pointer-events-none select-none">
                                       <QRCode
                                         value={upiLink}
                                         size={160}
@@ -1587,16 +1590,52 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                                           </button>
                                         </div>
                                       </div>
-                                      {/* Pay via UPI App button */}
-                                      <a
-                                        href={upiLink}
-                                        className="flex items-center justify-center gap-2 rounded-xl bg-t2w-accent px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                                      >
-                                        <Smartphone className="h-4 w-4" />
-                                        Pay ₹{ride.fee.toLocaleString()} via UPI App
-                                      </a>
+                                      {/* Pay via specific UPI apps */}
+                                      <p className="text-xs font-medium text-t2w-muted">Open with</p>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <a
+                                          href={gpayLink}
+                                          className="flex flex-col items-center justify-center gap-1 rounded-xl border border-t2w-border bg-t2w-bg px-2 py-2.5 text-xs font-semibold text-white transition-colors hover:border-t2w-accent/50 hover:bg-t2w-surface"
+                                          title="Pay with Google Pay"
+                                        >
+                                          <Smartphone className="h-3.5 w-3.5 text-[#4285F4]" />
+                                          GPay
+                                        </a>
+                                        <a
+                                          href={phonepeLink}
+                                          className="flex flex-col items-center justify-center gap-1 rounded-xl border border-t2w-border bg-t2w-bg px-2 py-2.5 text-xs font-semibold text-white transition-colors hover:border-t2w-accent/50 hover:bg-t2w-surface"
+                                          title="Pay with PhonePe"
+                                        >
+                                          <Smartphone className="h-3.5 w-3.5 text-[#5F259F]" />
+                                          PhonePe
+                                        </a>
+                                        <a
+                                          href={`paytmmp://pay?${upiParams}`}
+                                          className="flex flex-col items-center justify-center gap-1 rounded-xl border border-t2w-border bg-t2w-bg px-2 py-2.5 text-xs font-semibold text-white transition-colors hover:border-t2w-accent/50 hover:bg-t2w-surface"
+                                          title="Pay with Paytm"
+                                        >
+                                          <Smartphone className="h-3.5 w-3.5 text-[#00BAF2]" />
+                                          Paytm
+                                        </a>
+                                        <a
+                                          href={`upi://pay?${upiParams}&app=bhim`}
+                                          className="flex flex-col items-center justify-center gap-1 rounded-xl border border-t2w-border bg-t2w-bg px-2 py-2.5 text-xs font-semibold text-white transition-colors hover:border-t2w-accent/50 hover:bg-t2w-surface"
+                                          title="Pay with BHIM"
+                                        >
+                                          <Smartphone className="h-3.5 w-3.5 text-[#00A859]" />
+                                          BHIM
+                                        </a>
+                                        <a
+                                          href={upiLink}
+                                          className="flex flex-col items-center justify-center gap-1 rounded-xl border border-t2w-border bg-t2w-bg px-2 py-2.5 text-xs font-semibold text-white transition-colors hover:border-t2w-accent/50 hover:bg-t2w-surface col-span-2"
+                                          title="Pay with any UPI app"
+                                        >
+                                          <Smartphone className="h-3.5 w-3.5 text-t2w-muted" />
+                                          Other UPI App
+                                        </a>
+                                      </div>
                                       <p className="text-xs text-t2w-muted">
-                                        Scan QR with any UPI app (GPay, PhonePe, Paytm) or tap the button on your phone.
+                                        Scan the QR code with any UPI app, or tap a button above to pay ₹{ride.fee.toLocaleString()}.
                                       </p>
                                     </div>
                                   </div>
