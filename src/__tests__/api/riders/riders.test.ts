@@ -318,18 +318,19 @@ describe('GET /api/riders — emergency contact visibility', () => {
   });
 });
 
-describe('GET /api/riders — canViewMemberDirectory gating for t2w_rider', () => {
+describe('GET /api/riders — public leaderboard access (canViewMemberDirectory no longer gates)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
   });
 
-  it('returns 403 for t2w_rider when canViewMemberDirectory is disabled', async () => {
+  it('returns 200 for t2w_rider even when canViewMemberDirectory is disabled (public leaderboard access)', async () => {
     mockGetCurrentUser.mockResolvedValue(mockT2WRider);
+    mockProfileFindMany.mockResolvedValue([mockProfile]);
 
     const req = createNextRequest('http://localhost:3000/api/riders');
     const { status } = await parseResponse(await GET(req));
-    expect(status).toBe(403);
+    expect(status).toBe(200);
   });
 
   it('allows t2w_rider when canViewMemberDirectory is enabled', async () => {
@@ -345,11 +346,12 @@ describe('GET /api/riders — canViewMemberDirectory gating for t2w_rider', () =
     expect(status).toBe(200);
   });
 
-  it('returns 403 for plain rider regardless of permissions', async () => {
+  it('returns 200 for plain rider (public leaderboard access, PII stripped)', async () => {
     mockGetCurrentUser.mockResolvedValue(mockRider);
+    mockProfileFindMany.mockResolvedValue([mockProfile]);
 
     const req = createNextRequest('http://localhost:3000/api/riders');
     const { status } = await parseResponse(await GET(req));
-    expect(status).toBe(403);
+    expect(status).toBe(200);
   });
 });
