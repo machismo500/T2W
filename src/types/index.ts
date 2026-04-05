@@ -231,6 +231,7 @@ export interface RideRegistration {
   vehicleModel: string;
   vehicleRegNumber: string;
   tshirtSize: "XS" | "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "";
+  accommodationType?: string;
   agreedCancellationTerms: boolean;
   agreedIndemnity: boolean;
   paymentScreenshot: string;

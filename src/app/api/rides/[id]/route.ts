@@ -23,7 +23,7 @@ export async function GET(
           },
         },
         registrations: {
-          select: { id: true, userId: true, confirmationCode: true, approvalStatus: true, riderName: true },
+          select: { id: true, userId: true, confirmationCode: true, approvalStatus: true, riderName: true, accommodationType: true },
         },
       },
     });
@@ -74,6 +74,9 @@ export async function GET(
       confirmedRiderNames: ride.registrations
         .filter((r) => r.approvalStatus === "confirmed")
         .map((r) => r.riderName),
+      confirmedRiders: ride.registrations
+        .filter((r) => r.approvalStatus === "confirmed")
+        .map((r) => ({ name: r.riderName, accommodationType: r.accommodationType || "bed" })),
       difficulty: ride.difficulty,
       description: ride.description,
       highlights: safeJsonParse(ride.highlights, []),

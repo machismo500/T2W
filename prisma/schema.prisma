@@ -190,6 +190,7 @@ model RideRegistration {
   vehicleModel          String   @default("")
   vehicleRegNumber      String   @default("")
   tshirtSize            String   @default("")
+  accommodationType     String   @default("bed") // "bed" | "extra-bed"
   agreedCancellationTerms Boolean @default(false)
   agreedIndemnity       Boolean  @default(false)
   paymentScreenshot     String   @default("") @db.Text

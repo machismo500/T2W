@@ -242,6 +242,7 @@ interface Ride {
   registeredRiders: number;
   activeRegistrations?: number;
   confirmedRiderNames?: string[];
+  confirmedRiders?: { name: string; accommodationType: string }[];
   difficulty: string;
   description: string;
   fee: number;
@@ -343,6 +344,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
     vehicleModel: "",
     vehicleRegNumber: "",
     tshirtSize: "" as "XS" | "S" | "M" | "L" | "XL" | "XXL" | "XXXL" | "",
+    accommodationType: "bed" as "bed" | "extra-bed",
     agreedCancellationTerms: false,
     agreedIndemnity: false,
     paymentScreenshot: "",
@@ -442,6 +444,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const effectiveBankAccounts = bankAccounts.length > 0 ? bankAccounts : [{ label: "", details: (formSettings.bankDetails as string) || "Contact admin for details" }];
   const hiddenFields = (formSettings.hiddenFields as string[]) || [];
   const enableTshirtSize = Boolean(formSettings.enableTshirtSize);
+  const enableAccommodation = Boolean(formSettings.enableAccommodation);
   const paymentMode = (formSettings.paymentMode as string) || "screenshot";
 
   const [posterUploading, setPosterUploading] = useState(false);
@@ -1049,8 +1052,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   <Users className="h-5 w-5 text-green-400" />
                   Confirmed Riders ({ride.confirmedRiderNames.length})
                 </h3>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {ride.confirmedRiderNames.map((name, index) => {
+                <ul className="divide-y divide-t2w-border">
+                  {(ride.confirmedRiders ?? ride.confirmedRiderNames.map((n) => ({ name: n, accommodationType: "bed" }))).map(({ name, accommodationType: accom }, index) => {
                     const riderId = getRiderId(name, riderNameToId);
                     const avatar = riderId ? riderIdToAvatar[riderId] : null;
                     const link = riderId ? `/rider/${riderId}` : null;
@@ -1064,27 +1067,26 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         {initials}
                       </div>
                     );
-                    return link ? (
-                      <div key={`${name}-${index}`} className="flex items-center gap-3 rounded-lg bg-t2w-surface-light p-2.5 hover:bg-green-400/10 hover:ring-1 hover:ring-green-400/30 transition-all">
-                        <Link href={link} className="flex items-center gap-3 flex-1 min-w-0">
-                          {thumbEl}
-                          <span className="text-sm truncate flex items-center gap-1.5 text-green-400 hover:underline">
-                            {name}
-                            <RoleTag role={getRoleByNameOrId(name, riderId, riderIdToRole, riderNameToRole)} />
-                          </span>
-                        </Link>
-                      </div>
-                    ) : (
-                      <div key={`${name}-${index}`} className="flex items-center gap-3 rounded-lg bg-t2w-surface-light p-2.5">
+                    return (
+                      <li key={`${name}-${index}`} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                         {thumbEl}
-                        <span className="text-sm truncate flex items-center gap-1.5 text-white">
-                          {name}
-                          <RoleTag role={getRoleByNameOrId(name, riderId, riderIdToRole, riderNameToRole)} />
-                        </span>
-                      </div>
+                        {link ? (
+                          <Link href={link} className="flex-1 min-w-0 text-sm font-medium text-green-400 hover:underline">
+                            {name}
+                          </Link>
+                        ) : (
+                          <span className="flex-1 min-w-0 text-sm font-medium text-white">{name}</span>
+                        )}
+                        <RoleTag role={getRoleByNameOrId(name, riderId, riderIdToRole, riderNameToRole)} />
+                        {accom === "extra-bed" && (
+                          <span className="shrink-0 rounded-md bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                            Extra-bed
+                          </span>
+                        )}
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </div>
             )}
 
@@ -1100,12 +1102,13 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   <Users className="h-5 w-5 text-t2w-accent" />
                   Riders ({ridersList.length})
                 </h3>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <ul className="divide-y divide-t2w-border">
                   {ridersList.map((riderName, index) => {
                     const riderId = getRiderId(riderName, riderNameToId);
                     const avatar = riderId ? riderIdToAvatar[riderId] : null;
                     const initials = riderName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
                     const link = riderId ? `/rider/${riderId}` : null;
+                    const confirmedRider = ride.confirmedRiders?.find((r) => r.name === riderName);
                     const thumbEl = avatar ? (
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full overflow-hidden bg-t2w-accent/10">
                         <img src={avatar} alt={riderName} className="h-full w-full object-cover" />
@@ -1115,33 +1118,26 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                         {initials}
                       </div>
                     );
-                    return link ? (
-                      <div
-                        key={`${riderName}-${index}`}
-                        className="flex items-center gap-3 rounded-xl p-3 transition-all bg-t2w-surface-light hover:bg-t2w-accent/10 hover:ring-1 hover:ring-t2w-accent/30"
-                      >
-                        <Link href={link} className="flex items-center gap-3 flex-1 min-w-0">
-                          {thumbEl}
-                          <span className="text-sm truncate flex items-center gap-1.5 text-t2w-accent hover:underline">
-                            {riderName}
-                            <RoleTag role={getRoleByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole)} />
-                          </span>
-                        </Link>
-                      </div>
-                    ) : (
-                      <div
-                        key={`${riderName}-${index}`}
-                        className="flex items-center gap-3 rounded-xl p-3 bg-t2w-surface-light"
-                      >
+                    return (
+                      <li key={`${riderName}-${index}`} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                         {thumbEl}
-                        <span className="text-sm truncate flex items-center gap-1.5 flex-1 min-w-0 text-gray-300">
-                          {riderName}
-                          <RoleTag role={getRoleByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole)} />
-                        </span>
-                      </div>
+                        {link ? (
+                          <Link href={link} className="flex-1 min-w-0 text-sm font-medium text-t2w-accent hover:underline">
+                            {riderName}
+                          </Link>
+                        ) : (
+                          <span className="flex-1 min-w-0 text-sm font-medium text-gray-300">{riderName}</span>
+                        )}
+                        <RoleTag role={getRoleByNameOrId(riderName, riderId, riderIdToRole, riderNameToRole)} />
+                        {confirmedRider?.accommodationType === "extra-bed" && (
+                          <span className="shrink-0 rounded-md bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                            Extra-bed
+                          </span>
+                        )}
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </div>
               );
             })()}
@@ -1505,6 +1501,29 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                               <option value="XXL">Extra Extra Large (XXL)</option>
                               <option value="XXXL">Extra Extra Extra Large (XXXL)</option>
                             </select>
+                          </div>
+                        )}
+                        {enableAccommodation && (
+                          <div className="sm:col-span-2">
+                            <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                              Accommodation <span className="text-red-400">*</span>
+                            </label>
+                            <div className="flex gap-3">
+                              {(["bed", "extra-bed"] as const).map((opt) => (
+                                <button
+                                  type="button"
+                                  key={opt}
+                                  onClick={() => setRegForm((p) => ({ ...p, accommodationType: opt }))}
+                                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                                    regForm.accommodationType === opt
+                                      ? "border-t2w-accent bg-t2w-accent/10 text-t2w-accent"
+                                      : "border-t2w-border bg-t2w-surface-light text-t2w-muted hover:border-t2w-accent/40 hover:text-white"
+                                  }`}
+                                >
+                                  🛏 {opt === "bed" ? "Bed" : "Extra-Bed"}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

@@ -161,6 +161,7 @@ export async function POST(
     const vehicleModel = String(data.vehicleModel || "");
     const vehicleRegNumber = String(data.vehicleRegNumber || "");
     const tshirtSize = String(data.tshirtSize || "");
+    const accommodationType = data.accommodationType === "extra-bed" ? "extra-bed" : "bed";
 
     // Generate a cryptographically random confirmation code
     const randomPart = randomBytes(4).toString("hex").toUpperCase();
@@ -195,6 +196,7 @@ export async function POST(
           vehicleModel,
           vehicleRegNumber,
           tshirtSize,
+          accommodationType,
           agreedCancellationTerms: Boolean(data.agreedCancellationTerms),
           agreedIndemnity: Boolean(data.agreedIndemnity),
           paymentScreenshot: String(data.paymentScreenshot || ""),

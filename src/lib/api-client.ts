@@ -255,7 +255,7 @@ export const api = {
     const headers = [
       "Rider Name", "Email", "Phone", "Address", "Emergency Contact Name",
       "Emergency Contact Phone", "Blood Group", "Food Preference", "Riding Type",
-      "Vehicle Model", "Vehicle Reg Number", "T-Shirt Size", "Referred By",
+      "Vehicle Model", "Vehicle Reg Number", "T-Shirt Size", "Accommodation", "Referred By",
       "Payment Screenshot", "UPI Transaction ID", "Registered At", "Confirmation Code",
     ];
 
@@ -270,7 +270,7 @@ export const api = {
     const rows = entries.map((r: RideRegistration) => [
       r.riderName, r.email, r.phone, r.address, r.emergencyContactName,
       r.emergencyContactPhone, r.bloodGroup, r.foodPreference, r.ridingType,
-      r.vehicleModel, r.vehicleRegNumber, r.tshirtSize || "", r.referredBy,
+      r.vehicleModel, r.vehicleRegNumber, r.tshirtSize || "", r.accommodationType === "extra-bed" ? "Extra-bed" : "Bed", r.referredBy,
       r.paymentScreenshot ? "Yes" : "No", r.upiTransactionId || "", r.registeredAt, r.confirmationCode,
     ].map(escapeCsv).join(","));
 

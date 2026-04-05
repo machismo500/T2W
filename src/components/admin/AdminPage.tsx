@@ -281,6 +281,7 @@ export function AdminPage() {
     address: string; emergencyContactName: string; emergencyContactPhone: string;
     bloodGroup: string; referredBy: string; foodPreference: string; ridingType: string;
     vehicleModel: string; vehicleRegNumber: string; tshirtSize: string;
+    accommodationType?: string;
   }>>([]);
   const [loadingRegs, setLoadingRegs] = useState(false);
   const [updatingRegId, setUpdatingRegId] = useState<string | null>(null);
@@ -318,6 +319,7 @@ export function AdminPage() {
     bankDetails: "Contact admin for details",
     hiddenFields: [] as string[],
     enableTshirtSize: false,
+    enableAccommodation: false,
     paymentMode: "screenshot" as "screenshot" | "transaction_id" | "both",
   });
 
@@ -1731,6 +1733,9 @@ export function AdminPage() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium text-white text-sm truncate">{reg.riderName}</span>
+                                  {reg.accommodationType === "extra-bed" && (
+                                    <span className="shrink-0 rounded-md bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">Extra-bed</span>
+                                  )}
                                   <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-medium uppercase ${
                                     reg.approvalStatus === "confirmed" ? "bg-green-400/10 text-green-400" :
                                     reg.approvalStatus === "rejected" ? "bg-red-400/10 text-red-400" :
@@ -2434,6 +2439,19 @@ export function AdminPage() {
                       </div>
                       <button onClick={() => setFormSettings({ ...formSettings, enableTshirtSize: !formSettings.enableTshirtSize })} className="text-t2w-accent">
                         {formSettings.enableTshirtSize ? (
+                          <ToggleRight className="h-8 w-8 text-t2w-accent" />
+                        ) : (
+                          <ToggleLeft className="h-8 w-8 text-t2w-muted" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl border border-t2w-border bg-t2w-bg px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">Accommodation Preference</p>
+                        <p className="text-xs text-t2w-muted">Enable to collect accommodation type (Bed / Extra-Bed) during registration — useful for overnight and multi-day rides</p>
+                      </div>
+                      <button onClick={() => setFormSettings({ ...formSettings, enableAccommodation: !formSettings.enableAccommodation })} className="text-t2w-accent">
+                        {formSettings.enableAccommodation ? (
                           <ToggleRight className="h-8 w-8 text-t2w-accent" />
                         ) : (
                           <ToggleLeft className="h-8 w-8 text-t2w-muted" />

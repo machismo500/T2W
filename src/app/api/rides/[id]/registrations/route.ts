@@ -37,6 +37,7 @@ export async function GET(
         vehicleModel: true,
         vehicleRegNumber: true,
         tshirtSize: true,
+        accommodationType: true,
         agreedCancellationTerms: true,
         agreedIndemnity: true,
         upiTransactionId: true,
