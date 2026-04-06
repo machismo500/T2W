@@ -17,11 +17,27 @@ export async function PATCH(
     }
 
     const { id: rideId, regId } = await params;
-    const { approvalStatus } = await req.json();
+    const body = await req.json();
+    const { approvalStatus, accommodationType } = body;
 
-    if (!["confirmed", "rejected", "dropout"].includes(approvalStatus)) {
+    const isStatusUpdate = approvalStatus !== undefined;
+    const isAccommodationUpdate = accommodationType !== undefined;
+
+    if (!isStatusUpdate && !isAccommodationUpdate) {
+      return NextResponse.json(
+        { error: "Must provide approvalStatus or accommodationType." },
+        { status: 400 }
+      );
+    }
+    if (isStatusUpdate && !["confirmed", "rejected", "dropout"].includes(approvalStatus)) {
       return NextResponse.json(
         { error: "Invalid status. Must be 'confirmed', 'rejected', or 'dropout'." },
+        { status: 400 }
+      );
+    }
+    if (isAccommodationUpdate && accommodationType !== "bed") {
+      return NextResponse.json(
+        { error: "Invalid accommodationType. Only upgrade to 'bed' is supported." },
         { status: 400 }
       );
     }
@@ -37,6 +53,35 @@ export async function PATCH(
       );
     }
 
+    // --- Accommodation type upgrade (extra-bed → bed) ---
+    if (isAccommodationUpdate) {
+      if (registration.approvalStatus !== "confirmed") {
+        return NextResponse.json(
+          { error: "Only confirmed registrations can be upgraded." },
+          { status: 400 }
+        );
+      }
+      if (registration.accommodationType !== "extra-bed") {
+        return NextResponse.json(
+          { error: "Registration is not an extra-bed slot." },
+          { status: 400 }
+        );
+      }
+      const updated = await prisma.rideRegistration.update({
+        where: { id: regId },
+        data: { accommodationType: "bed" },
+      });
+      // syncRiders stores only names — call for consistency
+      await syncRideRidersFromRegistrations(rideId);
+      return NextResponse.json({
+        registration: {
+          id: updated.id,
+          accommodationType: updated.accommodationType,
+        },
+      });
+    }
+
+    // --- Approval status update ---
     const updated = await prisma.rideRegistration.update({
       where: { id: regId },
       data: { approvalStatus },

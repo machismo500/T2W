@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
       route: safeJsonParse(r.route, []),
       distanceKm: r.distanceKm,
       maxRiders: r.maxRiders,
+      extraBedSlots: r.extraBedSlots,
       registeredRiders: r.registrations.filter((reg) => reg.approvalStatus === "confirmed").length
         || r.participations.filter((p) => !p.droppedOut).length
         || (safeJsonParse(r.riders, []) as string[]).length,
