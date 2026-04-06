@@ -82,6 +82,8 @@ export async function GET(
       highlights: safeJsonParse(ride.highlights, []),
       posterUrl: ride.posterUrl,
       fee: ride.fee,
+      extraBedSlots: ride.extraBedSlots,
+      extraBedFee: ride.extraBedFee,
       leadRider: ride.leadRider,
       sweepRider: ride.sweepRider,
       organisedBy: ride.organisedBy,
