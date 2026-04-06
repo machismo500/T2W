@@ -935,9 +935,8 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                 {
                   icon: IndianRupee,
                   label: "Fee",
-                  sublabel: undefined,
-                  value: `₹${displayFee.toLocaleString()}`,
                   sublabel: isExtraBedSlot ? "Extra-bed" : undefined,
+                  value: `₹${displayFee.toLocaleString()}`,
                 },
               ].map(({ icon: Icon, label, sublabel, value }) => (
                 <div
