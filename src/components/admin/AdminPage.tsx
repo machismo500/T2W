@@ -27,6 +27,7 @@ import {
   BookOpen,
   ChevronDown,
   ArrowUpDown,
+  ArrowUp,
   Search,
   Mail,
   Settings,
@@ -85,6 +86,8 @@ type AdminRide = {
   endLocation: string;
   distanceKm: number;
   registeredRiders: number;
+  maxRiders?: number;
+  extraBedSlots?: number;
   detailsVisible?: boolean;
 };
 
@@ -737,6 +740,27 @@ export function AdminPage() {
       setRides((ridesData as { rides: AdminRide[] }).rides);
     } catch {
       alert("Failed to update registration status");
+    } finally {
+      setUpdatingRegId(null);
+    }
+  };
+
+  const upgradeToRegularBed = async (rideId: string, regId: string) => {
+    setUpdatingRegId(regId);
+    try {
+      const res = await fetch(`/api/rides/${rideId}/registrations/${regId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accommodationType: "bed" }),
+      });
+      if (!res.ok) throw new Error("Failed to upgrade");
+      setRideRegistrations((prev) =>
+        prev.map((r) => r.id === regId ? { ...r, accommodationType: "bed" } : r)
+      );
+      const ridesData = await api.rides.list();
+      setRides((ridesData as { rides: AdminRide[] }).rides);
+    } catch {
+      alert("Failed to upgrade registration to bed");
     } finally {
       setUpdatingRegId(null);
     }
@@ -1726,7 +1750,11 @@ export function AdminPage() {
                         <p className="text-sm text-t2w-muted py-4 text-center">No registrations yet.</p>
                       ) : (
                         <div className="space-y-2">
-                          {rideRegistrations.map((reg) => (
+                          {(() => {
+                            const confirmedBedCount = rideRegistrations.filter(
+                              (r) => r.approvalStatus === "confirmed" && r.accommodationType !== "extra-bed"
+                            ).length;
+                            return rideRegistrations.map((reg) => (
                             <div key={reg.id} className={`flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl p-3 border ${
                               reg.approvalStatus === "confirmed" ? "border-green-400/20 bg-green-400/5" :
                               reg.approvalStatus === "rejected" ? "border-red-400/20 bg-red-400/5" :
@@ -1815,9 +1843,23 @@ export function AdminPage() {
                                     Re-Confirm
                                   </button>
                                 )}
+                                {/* confirmed extra-bed → Upgrade to Bed (only when a bed slot is free) */}
+                                {reg.approvalStatus === "confirmed" &&
+                                  reg.accommodationType === "extra-bed" &&
+                                  confirmedBedCount < (ride.maxRiders ?? Infinity) && (
+                                    <button
+                                      onClick={() => upgradeToRegularBed(ride.id, reg.id)}
+                                      disabled={updatingRegId === reg.id}
+                                      className="flex items-center gap-1 rounded-lg bg-blue-400/10 px-3 py-1.5 text-xs text-blue-400 transition-colors hover:bg-blue-400/20 disabled:opacity-50"
+                                    >
+                                      {updatingRegId === reg.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUp className="h-3 w-3" />}
+                                      Upgrade to Bed
+                                    </button>
+                                  )}
                               </div>
                             </div>
-                          ))}
+                          ));
+                          })()}
                         </div>
                       )}
                     </div>
