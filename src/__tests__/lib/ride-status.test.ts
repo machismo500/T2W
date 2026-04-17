@@ -58,10 +58,22 @@ describe("computeRideStatus", () => {
     expect(computeRideStatus(start, end, "upcoming")).toBe("completed");
   });
 
-  it("overrides DB status 'completed' to 'upcoming' when dates are in the future", () => {
+  it("respects DB status 'completed' even when dates are in the future", () => {
     const start = daysFromNow(5);
     const end = daysFromNow(7);
-    expect(computeRideStatus(start, end, "completed")).toBe("upcoming");
+    expect(computeRideStatus(start, end, "completed")).toBe("completed");
+  });
+
+  it("respects DB status 'ongoing' when dates are in the future (admin manual start)", () => {
+    const start = daysFromNow(5);
+    const end = daysFromNow(7);
+    expect(computeRideStatus(start, end, "ongoing")).toBe("ongoing");
+  });
+
+  it("respects DB status 'ongoing' after end date (admin hasn't closed it out)", () => {
+    const start = daysFromNow(-10);
+    const end = daysFromNow(-3);
+    expect(computeRideStatus(start, end, "ongoing")).toBe("ongoing");
   });
 
   it("works with ISO string dates", () => {
