@@ -129,6 +129,14 @@ test.describe("Rides list page — displays rides", () => {
         }),
       });
     });
+    // Mock site-settings to prevent rate-limit failures in the full suite
+    await page.route("/api/site-settings**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ settings: {} }),
+      })
+    );
   });
 
   test("rides list shows ride title", async ({ page }) => {
