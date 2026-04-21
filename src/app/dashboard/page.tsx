@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Profile - Rider Dashboard",
   description:
     "Your personal T2W dashboard. Track your rides, kilometers covered, motorcycles, and achievements in one place.",
+  robots: { index: false, follow: false },
 };
 
 export default function Dashboard() {

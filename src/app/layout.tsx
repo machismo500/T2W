@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Inter, Courgette } from "next/font/google";
 import "./globals.css";
@@ -148,11 +148,21 @@ export const metadata: Metadata = {
     canonical: "https://taleson2wheels.com",
   },
   category: "Sports & Recreation",
+  // Add Google Search Console site verification here once verified:
+  // verification: { google: "YOUR_VERIFICATION_CODE" },
   other: {
     "msapplication-TileColor": "#0f0f0f",
     "theme-color": "#e94560",
     "pinterest-rich-pin": "true",
   },
+};
+
+// Separated per Next.js 14+ recommendation (avoids "viewport in metadata" warning)
+export const viewport: Viewport = {
+  themeColor: "#e94560",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 const organizationSchema = {

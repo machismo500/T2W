@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Login - Rider Access",
   description:
     "Log in to your Tales on 2 Wheels account. Access your rider dashboard, registered rides, and community features.",
+  robots: { index: false, follow: false },
 };
 
 export default function Login() {
