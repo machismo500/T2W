@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   Search,
   Heart,
@@ -21,6 +22,16 @@ import {
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import type { BlogApprovalStatus } from "@/types";
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" as const } },
+};
+
+const staggerGrid = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
 
 type BlogPost = {
   id: string;
@@ -175,7 +186,12 @@ export function BlogsPage() {
     <div className="min-h-screen pt-24 pb-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-12">
+        <motion.div
+          className="mb-12"
+          initial="hidden"
+          animate="visible"
+          variants={fadeInUp}
+        >
           <h1 className="font-display text-4xl font-bold text-white md:text-5xl">
             Blogs & <span className="gradient-text">Vlogs</span>
           </h1>
@@ -183,7 +199,7 @@ export function BlogsPage() {
             Stories from the road, gear reviews, riding tips, and video tales
             from the T2W community.
           </p>
-        </div>
+        </motion.div>
 
         {/* Filters Bar */}
         <div className="mb-10 flex flex-col gap-4">
@@ -295,6 +311,7 @@ export function BlogsPage() {
 
         {/* Featured Post */}
         {featuredBlog && (
+          <motion.div initial="hidden" animate="visible" variants={fadeInUp}>
           <Link href={`/blog/${featuredBlog.id}`} className="card-interactive group mb-10 overflow-hidden block">
             <div className="flex flex-col gap-6 md:flex-row md:items-center">
               <div className="flex h-48 w-full items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent/20 to-t2w-gold/10 md:h-64 md:w-80 shrink-0">
@@ -364,12 +381,19 @@ export function BlogsPage() {
               </div>
             </div>
           </Link>
+          </motion.div>
         )}
 
         {/* Blog Grid */}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <motion.div
+          className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          variants={staggerGrid}
+          initial="hidden"
+          animate="visible"
+        >
           {otherBlogs.map((blog) => (
-            <Link key={blog.id} href={`/blog/${blog.id}`} className="block">
+            <motion.div key={blog.id} variants={fadeInUp}>
+            <Link href={`/blog/${blog.id}`} className="block">
             <article className="card-interactive group">
               <div className="mb-4 flex h-40 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-surface-light to-t2w-border/50">
                 {blog.isVlog ? (
@@ -433,8 +457,9 @@ export function BlogsPage() {
               </div>
             </article>
             </Link>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
 
         {approvedFiltered.length === 0 && (
           <div className="py-20 text-center">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   Calendar,
   MapPin,
@@ -14,6 +15,16 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { Ride } from "@/types";
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+};
+
+const staggerGrid = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1 } },
+};
 
 function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
   const difficultyColors = {
@@ -216,7 +227,13 @@ export function UpcomingRides() {
         {/* Ongoing Rides */}
         {ongoing.length > 0 && (
           <div className="mb-16">
-            <div className="mb-10 flex items-end justify-between">
+            <motion.div
+              className="mb-10 flex items-end justify-between"
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeInUp}
+            >
               <div>
                 <h2 className="section-title">Ongoing Rides</h2>
                 <p className="mt-3 section-subtitle">
@@ -230,19 +247,33 @@ export function UpcomingRides() {
                 View All Rides
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
-            </div>
+            </motion.div>
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <motion.div
+              className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+              variants={staggerGrid}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-60px" }}
+            >
               {ongoing.map((ride, i) => (
-                <RideCard key={ride.id} ride={ride} featured={i === 0} />
+                <motion.div key={ride.id} variants={fadeInUp}>
+                  <RideCard ride={ride} featured={i === 0} />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           </div>
         )}
 
         {/* Upcoming */}
         <div className="mb-16">
-          <div className="mb-10 flex items-end justify-between">
+          <motion.div
+            className="mb-10 flex items-end justify-between"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeInUp}
+          >
             <div>
               <h2 className="section-title">Upcoming Rides</h2>
               <p className="mt-3 section-subtitle">
@@ -256,62 +287,83 @@ export function UpcomingRides() {
               View All Rides
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
-          </div>
+          </motion.div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <motion.div
+            className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+            variants={staggerGrid}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-60px" }}
+          >
             {upcoming.map((ride, i) => (
-              <RideCard key={ride.id} ride={ride} featured={i === 0} />
+              <motion.div key={ride.id} variants={fadeInUp}>
+                <RideCard ride={ride} featured={i === 0} />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
 
         {/* Recent Rides */}
         <div>
-          <div className="mb-10">
+          <motion.div
+            className="mb-10"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeInUp}
+          >
             <h2 className="section-title">Recent Tales</h2>
             <p className="mt-3 section-subtitle">
               Stories from the road. See where we&apos;ve been.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <motion.div
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+            variants={staggerGrid}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-60px" }}
+          >
             {recent.map((ride) => (
-              <Link
-                key={ride.id}
-                href={`/ride/${ride.id}`}
-                className="card-interactive group"
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="rounded-lg bg-green-400/10 px-2.5 py-1 text-xs font-medium text-green-400">
-                    Completed
-                  </span>
-                  <span className="font-mono text-xs text-t2w-accent">
-                    {ride.rideNumber}
-                  </span>
-                </div>
-                <h3 className="font-display text-lg font-bold text-white group-hover:text-t2w-accent transition-colors">
-                  {ride.title}
-                </h3>
-                <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
-                  <MapPin className="h-3.5 w-3.5" />
-                  <span>{ride.endLocation}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-2 text-sm text-gray-400">
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span>
-                    {new Date(ride.startDate).toLocaleDateString("en-IN", {
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </span>
-                </div>
-                <div className="mt-3 flex items-center gap-1 text-sm text-t2w-muted">
-                  <Users className="h-3.5 w-3.5" />
-                  <span>{ride.registeredRiders} riders participated</span>
-                </div>
-              </Link>
+              <motion.div key={ride.id} variants={fadeInUp}>
+                <Link
+                  href={`/ride/${ride.id}`}
+                  className="card-interactive group block"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="rounded-lg bg-green-400/10 px-2.5 py-1 text-xs font-medium text-green-400">
+                      Completed
+                    </span>
+                    <span className="font-mono text-xs text-t2w-accent">
+                      {ride.rideNumber}
+                    </span>
+                  </div>
+                  <h3 className="font-display text-lg font-bold text-white group-hover:text-t2w-accent transition-colors">
+                    {ride.title}
+                  </h3>
+                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
+                    <MapPin className="h-3.5 w-3.5" />
+                    <span>{ride.endLocation}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-sm text-gray-400">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>
+                      {new Date(ride.startDate).toLocaleDateString("en-IN", {
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-1 text-sm text-t2w-muted">
+                    <Users className="h-3.5 w-3.5" />
+                    <span>{ride.registeredRiders} riders participated</span>
+                  </div>
+                </Link>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   Heart,
   Target,
@@ -18,6 +19,16 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api-client";
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+};
+
+const stagger = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.12 } },
+};
 
 interface CrewMember {
   id: string;
@@ -154,7 +165,13 @@ export function AboutContact() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* About Section */}
         <div className="mb-24">
-          <div className="text-center">
+          <motion.div
+            className="text-center"
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeInUp}
+          >
             <div className="flex items-center justify-center gap-3">
               <h2 className="section-title">About T2W</h2>
               {isSuperAdmin && !editing && (
@@ -170,7 +187,7 @@ export function AboutContact() {
             <p className="mx-auto mt-4 max-w-2xl section-subtitle">
               Born from a shared passion for motorcycles and the open road
             </p>
-          </div>
+          </motion.div>
 
           {editing && isSuperAdmin ? (
             <div className="mt-16">
@@ -205,19 +222,25 @@ export function AboutContact() {
               </div>
             </div>
           ) : (
-            <div className="mt-16 grid gap-8 md:grid-cols-3">
+            <motion.div
+              className="mt-16 grid gap-8 md:grid-cols-3"
+              variants={stagger}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-60px" }}
+            >
               {aboutCards.map(({ icon: Icon, title, key }) => (
-                <div key={key} className="card group text-center">
-                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-t2w-accent/10 transition-colors group-hover:bg-t2w-accent/20">
+                <motion.div key={key} variants={fadeInUp} className="card group text-center">
+                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-t2w-accent/10 transition-all duration-300 group-hover:bg-t2w-accent/20 group-hover:scale-110">
                     <Icon className="h-7 w-7 text-t2w-accent" />
                   </div>
                   <h3 className="font-display text-xl font-bold text-white">{title}</h3>
                   <p className="mt-3 text-sm leading-relaxed text-t2w-muted">
                     {aboutContent[key]}
                   </p>
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
 
           {/* Team - only shown when core members exist in DB */}
@@ -267,10 +290,17 @@ export function AboutContact() {
         </div>
 
         {/* Contact Section */}
-        <div id="contact" className="scroll-mt-24">
+        <motion.div
+          id="contact"
+          className="scroll-mt-24"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={stagger}
+        >
           <div className="grid gap-12 lg:grid-cols-2">
             {/* Contact Info */}
-            <div>
+            <motion.div variants={fadeInUp}>
               <h2 className="section-title">Get in Touch</h2>
               <p className="mt-4 text-lg text-t2w-muted">
                 Have questions about T2W or want to organize a ride with us?
@@ -327,10 +357,10 @@ export function AboutContact() {
                   ))}
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Contact Form */}
-            <div className="card">
+            <motion.div className="card" variants={fadeInUp}>
               <h3 className="mb-6 font-display text-xl font-bold text-white">
                 Send us a Message
               </h3>
@@ -441,9 +471,9 @@ export function AboutContact() {
                   </button>
                 </form>
               )}
-            </div>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

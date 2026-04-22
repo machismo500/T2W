@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Bell,
   Info,
@@ -12,6 +13,17 @@ import {
   X,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" as const } },
+  exit: { opacity: 0, y: -10, transition: { duration: 0.25 } },
+};
+
+const stagger = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.07 } },
+};
 
 type Notification = {
   id: string;
@@ -135,7 +147,12 @@ export function NotificationBoard() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-2">
           {/* Notifications */}
-          <div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeInUp}
+          >
             <div className="mb-8 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-t2w-accent/10">
                 <Bell className="h-5 w-5 text-t2w-accent" />
@@ -171,7 +188,13 @@ export function NotificationBoard() {
             </div>
 
             {/* Notification List */}
-            <div className="space-y-3">
+            <motion.div
+              className="space-y-3"
+              variants={stagger}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+            >
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-t2w-accent border-t-transparent" />
@@ -185,9 +208,10 @@ export function NotificationBoard() {
                   const config = typeConfig[notif.type];
                   const Icon = config.icon;
                   return (
-                    <div
+                    <motion.div
                       key={notif.id}
-                      className={`group relative flex gap-4 rounded-xl border p-4 transition-all ${
+                      variants={fadeInUp}
+                      className={`group relative flex gap-4 rounded-xl border p-4 transition-all cursor-pointer ${
                         notif.isRead
                           ? "border-t2w-border bg-t2w-surface/50"
                           : `${config.border} ${config.bg}`
@@ -222,15 +246,20 @@ export function NotificationBoard() {
                           })}
                         </span>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })
               )}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           {/* Blog Highlights */}
-          <div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeInUp}
+          >
             <div className="mb-8">
               <h2 className="font-display text-2xl font-bold text-white">
                 Blog Highlights
@@ -240,7 +269,13 @@ export function NotificationBoard() {
               </p>
             </div>
 
-            <div className="space-y-4">
+            <motion.div
+              className="space-y-4"
+              variants={stagger}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+            >
               {blogsLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-t2w-accent border-t-transparent" />
@@ -251,36 +286,37 @@ export function NotificationBoard() {
                 </p>
               ) : (
                 blogHighlights.map((blog, i) => (
-                <Link
-                  key={i}
-                  href="/blogs"
-                  className="card-interactive group flex gap-4"
-                >
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent/20 to-t2w-gold/20 font-display text-2xl font-bold text-t2w-accent">
-                    {String(i + 1).padStart(2, "0")}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-md bg-t2w-accent/10 px-2 py-0.5 text-xs font-medium text-t2w-accent">
-                        {blog.tag}
-                      </span>
-                      <span className="text-xs text-t2w-muted">
-                        {blog.readTime}
-                      </span>
+                <motion.div key={i} variants={fadeInUp}>
+                  <Link
+                    href="/blogs"
+                    className="card-interactive group flex gap-4"
+                  >
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-t2w-accent/20 to-t2w-gold/20 font-display text-2xl font-bold text-t2w-accent">
+                      {String(i + 1).padStart(2, "0")}
                     </div>
-                    <h3 className="mt-1.5 text-sm font-semibold text-white group-hover:text-t2w-accent transition-colors line-clamp-2">
-                      {blog.title}
-                    </h3>
-                    <div className="mt-1.5 flex items-center gap-2 text-xs text-t2w-muted">
-                      <span>{blog.author}</span>
-                      <span>&middot;</span>
-                      <span>{blog.date}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md bg-t2w-accent/10 px-2 py-0.5 text-xs font-medium text-t2w-accent">
+                          {blog.tag}
+                        </span>
+                        <span className="text-xs text-t2w-muted">
+                          {blog.readTime}
+                        </span>
+                      </div>
+                      <h3 className="mt-1.5 text-sm font-semibold text-white group-hover:text-t2w-accent transition-colors line-clamp-2">
+                        {blog.title}
+                      </h3>
+                      <div className="mt-1.5 flex items-center gap-2 text-xs text-t2w-muted">
+                        <span>{blog.author}</span>
+                        <span>&middot;</span>
+                        <span>{blog.date}</span>
+                      </div>
                     </div>
-                  </div>
-                  <ChevronRight className="h-5 w-5 shrink-0 self-center text-t2w-muted transition-transform group-hover:translate-x-1 group-hover:text-t2w-accent" />
-                </Link>
+                    <ChevronRight className="h-5 w-5 shrink-0 self-center text-t2w-muted transition-transform group-hover:translate-x-1 group-hover:text-t2w-accent" />
+                  </Link>
+                </motion.div>
               )))}
-            </div>
+            </motion.div>
 
             <Link
               href="/blogs"
@@ -289,7 +325,7 @@ export function NotificationBoard() {
               View All Posts
               <ChevronRight className="h-4 w-4" />
             </Link>
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>

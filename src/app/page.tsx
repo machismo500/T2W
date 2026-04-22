@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { HeroSection } from "@/components/home/HeroSection";
 import { UpcomingRides } from "@/components/home/UpcomingRides";
 import { NotificationBoard } from "@/components/home/NotificationBoard";
+import { HowToJoin } from "@/components/home/HowToJoin";
 import { AboutContact } from "@/components/home/AboutContact";
 import { prisma } from "@/lib/db";
 
@@ -143,6 +144,7 @@ export default function Home() {
       <HeroSection />
       <UpcomingRides />
       <NotificationBoard />
+      <HowToJoin />
       <AboutContact />
     </>
   );

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   Calendar,
   MapPin,
@@ -16,6 +17,16 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { Ride } from "@/types";
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: "easeOut" as const } },
+};
+
+const staggerGrid = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
 
 type FilterTab = "all" | "upcoming" | "ongoing" | "completed";
 
@@ -128,7 +139,12 @@ export function RidesPage() {
     <div className="min-h-screen pt-24 pb-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-12">
+        <motion.div
+          className="mb-12"
+          initial="hidden"
+          animate="visible"
+          variants={fadeInUp}
+        >
           <h1 className="font-display text-4xl font-bold text-white md:text-5xl">
             T2W <span className="gradient-text">Tales</span>
           </h1>
@@ -169,7 +185,7 @@ export function RidesPage() {
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Filters */}
         <div className="mb-8 flex flex-col gap-4">
@@ -250,12 +266,17 @@ export function RidesPage() {
 
         {/* Grid View */}
         {viewMode === "grid" ? (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <motion.div
+            className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+            variants={staggerGrid}
+            initial="hidden"
+            animate="visible"
+          >
             {filtered.map((ride) => (
+              <motion.div key={ride.id} variants={fadeInUp}>
               <Link
-                key={ride.id}
                 href={`/ride/${ride.id}`}
-                className="card-interactive group relative overflow-hidden"
+                className="card-interactive group relative overflow-hidden block"
               >
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-t2w-accent to-t2w-gold opacity-0 transition-opacity group-hover:opacity-100" />
 
@@ -340,8 +361,9 @@ export function RidesPage() {
                   </div>
                 )}
               </Link>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         ) : (
           /* Table View */
           <div className="overflow-x-auto rounded-2xl border border-t2w-border">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   Search,
   ChevronDown,
@@ -409,8 +410,11 @@ export function ArenaLeaderboard({
                         : "text-t2w-muted";
 
                 return (
-                  <tr
+                  <motion.tr
                     key={rider.id}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.35, delay: Math.min(idx * 0.04, 0.8) }}
                     className={`transition-colors hover:bg-white/[0.03] ${
                       isMe ? "bg-t2w-gold/[0.05]" : ""
                     }`}
@@ -516,7 +520,7 @@ export function ArenaLeaderboard({
                     <td className="hidden px-3 py-3 text-sm text-white xl:table-cell">
                       {rider.totalPoints}
                     </td>
-                  </tr>
+                  </motion.tr>
                 );
               })}
             </tbody>
@@ -533,15 +537,21 @@ export function ArenaLeaderboard({
       {viewMode === "grid" && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {sorted.map((rider, idx) => (
-            <ArenaRiderCard
+            <motion.div
               key={rider.id}
-              rider={rider}
-              rank={idx + 1}
-              maxKm={maxKm}
-              maxRides={maxRides}
-              isCurrentUser={currentUserId === rider.id}
-              canLinkProfiles={canLinkProfiles}
-            />
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: Math.min(idx * 0.06, 0.9) }}
+            >
+              <ArenaRiderCard
+                rider={rider}
+                rank={idx + 1}
+                maxKm={maxKm}
+                maxRides={maxRides}
+                isCurrentUser={currentUserId === rider.id}
+                canLinkProfiles={canLinkProfiles}
+              />
+            </motion.div>
           ))}
           {sorted.length === 0 && (
             <div className="col-span-full py-12 text-center text-sm text-t2w-muted">
