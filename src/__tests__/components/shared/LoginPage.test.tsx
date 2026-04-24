@@ -40,6 +40,9 @@ vi.mock('lucide-react', () => ({
   AlertCircle: () => <span data-testid="icon-alert" />,
   KeyRound: () => <span data-testid="icon-key" />,
   ShieldCheck: () => <span data-testid="icon-shield" />,
+  XCircle: () => <span data-testid="icon-xcircle" />,
+  AlertTriangle: () => <span data-testid="icon-alerttriangle" />,
+  Info: () => <span data-testid="icon-info" />,
 }));
 
 beforeEach(() => {

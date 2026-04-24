@@ -22,6 +22,7 @@ import {
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import type { BlogApprovalStatus } from "@/types";
+import { BlogCardSkeletonGrid } from "@/components/shared/Skeleton";
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 20 },
@@ -176,8 +177,18 @@ export function BlogsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center pt-24">
-        <Loader2 className="h-8 w-8 animate-spin text-t2w-accent" />
+      <div className="min-h-screen pt-24 pb-16">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-12">
+            <h1 className="font-display text-4xl font-bold text-white md:text-5xl">
+              Blogs & <span className="gradient-text">Vlogs</span>
+            </h1>
+            <p className="mt-4 max-w-2xl text-lg text-t2w-muted">
+              Loading stories &hellip;
+            </p>
+          </div>
+          <BlogCardSkeletonGrid count={6} />
+        </div>
       </div>
     );
   }

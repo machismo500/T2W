@@ -37,6 +37,10 @@ vi.mock('lucide-react', () => ({
   LogIn: () => <span data-testid="icon-login" />,
   LogOut: () => <span data-testid="icon-logout" />,
   Shield: () => <span data-testid="icon-shield" />,
+  ChevronDown: () => <span data-testid="icon-chevron-down" />,
+  Settings: () => <span data-testid="icon-settings" />,
+  Bike: () => <span data-testid="icon-bike" />,
+  LayoutDashboard: () => <span data-testid="icon-dashboard" />,
 }));
 
 beforeEach(() => {

@@ -12,6 +12,7 @@ import {
   Bike,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { CountUp } from "@/components/shared/CountUp";
 
 interface HeroStats {
   activeRiders: number;
@@ -155,9 +156,10 @@ export function HeroSection() {
                     <Icon className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="font-display text-2xl font-bold text-white">
-                      {value.toLocaleString()}
-                    </div>
+                    <CountUp
+                      value={value}
+                      className="font-display text-2xl font-bold text-white"
+                    />
                     <div className="text-xs text-t2w-muted">{label}</div>
                   </div>
                 </div>

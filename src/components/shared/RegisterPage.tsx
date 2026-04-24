@@ -19,11 +19,14 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { PasswordStrength } from "@/components/shared/PasswordStrength";
+import { useToast } from "@/components/shared/Toast";
 
 export function RegisterPage() {
   const { register, sendOtp, verifyOtp } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const toast = useToast();
 
   // step 1: basic info + email, step 2: OTP verification, step 3: riding info
   const [step, setStep] = useState(1);
@@ -73,6 +76,7 @@ export function RegisterPage() {
     try {
       await sendOtp(formData.email);
       setOtpSent(true);
+      toast.info("Verification code sent", `Check ${formData.email} for your 6-digit code.`);
     } catch (err: unknown) {
       if (err instanceof Error) {
         setOtpError(err.message);
@@ -161,6 +165,10 @@ export function RegisterPage() {
       try {
         const { name, email, phone, password, city, ridingExperience, motorcycle } = formData;
         const { user: newUser } = await register({ name, email, phone, password, city, ridingExperience, motorcycle });
+        toast.success(
+          `Welcome to T2W, ${newUser.name.split(" ")[0]}!`,
+          "You'll get an email when our next ride is announced."
+        );
         router.push(newUser.linkedRiderId ? `/rider/${newUser.linkedRiderId}` : "/rides");
       } catch (err: unknown) {
         if (err instanceof Error) {
@@ -435,6 +443,7 @@ export function RegisterPage() {
                         )}
                       </button>
                     </div>
+                    <PasswordStrength password={formData.password} />
                   </div>
 
                   <div>
