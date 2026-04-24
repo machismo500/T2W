@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createNextRequest, parseResponse, mockSuperAdmin, mockCoreMember, mockRider } from '@/__tests__/helpers';
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
+vi.mock('@/lib/db', () => {
+  const mock: Record<string, unknown> = {
     liveRideSession: {
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+    },
+    liveRideBreak: {
+      updateMany: vi.fn(),
     },
     ride: {
       findUnique: vi.fn(),
@@ -23,8 +26,11 @@ vi.mock('@/lib/db', () => ({
       findMany: vi.fn(),
     },
     $queryRaw: vi.fn(),
-  },
-}));
+    $transaction: null,
+  };
+  mock.$transaction = vi.fn().mockImplementation(async (fn: (p: typeof mock) => unknown) => fn(mock));
+  return { prisma: mock };
+});
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
@@ -146,9 +152,12 @@ describe('GET /api/rides/[id]/live', () => {
     ]);
 
     // Lead path locations
+    // Route now queries orderBy: recordedAt desc, take: 2000 and reverses on
+    // the server — so the mock returns newest-first and the test asserts on
+    // the chronological (reversed) output.
     mockLocationFindMany.mockResolvedValue([
-      { lat: 12.9700, lng: 77.5900, recordedAt: new Date('2024-06-01T08:00:00Z') },
       { lat: 12.9716, lng: 77.5946, recordedAt: new Date('2024-06-01T09:30:00Z') },
+      { lat: 12.9700, lng: 77.5900, recordedAt: new Date('2024-06-01T08:00:00Z') },
     ]);
 
     const res = await callGET('ride-1');
@@ -193,6 +202,9 @@ describe('POST /api/rides/[id]/live', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (p: typeof prisma) => unknown) => fn(prisma)
+    );
   });
 
   it('returns 403 for regular rider', async () => {
@@ -354,6 +366,8 @@ describe('POST /api/rides/[id]/live', () => {
     };
     mockSessionUpdate.mockResolvedValue(updatedSession);
     mockRideUpdate.mockResolvedValue({});
+    // Route now auto-closes any open breaks in the same transaction
+    vi.mocked(prisma.liveRideBreak.updateMany).mockResolvedValue({ count: 0 } as any);
 
     const res = await callPOST('ride-1', { action: 'end' });
     const { status, data } = await parseResponse(res);

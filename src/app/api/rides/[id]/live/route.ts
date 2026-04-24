@@ -72,19 +72,25 @@ export async function GET(
       };
     });
 
-    // Get lead rider's full path for route painting
+    // Get lead rider's recent path for route painting.
+    // Cap at the last 2000 points (~2.8h at 5s cadence) to keep responses
+    // and map polylines fast on multi-day rides.
     let leadPath: { lat: number; lng: number; recordedAt: string }[] = [];
     if (session.leadRiderId) {
       const leadLocations = await prisma.liveRideLocation.findMany({
         where: { sessionId: session.id, userId: session.leadRiderId },
-        orderBy: { recordedAt: "asc" },
+        orderBy: { recordedAt: "desc" },
+        take: 2000,
         select: { lat: true, lng: true, recordedAt: true },
       });
-      leadPath = leadLocations.map((l) => ({
-        lat: l.lat,
-        lng: l.lng,
-        recordedAt: l.recordedAt.toISOString(),
-      }));
+      // Reverse to chronological order for polyline rendering
+      leadPath = leadLocations
+        .reverse()
+        .map((l) => ({
+          lat: l.lat,
+          lng: l.lng,
+          recordedAt: l.recordedAt.toISOString(),
+        }));
     }
 
     return NextResponse.json({
@@ -249,15 +255,24 @@ export async function POST(
     }
 
     if (action === "end") {
-      const updated = await prisma.liveRideSession.update({
-        where: { rideId },
-        data: { status: "ended", endedAt: new Date() },
-      });
-
-      // Update ride status to completed
-      await prisma.ride.update({
-        where: { id: rideId },
-        data: { status: "completed" },
+      const endedAt = new Date();
+      // Atomically close the session, auto-close any still-open breaks so
+      // metrics don't count hours of forgotten "break time", and mark the
+      // ride as completed — all in one transaction.
+      const updated = await prisma.$transaction(async (tx) => {
+        const upd = await tx.liveRideSession.update({
+          where: { rideId },
+          data: { status: "ended", endedAt },
+        });
+        await tx.liveRideBreak.updateMany({
+          where: { sessionId: session.id, endedAt: null },
+          data: { endedAt },
+        });
+        await tx.ride.update({
+          where: { id: rideId },
+          data: { status: "completed" },
+        });
+        return upd;
       });
 
       return NextResponse.json({ session: updated, action: "ended" });

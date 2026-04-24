@@ -53,6 +53,26 @@ export async function PUT(req: NextRequest) {
     if (!user && email) {
       user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     }
+
+    // Guard: don't let an admin demote themselves — one mis-click locks them out
+    if (user && user.id === currentUser.id && user.role !== newRole) {
+      return NextResponse.json(
+        { error: "You cannot change your own role. Ask another admin." },
+        { status: 403 }
+      );
+    }
+
+    // Guard: don't let the last superadmin be demoted out of that role
+    if (user && user.role === "superadmin" && newRole !== "superadmin") {
+      const superCount = await prisma.user.count({ where: { role: "superadmin" } });
+      if (superCount <= 1) {
+        return NextResponse.json(
+          { error: "Cannot demote the last superadmin. Promote another user first." },
+          { status: 403 }
+        );
+      }
+    }
+
     if (user) {
       await prisma.user.update({
         where: { id: user.id },

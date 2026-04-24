@@ -175,7 +175,7 @@ export async function POST(
     const tshirtSize = String(data.tshirtSize || "");
 
     // Generate a cryptographically random confirmation code
-    const randomPart = randomBytes(4).toString("hex").toUpperCase();
+    const randomPart = randomBytes(8).toString("hex").toUpperCase();
     const confirmationCode = `T2W-${rideId.toUpperCase().slice(0, 10)}-${randomPart}`;
 
     // Wrap capacity re-check + insert in a transaction to prevent TOCTOU race conditions
@@ -255,19 +255,33 @@ export async function POST(
         "taleson2wheels.official@gmail.com", // T2W official
       ].filter((e) => e && e !== smtpUser);
 
-      // Fire-and-forget: send emails without blocking the API response
-      Promise.all(
+      // Fire-and-forget: send emails without blocking the API response.
+      // Each failure is logged with the registration id so we can resend
+      // manually from the server logs if SMTP flaps.
+      Promise.allSettled(
         recipients.map((to) =>
-          transporter
-            .sendMail({
-              from: `"${smtpFromName}" <${smtpUser}>`,
-              to,
-              subject: `[T2W] Registration for ${ride.title} — ${confirmationCode}`,
-              html: emailHtml,
-            })
-            .catch((err) => console.error(`[T2W] Failed to send reg email to ${to}:`, err))
+          transporter.sendMail({
+            from: `"${smtpFromName}" <${smtpUser}>`,
+            to,
+            subject: `[T2W] Registration for ${ride.title} — ${confirmationCode}`,
+            html: emailHtml,
+          })
         )
-      ).catch(() => {});
+      ).then((results) => {
+        results.forEach((r, i) => {
+          const to = recipients[i];
+          if (r.status === "rejected") {
+            console.error(
+              `[T2W] Registration email failed (regId=${registration.id}, to=${to}):`,
+              r.reason
+            );
+          } else {
+            console.log(
+              `[T2W] Registration email sent (regId=${registration.id}, to=${to})`
+            );
+          }
+        });
+      });
     }
 
     return NextResponse.json({

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createNextRequest, parseResponse, mockSuperAdmin, mockCoreMember, mockRider } from '@/__tests__/helpers';
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
+vi.mock('@/lib/db', () => {
+  const mock: Record<string, unknown> = {
     rideRegistration: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -18,8 +18,11 @@ vi.mock('@/lib/db', () => ({
     user: {
       findUnique: vi.fn(),
     },
-  },
-}));
+    $transaction: null,
+  };
+  mock.$transaction = vi.fn().mockImplementation(async (fn: (p: typeof mock) => unknown) => fn(mock));
+  return { prisma: mock };
+});
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
@@ -56,6 +59,10 @@ describe('PATCH /api/rides/[id]/registrations/[regId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSyncReturningNames([]);
+    // clearAllMocks wipes $transaction's implementation — re-install it
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (p: typeof prisma) => unknown) => fn(prisma)
+    );
   });
 
   it('returns 403 for unauthenticated user', async () => {

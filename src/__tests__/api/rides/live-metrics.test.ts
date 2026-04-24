@@ -117,18 +117,23 @@ describe('GET /api/rides/[id]/live/metrics', () => {
     expect(data.elapsedMinutes).toBe(60);
   });
 
-  it('calculates open break duration using current time for live sessions', async () => {
+  it('excludes still-open breaks from breakMinutes (they are in-progress, not yet accounted)', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
 
     const now = new Date();
     const twoHoursAgo = new Date(now.getTime() - 120 * 60000);
     const thirtyMinsAgo = new Date(now.getTime() - 30 * 60000);
+    const closedBreakStart = new Date(now.getTime() - 90 * 60000);
+    const closedBreakEnd = new Date(now.getTime() - 80 * 60000);
 
     vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
       id: 'sess-1', status: 'live',
       startedAt: twoHoursAgo, createdAt: twoHoursAgo, endedAt: null,
       leadRiderId: null, sweepRiderId: null,
-      breaks: [{ startedAt: thirtyMinsAgo, endedAt: null }], // open break
+      breaks: [
+        { startedAt: closedBreakStart, endedAt: closedBreakEnd }, // 10 min, closed — counted
+        { startedAt: thirtyMinsAgo, endedAt: null },              // 30 min, open — ignored
+      ],
     } as any);
 
     vi.mocked(prisma.liveRideLocation.findMany).mockResolvedValue([] as any);
@@ -139,9 +144,10 @@ describe('GET /api/rides/[id]/live/metrics', () => {
     const res = await GET(makeReq(), makeParams());
     const { status, data } = await parseResponse(res);
     expect(status).toBe(200);
-    // Break started 30 mins ago and is still open — should be ~30 minutes
-    expect(data.breakMinutes).toBeGreaterThanOrEqual(29);
-    expect(data.breakMinutes).toBeLessThanOrEqual(31);
+    // Only the closed 10-minute break counts; the open one is excluded so a
+    // forgotten-to-close break can't inflate metrics.
+    expect(data.breakMinutes).toBe(10);
+    expect(data.breakCount).toBe(1);
   });
 
   it('handles session with no lead rider', async () => {

@@ -70,10 +70,19 @@ describe("computeRideStatus", () => {
     expect(computeRideStatus(start, end, "ongoing")).toBe("ongoing");
   });
 
-  it("respects DB status 'ongoing' after end date (admin hasn't closed it out)", () => {
-    const start = daysFromNow(-10);
-    const end = daysFromNow(-3);
+  it("respects DB status 'ongoing' just past end date (admin hasn't closed it yet)", () => {
+    // Within 48h grace window — admin override still holds
+    const start = daysFromNow(-3);
+    const end = daysFromNow(-1);
     expect(computeRideStatus(start, end, "ongoing")).toBe("ongoing");
+  });
+
+  it("auto-completes stale 'ongoing' rides > 48h past end date", () => {
+    // Admin forgot to close an ongoing ride; after 48h we fall back to
+    // date-derived "completed" so registration isn't permanently blocked.
+    const start = daysFromNow(-10);
+    const end = daysFromNow(-5);
+    expect(computeRideStatus(start, end, "ongoing")).toBe("completed");
   });
 
   it("works with ISO string dates", () => {

@@ -438,8 +438,15 @@ export function AdminPage() {
         details: `Changed ride status from "${previousStatus}" to "${newStatus}"`,
       });
     } catch {
-      // Revert on failure
-      setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, status: previousStatus } : r));
+      // Refetch on failure instead of local-revert — the request may have
+      // succeeded server-side even if the response never reached us, and a
+      // blind revert would desync the UI from the DB.
+      try {
+        const data = (await api.rides.list()) as { rides: AdminRide[] };
+        setRides(data.rides);
+      } catch {
+        setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, status: previousStatus } : r));
+      }
     }
   };
 
@@ -724,10 +731,11 @@ export function AdminPage() {
         body: JSON.stringify({ approvalStatus: status }),
       });
       if (!res.ok) throw new Error("Failed to update");
+      // Read reg before setRideRegistrations to avoid stale-closure on the next line
+      const reg = rideRegistrations.find((r) => r.id === regId);
       setRideRegistrations((prev) => prev.map((r) => r.id === regId ? { ...r, approvalStatus: status } : r));
       // The PATCH endpoint handles all sync (participation + Ride.riders cache).
       // Update local edit riders list to stay in sync with confirmed registrations.
-      const reg = rideRegistrations.find((r) => r.id === regId);
       if (reg?.riderName) {
         if (status === "confirmed") {
           setEditRideRiders((prev) => prev.includes(reg.riderName) ? prev : [...prev, reg.riderName]);
@@ -740,6 +748,10 @@ export function AdminPage() {
       setRides((ridesData as { rides: AdminRide[] }).rides);
     } catch {
       alert("Failed to update registration status");
+      // Refetch so the UI reflects the server truth (the mutation may have
+      // partially applied — e.g. participation row created before a later
+      // step failed).
+      await loadRegistrations(rideId).catch(() => {});
     } finally {
       setUpdatingRegId(null);
     }
@@ -753,7 +765,15 @@ export function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accommodationType: "bed" }),
       });
-      if (!res.ok) throw new Error("Failed to upgrade");
+      if (!res.ok) {
+        if (res.status === 409) {
+          alert("No regular bed slots available — another admin may have filled the last one.");
+        } else {
+          throw new Error("Failed to upgrade");
+        }
+        await loadRegistrations(rideId).catch(() => {});
+        return;
+      }
       setRideRegistrations((prev) =>
         prev.map((r) => r.id === regId ? { ...r, accommodationType: "bed" } : r)
       );
@@ -761,6 +781,7 @@ export function AdminPage() {
       setRides((ridesData as { rides: AdminRide[] }).rides);
     } catch {
       alert("Failed to upgrade registration to bed");
+      await loadRegistrations(rideId).catch(() => {});
     } finally {
       setUpdatingRegId(null);
     }

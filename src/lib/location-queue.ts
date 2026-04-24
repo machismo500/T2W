@@ -38,17 +38,54 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
-/** Add one location ping to the offline queue. */
+// Cap the queue so a week-long offline window can't fill the per-origin
+// IndexedDB quota (~50 MB on most browsers). 5000 × ~200 bytes ≈ 1 MB per ride.
+const MAX_QUEUE_SIZE_PER_RIDE = 5000;
+
+/** Add one location ping to the offline queue. Evicts oldest when over cap. */
 export async function enqueueLocation(
   loc: Omit<QueuedLocation, "id">
 ): Promise<void> {
   const db = await openDB();
+
+  // FIFO-evict oldest if this ride is already at the cap
+  const existing = await new Promise<QueuedLocation[]>((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).index("rideId").getAll(loc.rideId);
+    req.onsuccess = () => resolve(req.result as QueuedLocation[]);
+    req.onerror = () => reject(req.error);
+  });
+  if (existing.length >= MAX_QUEUE_SIZE_PER_RIDE) {
+    const overflow = existing
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(0, existing.length - MAX_QUEUE_SIZE_PER_RIDE + 1);
+    const ids = overflow
+      .map((e) => e.id)
+      .filter((id): id is number => typeof id === "number");
+    await removeLocations(ids);
+  }
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).add(loc);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+/** Drop every queued ping for a ride. Call on session end to free IDB quota. */
+export async function clearQueueForRide(rideId: string): Promise<void> {
+  const db = await openDB();
+  const entries = await new Promise<QueuedLocation[]>((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).index("rideId").getAll(rideId);
+    req.onsuccess = () => resolve(req.result as QueuedLocation[]);
+    req.onerror = () => reject(req.error);
+  });
+  const ids = entries
+    .map((e) => e.id)
+    .filter((id): id is number => typeof id === "number");
+  await removeLocations(ids);
 }
 
 /** Retrieve all queued pings for a ride, sorted oldest-first. */

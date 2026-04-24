@@ -29,20 +29,32 @@ export async function createEmailOtp(email: string): Promise<string> {
   return code;
 }
 
+const MAX_OTP_ATTEMPTS = 5;
+
 export async function verifyEmailOtp(email: string, code: string): Promise<boolean> {
   const key = email.toLowerCase().trim();
 
+  // Look up by email/type only so we can track wrong-code attempts
   const entry = await prisma.otp.findFirst({
-    where: { email: key, type: "email_verify", code: code.trim() },
+    where: { email: key, type: "email_verify" },
   });
 
   if (!entry) return false;
-
-  // Delete the OTP regardless (single-use)
-  await prisma.otp.delete({ where: { id: entry.id } });
-
   if (new Date() > entry.expiresAt) return false;
+  if (entry.attempts >= MAX_OTP_ATTEMPTS) return false;
 
+  const match = entry.code === code.trim();
+  if (!match) {
+    // Increment attempts; stays locked out for the rest of the 10-min window once we hit MAX
+    await prisma.otp.update({
+      where: { id: entry.id },
+      data: { attempts: { increment: 1 } },
+    });
+    return false;
+  }
+
+  // Success — delete so the code can't be replayed
+  await prisma.otp.delete({ where: { id: entry.id } });
   return true;
 }
 
@@ -71,13 +83,22 @@ export async function verifyResetOtp(email: string, code: string): Promise<boole
   const key = email.toLowerCase().trim();
 
   const entry = await prisma.otp.findFirst({
-    where: { email: key, type: "password_reset", code: code.trim() },
+    where: { email: key, type: "password_reset" },
   });
 
   if (!entry) return false;
-
   if (new Date() > entry.expiresAt) {
     await prisma.otp.delete({ where: { id: entry.id } });
+    return false;
+  }
+  if (entry.attempts >= MAX_OTP_ATTEMPTS) return false;
+
+  const match = entry.code === code.trim();
+  if (!match) {
+    await prisma.otp.update({
+      where: { id: entry.id },
+      data: { attempts: { increment: 1 } },
+    });
     return false;
   }
 

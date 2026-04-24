@@ -10,6 +10,7 @@ import { BackToTop } from "@/components/shared/BackToTop";
 import { ScrollProgress } from "@/components/shared/ScrollProgress";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
+import { MotionConfigWrapper } from "@/components/shared/MotionConfigWrapper";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -447,18 +448,20 @@ export default function RootLayout({
           Skip to main content
         </a>
 
-        <AuthProvider>
-          <ToastProvider>
-            <ServiceWorkerRegistrar />
-            <ScrollProgress />
-            <Navbar />
-            <main id="main-content" className="min-h-screen">
-              {children}
-            </main>
-            <Footer />
-            <BackToTop />
-          </ToastProvider>
-        </AuthProvider>
+        <MotionConfigWrapper>
+          <AuthProvider>
+            <ToastProvider>
+              <ServiceWorkerRegistrar />
+              <ScrollProgress />
+              <Navbar />
+              <main id="main-content" className="min-h-screen">
+                {children}
+              </main>
+              <Footer />
+              <BackToTop />
+            </ToastProvider>
+          </AuthProvider>
+        </MotionConfigWrapper>
 
         {/* Google Analytics */}
         <Script

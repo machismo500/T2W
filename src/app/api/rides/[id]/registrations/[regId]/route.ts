@@ -67,12 +67,36 @@ export async function PATCH(
           { status: 400 }
         );
       }
-      const updated = await prisma.rideRegistration.update({
-        where: { id: regId },
-        data: { accommodationType: "bed" },
-      });
-      // syncRiders stores only names — call for consistency
-      await syncRideRidersFromRegistrations(rideId);
+      // Re-check bed availability inside a transaction to prevent TOCTOU races
+      let updated: Awaited<ReturnType<typeof prisma.rideRegistration.update>>;
+      try {
+        updated = await prisma.$transaction(async (tx) => {
+          const ride = await tx.ride.findUnique({
+            where: { id: rideId },
+            select: { maxRiders: true },
+          });
+          const bedCount = await tx.rideRegistration.count({
+            where: { rideId, approvalStatus: "confirmed", accommodationType: "bed" },
+          });
+          if (!ride || bedCount >= ride.maxRiders) {
+            throw new Error("NO_BED_SLOTS");
+          }
+          return tx.rideRegistration.update({
+            where: { id: regId },
+            data: { accommodationType: "bed" },
+          });
+        });
+      } catch (err) {
+        if (err instanceof Error && err.message === "NO_BED_SLOTS") {
+          return NextResponse.json(
+            { error: "No regular bed slots available." },
+            { status: 409 }
+          );
+        }
+        throw err;
+      }
+      // No Ride.riders sync needed — the cached name list is unaffected by
+      // accommodation-type changes on an already-confirmed registration.
       return NextResponse.json({
         registration: {
           id: updated.id,
@@ -82,48 +106,61 @@ export async function PATCH(
     }
 
     // --- Approval status update ---
-    const updated = await prisma.rideRegistration.update({
-      where: { id: regId },
-      data: { approvalStatus },
-    });
-
-    // Find the rider's linked RiderProfile for participation updates
+    // Status update + participation upsert + Ride.riders sync all run in a
+    // single transaction so two admins approving different registrations at
+    // the same time can't race and drop one from the cached riders list.
     const regUser = await prisma.user.findUnique({
       where: { id: registration.userId },
       select: { linkedRiderId: true },
     });
 
-    // When confirmed, auto-create a RideParticipation with 5 points (if not already present)
-    if (approvalStatus === "confirmed" && regUser?.linkedRiderId) {
-      await prisma.rideParticipation.upsert({
-        where: {
-          riderProfileId_rideId: {
+    const updated = await prisma.$transaction(async (tx) => {
+      const upd = await tx.rideRegistration.update({
+        where: { id: regId },
+        data: { approvalStatus },
+      });
+
+      if (approvalStatus === "confirmed" && regUser?.linkedRiderId) {
+        await tx.rideParticipation.upsert({
+          where: {
+            riderProfileId_rideId: {
+              riderProfileId: regUser.linkedRiderId,
+              rideId,
+            },
+          },
+          update: { droppedOut: false },
+          create: {
+            riderProfileId: regUser.linkedRiderId,
+            rideId,
+            points: 5,
+          },
+        });
+      }
+
+      if (approvalStatus === "dropout" && regUser?.linkedRiderId) {
+        await tx.rideParticipation.updateMany({
+          where: {
             riderProfileId: regUser.linkedRiderId,
             rideId,
           },
-        },
-        update: { droppedOut: false }, // Restore if previously dropped out
-        create: {
-          riderProfileId: regUser.linkedRiderId,
-          rideId,
-          points: 5,
-        },
-      });
-    }
+          data: { droppedOut: true },
+        });
+      }
 
-    // When marked as dropout, set droppedOut flag on the participation
-    if (approvalStatus === "dropout" && regUser?.linkedRiderId) {
-      await prisma.rideParticipation.updateMany({
-        where: {
-          riderProfileId: regUser.linkedRiderId,
-          rideId,
-        },
-        data: { droppedOut: true },
+      // Re-read confirmed riders inside the transaction so the cache reflects
+      // the state *after* this update — free of races with concurrent writes.
+      const confirmed = await tx.rideRegistration.findMany({
+        where: { rideId, approvalStatus: "confirmed" },
+        select: { riderName: true },
+        orderBy: { registeredAt: "asc" },
       });
-    }
+      await tx.ride.update({
+        where: { id: rideId },
+        data: { riders: JSON.stringify(confirmed.map((r) => r.riderName)) },
+      });
 
-    // Sync Ride.riders cache from confirmed registrations (single source of truth)
-    await syncRideRidersFromRegistrations(rideId);
+      return upd;
+    });
 
     return NextResponse.json({
       registration: {
@@ -140,22 +177,3 @@ export async function PATCH(
   }
 }
 
-/** Sync the Ride.riders JSON field from confirmed RideRegistration records. */
-async function syncRideRidersFromRegistrations(rideId: string) {
-  try {
-    const confirmedRegistrations = await prisma.rideRegistration.findMany({
-      where: { rideId, approvalStatus: "confirmed" },
-      select: { riderName: true },
-      orderBy: { registeredAt: "asc" },
-    });
-
-    const riderNames = confirmedRegistrations.map((r) => r.riderName);
-
-    await prisma.ride.update({
-      where: { id: rideId },
-      data: { riders: JSON.stringify(riderNames) },
-    });
-  } catch (error) {
-    console.error("[T2W] syncRideRidersFromRegistrations error:", error);
-  }
-}

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle, AlertTriangle, Info, XCircle, X } from "lucide-react";
 
@@ -54,8 +54,14 @@ const kindStyles: Record<ToastKind, { icon: typeof CheckCircle; color: string; b
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const timersRef = useRef(new Map<string, number>());
 
   const dismiss = useCallback((id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
@@ -64,9 +70,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const duration = t.duration ?? 4500;
     setToasts((prev) => [...prev, { ...t, id, duration }]);
     if (duration > 0) {
-      window.setTimeout(() => {
+      const timer = window.setTimeout(() => {
+        timersRef.current.delete(id);
         setToasts((prev) => prev.filter((x) => x.id !== id));
       }, duration);
+      timersRef.current.set(id, timer);
     }
   }, []);
 

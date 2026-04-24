@@ -137,8 +137,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Only super admins can delete users" }, { status: 403 });
     }
 
-    // Protect built-in superadmin accounts
-    const protectedEmails = ["roshan.manuel@gmail.com", "taleson2wheels.official@gmail.com"];
+    // Protect built-in superadmin accounts. The list is env-driven so rotating
+    // the protected set doesn't require a code change. Falls back to the
+    // historical built-ins so existing deployments keep working without an
+    // env var set.
+    const envList = (process.env.PROTECTED_ADMIN_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const protectedEmails = envList.length
+      ? envList
+      : ["roshan.manuel@gmail.com", "taleson2wheels.official@gmail.com"];
     const user = await prisma.user.findUnique({ where: { id } });
     if (user && protectedEmails.includes(user.email.toLowerCase())) {
       return NextResponse.json({ error: "Cannot delete protected admin account" }, { status: 403 });

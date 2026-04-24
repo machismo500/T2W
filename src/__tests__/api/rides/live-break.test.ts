@@ -9,12 +9,21 @@ vi.mock('@/lib/role-permissions', () => ({
   getRolePermissions: mockGetRolePermissions,
 }));
 
-vi.mock('@/lib/db', () => ({
-  prisma: {
+vi.mock('@/lib/db', () => {
+  const mock: Record<string, unknown> = {
     liveRideSession: { findUnique: vi.fn(), update: vi.fn() },
-    liveRideBreak: { create: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
-  },
-}));
+    liveRideBreak: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    $transaction: null,
+  };
+  mock.$transaction = vi.fn().mockImplementation(async (fn: (p: typeof mock) => unknown) => fn(mock));
+  return { prisma: mock };
+});
 
 vi.mock('@/lib/auth', () => ({
   getCurrentUser: vi.fn(),
@@ -40,6 +49,11 @@ describe('POST /api/rides/[id]/live/break', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRolePermissions.mockResolvedValue(defaultRolePerms);
+    // clearAllMocks wipes the $transaction implementation — re-install so the
+    // route body runs against the same prisma mock inside the callback.
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (p: typeof prisma) => unknown) => fn(prisma)
+    );
   });
 
   it('returns 403 when not authenticated', async () => {
@@ -183,7 +197,9 @@ describe('POST /api/rides/[id]/live/break', () => {
     vi.mocked(prisma.liveRideBreak.findFirst)
       .mockResolvedValueOnce({ id: 'break-1', startedAt: new Date(), endedAt: null } as any) // the open break
       .mockResolvedValueOnce(null); // no remaining open breaks after closing
-    vi.mocked(prisma.liveRideBreak.update).mockResolvedValue({
+    // New flow: updateMany (guarded close) + findUnique (re-read updated row)
+    vi.mocked(prisma.liveRideBreak.updateMany).mockResolvedValue({ count: 1 } as any);
+    vi.mocked(prisma.liveRideBreak.findUnique).mockResolvedValue({
       id: 'break-1', startedAt: new Date(), endedAt: new Date(), reason: null,
     } as any);
     vi.mocked(prisma.liveRideSession.update).mockResolvedValue({} as any);
@@ -209,7 +225,8 @@ describe('POST /api/rides/[id]/live/break', () => {
     vi.mocked(prisma.liveRideBreak.findFirst)
       .mockResolvedValueOnce({ id: 'break-1', startedAt: new Date(), endedAt: null } as any) // the open break to end
       .mockResolvedValueOnce({ id: 'break-2', startedAt: new Date(), endedAt: null } as any); // another still open
-    vi.mocked(prisma.liveRideBreak.update).mockResolvedValue({
+    vi.mocked(prisma.liveRideBreak.updateMany).mockResolvedValue({ count: 1 } as any);
+    vi.mocked(prisma.liveRideBreak.findUnique).mockResolvedValue({
       id: 'break-1', startedAt: new Date(), endedAt: new Date(), reason: null,
     } as any);
 

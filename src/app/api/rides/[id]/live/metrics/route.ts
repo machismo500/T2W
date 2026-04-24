@@ -30,16 +30,23 @@ export async function GET(
     const elapsedMs = endTime.getTime() - startTime.getTime();
     const elapsedMinutes = Math.round(elapsedMs / 60000);
 
-    // Break time
+    // Break time — only count closed breaks. Open breaks are still running;
+    // the ride-end flow auto-closes them, so anything left open mid-ride is
+    // "in progress" and excluded from the completed-break total.
     let breakMs = 0;
+    let closedBreakCount = 0;
     for (const b of session.breaks) {
-      const bEnd = b.endedAt || (session.status === "ended" ? endTime : new Date());
-      breakMs += bEnd.getTime() - b.startedAt.getTime();
+      if (!b.endedAt) continue;
+      breakMs += b.endedAt.getTime() - b.startedAt.getTime();
+      closedBreakCount += 1;
     }
     const breakMinutes = Math.round(breakMs / 60000);
 
     // Run all location queries in parallel
     const [leadPoints, speedStats, riderCountRows] = await Promise.all([
+      // For distance we aggregate every point (decimation distorts totals),
+      // but the projection is trivially indexed and only 2 floats each —
+      // 100k points is ~1.5 MB. No pagination here; see /live for the UI cap.
       session.leadRiderId
         ? prisma.liveRideLocation.findMany({
             where: { sessionId: session.id, userId: session.leadRiderId },
@@ -72,7 +79,7 @@ export async function GET(
       distanceKm,
       avgSpeedKmh: Math.round((speedStats._avg.speed || 0) * 10) / 10,
       maxSpeedKmh: Math.round((speedStats._max.speed || 0) * 10) / 10,
-      breakCount: session.breaks.length,
+      breakCount: closedBreakCount,
       breakMinutes,
       riderCount: riderCountRows.length,
     });

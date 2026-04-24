@@ -77,36 +77,49 @@ export async function POST(
     }
 
     if (action === "end") {
-      // Find the latest open break
-      const openBreak = await prisma.liveRideBreak.findFirst({
-        where: { sessionId: session.id, endedAt: null },
-        orderBy: { startedAt: "desc" },
+      // Wrap find → close → resume in a transaction so two concurrent
+      // "end" requests can't both close the same break and both flip
+      // the session back to "live".
+      const result = await prisma.$transaction(async (tx) => {
+        const openBreak = await tx.liveRideBreak.findFirst({
+          where: { sessionId: session.id, endedAt: null },
+          orderBy: { startedAt: "desc" },
+        });
+        if (!openBreak) return { error: "NO_OPEN_BREAK" as const };
+
+        // Guarded update — only closes if another request hasn't already
+        // closed it. count === 0 means someone beat us to it.
+        const closed = await tx.liveRideBreak.updateMany({
+          where: { id: openBreak.id, endedAt: null },
+          data: { endedAt: new Date() },
+        });
+        if (closed.count === 0) return { error: "NO_OPEN_BREAK" as const };
+
+        const updated = await tx.liveRideBreak.findUnique({
+          where: { id: openBreak.id },
+        });
+
+        const stillOpen = await tx.liveRideBreak.findFirst({
+          where: { sessionId: session.id, endedAt: null },
+        });
+        if (!stillOpen) {
+          await tx.liveRideSession.update({
+            where: { id: session.id },
+            data: { status: "live" },
+          });
+        }
+
+        return { updated };
       });
 
-      if (!openBreak) {
+      if ("error" in result) {
         return NextResponse.json(
           { error: "No active break to end" },
           { status: 400 }
         );
       }
 
-      const updated = await prisma.liveRideBreak.update({
-        where: { id: openBreak.id },
-        data: { endedAt: new Date() },
-      });
-
-      // Only resume the session if no other open breaks remain
-      const nextOpenBreak = await prisma.liveRideBreak.findFirst({
-        where: { sessionId: session.id, endedAt: null },
-      });
-
-      if (!nextOpenBreak) {
-        await prisma.liveRideSession.update({
-          where: { id: session.id },
-          data: { status: "live" },
-        });
-      }
-
+      const updated = result.updated!;
       return NextResponse.json({
         success: true,
         break: {

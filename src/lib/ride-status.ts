@@ -16,17 +16,23 @@ export function computeRideStatus(
 ): "upcoming" | "ongoing" | "completed" | "cancelled" {
   // Admin overrides — trust explicit DB values
   if (dbStatus === "cancelled") return "cancelled";
-  if (dbStatus === "ongoing") return "ongoing";
   if (dbStatus === "completed") return "completed";
 
   const now = new Date();
   const start = new Date(startDate);
   const end = new Date(endDate);
-
-  // Compare using the start of the day for start date, and end of day for end date
-  // so that the ride is "ongoing" for the entire start day and "completed" only after the end day
   const startOfStartDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const endOfEndDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+
+  // Admin "ongoing" override: trust it, unless the ride has been past its end
+  // date for > 48h — that usually means an admin forgot to close it out, so
+  // fall through to date-based completion rather than holding registration
+  // permanently closed.
+  if (dbStatus === "ongoing") {
+    const staleThreshold = new Date(endOfEndDay.getTime() + 48 * 60 * 60 * 1000);
+    if (now > staleThreshold) return "completed";
+    return "ongoing";
+  }
 
   if (now < startOfStartDay) return "upcoming";
   if (now <= endOfEndDay) return "ongoing";

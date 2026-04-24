@@ -10,6 +10,7 @@ import {
   enqueueLocation,
   flushLocationQueue,
   getPendingCount,
+  clearQueueForRide,
 } from "@/lib/location-queue";
 import { LiveRideMap } from "./LiveRideMap";
 import { LiveRideControls } from "./LiveRideControls";
@@ -185,6 +186,8 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
     // Watch position for continuous updates (GPS works without network)
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        // Discard fixes with accuracy worse than 150 m to avoid wild location jumps
+        if (position.coords.accuracy > 150) return;
         lastCoordsRef.current = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -296,9 +299,25 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   const handleEnd = async () => {
     try {
       stopTracking();
+      // Flush any queued offline pings before closing the session
+      if (isOnline && queuedCount > 0) {
+        await flushLocationQueue(rideId, (coords) =>
+          api.liveSession.submitLocation(rideId, {
+            lat: coords.lat,
+            lng: coords.lng,
+            speed: coords.speed ?? undefined,
+            heading: coords.heading ?? undefined,
+            accuracy: coords.accuracy ?? undefined,
+          })
+        ).then(() => setQueuedCount(0)).catch(() => {});
+      }
       await api.liveSession.control(rideId, "end");
       await fetchSession();
       await fetchMetrics();
+      // Free IDB quota — anything still queued is now stranded (the session
+      // is ended server-side, so pings would 4xx and be dropped anyway).
+      await clearQueueForRide(rideId).catch(() => {});
+      setQueuedCount(0);
     } catch (err) {
       alert("Failed to end session");
       console.error(err);

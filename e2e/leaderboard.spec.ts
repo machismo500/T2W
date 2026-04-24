@@ -183,8 +183,10 @@ test.describe("Leaderboard — authenticated users see hyperlinks", () => {
     await page.goto("/riders");
     await page.waitForLoadState("networkidle");
 
-    // Authenticated users see clickable links to /rider/:id
+    // Auth state hydration happens after `networkidle` — wait for the
+    // conditional link-wrap to actually render before counting.
     const links = page.locator('a[href*="/rider/"]');
+    await expect(links.first()).toBeVisible();
     const linkCount = await links.count();
     expect(linkCount).toBeGreaterThan(0);
   });
