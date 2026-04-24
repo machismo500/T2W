@@ -85,7 +85,10 @@ test.describe("Accommodation — GET /api/rides/:id response fields", () => {
     await mockRidePosts(page);
 
     // Must navigate first so relative URLs resolve
-    await page.goto(`/ride/${RIDE_ID}`);
+    // We only need a page context so page.route mocks intercept — we don't
+    // actually render the ride UI. Skip the full 'load' wait (maps/fonts/etc)
+    // to avoid flakes under full-suite concurrency.
+    await page.goto(`/ride/${RIDE_ID}`, { waitUntil: "domcontentloaded" });
     const result = await page.evaluate(async (url) => {
       const res = await fetch(url);
       return res.json();
@@ -99,7 +102,10 @@ test.describe("Accommodation — GET /api/rides/:id response fields", () => {
     await mockRideApi(page, { ...BASE_RIDE, extraBedSlots: 4, extraBedFee: 500 });
     await mockRidePosts(page);
 
-    await page.goto(`/ride/${RIDE_ID}`);
+    // We only need a page context so page.route mocks intercept — we don't
+    // actually render the ride UI. Skip the full 'load' wait (maps/fonts/etc)
+    // to avoid flakes under full-suite concurrency.
+    await page.goto(`/ride/${RIDE_ID}`, { waitUntil: "domcontentloaded" });
     const result = await page.evaluate(async (url) => {
       const res = await fetch(url);
       return res.json();
@@ -113,7 +119,10 @@ test.describe("Accommodation — GET /api/rides/:id response fields", () => {
     await mockRideApi(page, BASE_RIDE);
     await mockRidePosts(page);
 
-    await page.goto(`/ride/${RIDE_ID}`);
+    // We only need a page context so page.route mocks intercept — we don't
+    // actually render the ride UI. Skip the full 'load' wait (maps/fonts/etc)
+    // to avoid flakes under full-suite concurrency.
+    await page.goto(`/ride/${RIDE_ID}`, { waitUntil: "domcontentloaded" });
     const result = await page.evaluate(async (url) => {
       const res = await fetch(url);
       return res.json();
