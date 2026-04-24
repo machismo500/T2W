@@ -471,7 +471,6 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
                 ? session.plannedRoute[session.plannedRoute.length - 1]
                 : undefined
             }
-            isEnded={session?.status === "ended"}
           />
         )}
 

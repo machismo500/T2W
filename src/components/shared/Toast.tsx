@@ -54,7 +54,7 @@ const kindStyles: Record<ToastKind, { icon: typeof CheckCircle; color: string; b
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const timersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const timersRef = useRef(new Map<string, number>());
 
   const dismiss = useCallback((id: string) => {
     const timer = timersRef.current.get(id);
