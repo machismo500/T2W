@@ -48,11 +48,12 @@ export function CountUp({ value, duration = 1200, format, className }: CountUpPr
     };
 
     // Use IntersectionObserver so the count only triggers when visible
+    let rafCleanup: (() => void) | undefined;
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            run();
+            rafCleanup = run() ?? undefined;
             observer.disconnect();
           }
         });
@@ -60,7 +61,10 @@ export function CountUp({ value, duration = 1200, format, className }: CountUpPr
       { threshold: 0.2 }
     );
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      rafCleanup?.();
+    };
   }, [value, duration]);
 
   return <span ref={ref} className={className}>{format ? format(display) : display.toLocaleString()}</span>;

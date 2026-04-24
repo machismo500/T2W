@@ -724,10 +724,11 @@ export function AdminPage() {
         body: JSON.stringify({ approvalStatus: status }),
       });
       if (!res.ok) throw new Error("Failed to update");
+      // Read reg before setRideRegistrations to avoid stale-closure on the next line
+      const reg = rideRegistrations.find((r) => r.id === regId);
       setRideRegistrations((prev) => prev.map((r) => r.id === regId ? { ...r, approvalStatus: status } : r));
       // The PATCH endpoint handles all sync (participation + Ride.riders cache).
       // Update local edit riders list to stay in sync with confirmed registrations.
-      const reg = rideRegistrations.find((r) => r.id === regId);
       if (reg?.riderName) {
         if (status === "confirmed") {
           setEditRideRiders((prev) => prev.includes(reg.riderName) ? prev : [...prev, reg.riderName]);

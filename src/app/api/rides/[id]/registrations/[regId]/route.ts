@@ -67,10 +67,34 @@ export async function PATCH(
           { status: 400 }
         );
       }
-      const updated = await prisma.rideRegistration.update({
-        where: { id: regId },
-        data: { accommodationType: "bed" },
-      });
+      // Re-check bed availability inside a transaction to prevent TOCTOU races
+      let updated: Awaited<ReturnType<typeof prisma.rideRegistration.update>>;
+      try {
+        updated = await prisma.$transaction(async (tx) => {
+          const ride = await tx.ride.findUnique({
+            where: { id: rideId },
+            select: { maxRiders: true },
+          });
+          const bedCount = await tx.rideRegistration.count({
+            where: { rideId, approvalStatus: "confirmed", accommodationType: "bed" },
+          });
+          if (!ride || bedCount >= ride.maxRiders) {
+            throw new Error("NO_BED_SLOTS");
+          }
+          return tx.rideRegistration.update({
+            where: { id: regId },
+            data: { accommodationType: "bed" },
+          });
+        });
+      } catch (err) {
+        if (err instanceof Error && err.message === "NO_BED_SLOTS") {
+          return NextResponse.json(
+            { error: "No regular bed slots available." },
+            { status: 409 }
+          );
+        }
+        throw err;
+      }
       // syncRiders stores only names — call for consistency
       await syncRideRidersFromRegistrations(rideId);
       return NextResponse.json({

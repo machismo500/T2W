@@ -45,7 +45,7 @@ function rideAnnouncementHtml(ride: {
   leadRider: string;
 }): string {
   const BASE_URL = "https://taleson2wheels.com";
-  const rideUrl = `${BASE_URL}/ride/${ride.id}`;
+  const rideUrl = `${BASE_URL}/ride/${escapeHtml(ride.id)}`;
   const startDateStr = new Date(ride.startDate).toLocaleDateString("en-IN", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
@@ -53,10 +53,18 @@ function rideAnnouncementHtml(ride: {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
-  const posterSection = ride.posterUrl
+  // Only allow https:// poster URLs to prevent javascript: injection
+  const safePosterUrl =
+    ride.posterUrl && ride.posterUrl.startsWith("https://")
+      ? ride.posterUrl
+      : ride.posterUrl && ride.posterUrl.startsWith("/")
+        ? BASE_URL + ride.posterUrl
+        : null;
+
+  const posterSection = safePosterUrl
     ? `<div style="margin: 0 0 28px 0; border-radius: 12px; overflow: hidden;">
-        <img src="${ride.posterUrl.startsWith("http") ? ride.posterUrl : BASE_URL + ride.posterUrl}"
-             alt="${ride.title}" style="width: 100%; display: block;" />
+        <img src="${escapeHtml(safePosterUrl)}"
+             alt="${escapeHtml(ride.title)}" style="width: 100%; display: block;" />
        </div>`
     : "";
 
@@ -77,17 +85,17 @@ function rideAnnouncementHtml(ride: {
 
         <!-- Ride number + title -->
         <div style="margin-bottom: 20px;">
-          <span style="background: rgba(245,166,35,0.15); color: #f5a623; padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid rgba(245,166,35,0.3);">${ride.rideNumber}</span>
-          <h2 style="margin: 12px 0 0; font-size: 26px; font-weight: 800; color: #ffffff; line-height: 1.2;">${ride.title}</h2>
+          <span style="background: rgba(245,166,35,0.15); color: #f5a623; padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid rgba(245,166,35,0.3);">${escapeHtml(ride.rideNumber)}</span>
+          <h2 style="margin: 12px 0 0; font-size: 26px; font-weight: 800; color: #ffffff; line-height: 1.2;">${escapeHtml(ride.title)}</h2>
         </div>
 
         <!-- Route info -->
         <div style="background: #1a1a2e; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
           <p style="margin: 0 0 10px; color: #a0a0b0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Route</p>
           <p style="margin: 0; font-size: 20px; font-weight: 600; color: #ffffff;">
-            ${ride.startLocation}
+            ${escapeHtml(ride.startLocation)}
             <span style="color: #f5a623; margin: 0 8px;">→</span>
-            ${ride.endLocation}
+            ${escapeHtml(ride.endLocation)}
           </p>
           <p style="margin: 8px 0 0; color: #666; font-size: 14px;">${ride.distanceKm} km</p>
         </div>
@@ -109,7 +117,7 @@ function rideAnnouncementHtml(ride: {
         </div>
 
         <!-- Description -->
-        <p style="color: #c0c0c0; font-size: 15px; line-height: 1.6; margin-bottom: 28px;">${ride.description}</p>
+        <p style="color: #c0c0c0; font-size: 15px; line-height: 1.6; margin-bottom: 28px;">${escapeHtml(ride.description)}</p>
 
         <!-- CTA -->
         <div style="text-align: center; margin-bottom: 28px;">
@@ -182,7 +190,8 @@ export async function sendRideAnnouncementEmails(
   const allRecipients = [...users, ...unlinkedRecipients];
   if (allRecipients.length === 0) return;
 
-  const subject = `New Ride: ${ride.rideNumber} ${ride.title} — ${ride.startLocation} → ${ride.endLocation}`;
+  const san = (s: string) => s.replace(/[\r\n]/g, " ");
+  const subject = `New Ride: ${san(ride.rideNumber)} ${san(ride.title)} — ${san(ride.startLocation)} → ${san(ride.endLocation)}`;
   const html = rideAnnouncementHtml(ride);
 
   const results = await Promise.allSettled(

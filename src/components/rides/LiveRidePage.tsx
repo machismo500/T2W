@@ -185,6 +185,8 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
     // Watch position for continuous updates (GPS works without network)
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        // Discard fixes with accuracy worse than 150 m to avoid wild location jumps
+        if (position.coords.accuracy > 150) return;
         lastCoordsRef.current = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -296,6 +298,18 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   const handleEnd = async () => {
     try {
       stopTracking();
+      // Flush any queued offline pings before closing the session
+      if (isOnline && queuedCount > 0) {
+        await flushLocationQueue(rideId, (coords) =>
+          api.liveSession.submitLocation(rideId, {
+            lat: coords.lat,
+            lng: coords.lng,
+            speed: coords.speed ?? undefined,
+            heading: coords.heading ?? undefined,
+            accuracy: coords.accuracy ?? undefined,
+          })
+        ).then(() => setQueuedCount(0)).catch(() => {});
+      }
       await api.liveSession.control(rideId, "end");
       await fetchSession();
       await fetchMetrics();
@@ -457,6 +471,7 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
                 ? session.plannedRoute[session.plannedRoute.length - 1]
                 : undefined
             }
+            isEnded={session?.status === "ended"}
           />
         )}
 

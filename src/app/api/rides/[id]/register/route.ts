@@ -175,7 +175,7 @@ export async function POST(
     const tshirtSize = String(data.tshirtSize || "");
 
     // Generate a cryptographically random confirmation code
-    const randomPart = randomBytes(4).toString("hex").toUpperCase();
+    const randomPart = randomBytes(8).toString("hex").toUpperCase();
     const confirmationCode = `T2W-${rideId.toUpperCase().slice(0, 10)}-${randomPart}`;
 
     // Wrap capacity re-check + insert in a transaction to prevent TOCTOU race conditions
