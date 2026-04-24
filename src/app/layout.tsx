@@ -5,6 +5,9 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AuthProvider } from "@/context/AuthContext";
+import { ToastProvider } from "@/components/shared/Toast";
+import { BackToTop } from "@/components/shared/BackToTop";
+import { ScrollProgress } from "@/components/shared/ScrollProgress";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 
@@ -436,11 +439,25 @@ export default function RootLayout({
         />
       </head>
       <body className={`min-h-screen bg-t2w-dark font-sans antialiased ${inter.className}`}>
+        {/* Skip-to-content link for keyboard/screen-reader users */}
+        <a
+          href="#main-content"
+          className="sr-only z-[100] focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:rounded-xl focus:bg-t2w-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg"
+        >
+          Skip to main content
+        </a>
+
         <AuthProvider>
-          <ServiceWorkerRegistrar />
-          <Navbar />
-          <main className="min-h-screen">{children}</main>
-          <Footer />
+          <ToastProvider>
+            <ServiceWorkerRegistrar />
+            <ScrollProgress />
+            <Navbar />
+            <main id="main-content" className="min-h-screen">
+              {children}
+            </main>
+            <Footer />
+            <BackToTop />
+          </ToastProvider>
         </AuthProvider>
 
         {/* Google Analytics */}

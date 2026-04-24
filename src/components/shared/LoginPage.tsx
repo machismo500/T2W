@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,6 +17,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { PasswordStrength } from "@/components/shared/PasswordStrength";
+import { useToast } from "@/components/shared/Toast";
+
+const REMEMBERED_EMAIL_KEY = "t2w_remembered_email";
 
 // "none" = no modal; forgot flow steps: email → otp → newPassword → success
 type ModalState = "none" | "forgotEmail" | "forgotOtp" | "forgotNewPassword" | "forgotSuccess";
@@ -27,6 +31,21 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rememberMe, setRememberMe] = useState(false);
+  const toast = useToast();
+
+  // Prefill the email if a previous session chose "Remember me"
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(REMEMBERED_EMAIL_KEY);
+      if (saved) {
+        setEmail(saved);
+        setRememberMe(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Forgot password state
   const [modal, setModal] = useState<ModalState>("none");
@@ -53,6 +72,16 @@ export function LoginPage() {
 
     try {
       const { user: loggedInUser } = await login(email, password);
+      try {
+        if (rememberMe) {
+          localStorage.setItem(REMEMBERED_EMAIL_KEY, email);
+        } else {
+          localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+        }
+      } catch {
+        /* localStorage unavailable — ignore */
+      }
+      toast.success(`Welcome back, ${loggedInUser.name.split(" ")[0]}!`);
       router.push(loggedInUser.linkedRiderId ? `/rider/${loggedInUser.linkedRiderId}` : "/rides");
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -178,6 +207,7 @@ export function LoginPage() {
 
     try {
       await resetPassword(forgotEmail, newPassword);
+      toast.success("Password reset", "You can now log in with your new password.");
       setModal("forgotSuccess");
     } catch (err: unknown) {
       setForgotError(err instanceof Error ? err.message : "Password reset failed.");
@@ -297,9 +327,11 @@ export function LoginPage() {
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="h-4 w-4 rounded border-t2w-border accent-t2w-accent"
                 />
                 <span className="text-sm text-t2w-muted">Remember me</span>
@@ -513,6 +545,7 @@ export function LoginPage() {
                     {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <PasswordStrength password={newPassword} />
               </div>
 
               <div>

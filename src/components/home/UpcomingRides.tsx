@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { Ride } from "@/types";
+import { RideCardSkeletonGrid } from "@/components/shared/Skeleton";
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 24 },
@@ -210,12 +211,13 @@ export function UpcomingRides() {
     return (
       <section className="relative py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <Bike className="mx-auto h-16 w-16 animate-pulse text-t2w-accent" />
-              <p className="mt-4 text-t2w-muted">Loading rides...</p>
-            </div>
+          <div className="mb-10">
+            <h2 className="section-title">Upcoming Rides</h2>
+            <p className="mt-3 section-subtitle">
+              Loading the next adventures &hellip;
+            </p>
           </div>
+          <RideCardSkeletonGrid count={3} />
         </div>
       </section>
     );
