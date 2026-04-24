@@ -10,7 +10,7 @@
  * On Safari / Firefox the page falls back to the `online` event instead.
  */
 
-const CACHE_NAME = "t2w-shell-v1";
+const CACHE_NAME = "t2w-shell-v2";
 
 // Pages / assets to pre-cache on install so the live-tracking UI opens offline.
 const PRECACHE_URLS = ["/offline.html"];
@@ -50,14 +50,24 @@ self.addEventListener("fetch", (event) => {
   // Let non-GET and cross-origin requests pass through
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
 
-  // API routes: network only (POST location, session state, etc.)
+  // API routes: network only
   if (url.pathname.startsWith("/api/")) return;
 
-  // App pages: network-first, fall back to cache, fall back to offline page
+  // Next.js internals and static assets: pass through without SW caching.
+  // Intercepting /_next/ files is dangerous — if the network blips on mobile,
+  // the SW would serve /offline.html AS a JS chunk, crashing the page.
+  // Next.js CDN already handles long-term caching for these content-hashed files.
+  if (url.pathname.startsWith("/_next/")) return;
+
+  // Static file extensions: also pass through to avoid serving offline.html
+  // as an image, font, or other binary response.
+  if (/\.(js|css|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|eot|json|txt|xml)$/.test(url.pathname)) return;
+
+  // Navigation requests only — network-first, fall back to cache, then offline page.
   event.respondWith(
     fetch(request)
       .then((res) => {
-        // Cache successful page responses
+        // Cache successful HTML page responses
         if (res.ok && res.type === "basic") {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
@@ -66,7 +76,13 @@ self.addEventListener("fetch", (event) => {
       })
       .catch(async () => {
         const cached = await caches.match(request);
-        return cached || caches.match("/offline.html");
+        if (cached) return cached;
+        // Last resort: return the offline page (guaranteed to be an HTML response)
+        const offline = await caches.match("/offline.html");
+        return offline || new Response("You are offline", {
+          status: 503,
+          headers: { "Content-Type": "text/plain" },
+        });
       })
   );
 });
