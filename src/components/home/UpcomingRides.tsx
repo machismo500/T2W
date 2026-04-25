@@ -27,7 +27,7 @@ const staggerGrid = {
   visible: { transition: { staggerChildren: 0.1 } },
 };
 
-function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
+function RideCard({ ride }: { ride: Ride }) {
   const difficultyColors = {
     easy: "text-green-400 bg-green-400/10 border-green-400/20",
     moderate: "text-yellow-400 bg-yellow-400/10 border-yellow-400/20",
@@ -46,11 +46,7 @@ function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
   const fillPercentage = ((ride.activeRegistrations ?? ride.registeredRiders) / ride.maxRiders) * 100;
 
   return (
-    <div
-      className={`card-interactive group relative overflow-hidden ${
-        featured ? "md:col-span-2 md:row-span-2" : ""
-      }`}
-    >
+    <div className="card-interactive group relative overflow-hidden">
       {/* Gradient accent */}
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-t2w-accent to-t2w-gold opacity-0 transition-opacity group-hover:opacity-100" />
 
@@ -117,8 +113,8 @@ function RideCard({ ride, featured }: { ride: Ride; featured?: boolean }) {
           </div>
         </div>
 
-        {featured && (
-          <p className="mt-4 text-sm leading-relaxed text-gray-400">
+        {ride.description && (
+          <p className="mt-4 line-clamp-2 text-sm leading-relaxed text-gray-400">
             {ride.description}
           </p>
         )}
@@ -258,9 +254,9 @@ export function UpcomingRides() {
               whileInView="visible"
               viewport={{ once: true, margin: "-60px" }}
             >
-              {ongoing.map((ride, i) => (
+              {ongoing.map((ride) => (
                 <motion.div key={ride.id} variants={fadeInUp}>
-                  <RideCard ride={ride} featured={i === 0} />
+                  <RideCard ride={ride} />
                 </motion.div>
               ))}
             </motion.div>
@@ -298,9 +294,9 @@ export function UpcomingRides() {
             whileInView="visible"
             viewport={{ once: true, margin: "-60px" }}
           >
-            {upcoming.map((ride, i) => (
+            {upcoming.map((ride) => (
               <motion.div key={ride.id} variants={fadeInUp}>
-                <RideCard ride={ride} featured={i === 0} />
+                <RideCard ride={ride} />
               </motion.div>
             ))}
           </motion.div>
