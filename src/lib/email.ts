@@ -165,39 +165,52 @@ export async function sendRideAnnouncementEmails(
 ): Promise<void> {
   if (notifyMode === "none") return;
 
-  const where: Record<string, unknown> = {
+  // "all"      → every approved member with an email, regardless of notifyRides preference
+  // "selected" → only members who have the notifications toggle ON (notifyRides: true)
+  const userWhere: Record<string, unknown> = {
     isApproved: true,
-    notifyRides: true,
     email: { not: "" },
   };
   if (notifyMode === "selected") {
-    where.adminNotifySelected = true;
+    userWhere.notifyRides = true;
   }
 
   const users = await prisma.user.findMany({
-    where,
+    where: userWhere,
     select: { email: true, name: true },
   });
 
-  // Also include unlinked rider profiles (no User account) with notifyRides=true.
-  // For "selected" mode, unlinked riders are always included when notifyRides=true
-  // (they have no adminNotifySelected concept — they were added by the admin).
-  const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
+  // Unlinked rider profiles (imported records with no User account) use the
+  // same rule: "all" = everyone with email; "selected" = notifyRides: true only.
+  const profileWhere: Record<string, unknown> = {
+    mergedIntoId: null,
+    email: { not: "" },
+  };
+  if (notifyMode === "selected") {
+    profileWhere.notifyRides = true;
+  }
+
   const unlinkedProfiles = await prisma.riderProfile.findMany({
-    where: {
-      notifyRides: true,
-      mergedIntoId: null,
-      email: { not: "" },
-    },
+    where: profileWhere,
     select: { email: true, name: true },
   });
-  // Deduplicate: skip profiles whose email already covered by a User account
+
+  // Deduplicate: skip profiles whose email is already covered by a User account
+  const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
   const unlinkedRecipients = unlinkedProfiles.filter(
     (p) => !userEmails.has(p.email.toLowerCase())
   );
 
   const allRecipients = [...users, ...unlinkedRecipients];
-  if (allRecipients.length === 0) return;
+
+  console.log(
+    `[T2W] Ride announcement: mode=${notifyMode}, userAccounts=${users.length}, unlinkedProfiles=${unlinkedRecipients.length}, total=${allRecipients.length}`
+  );
+
+  if (allRecipients.length === 0) {
+    console.warn("[T2W] Ride announcement: 0 recipients found — no emails sent");
+    return;
+  }
 
   const san = (s: string) => s.replace(/[\r\n]/g, " ");
   const subject = `New Ride: ${san(ride.rideNumber)} ${san(ride.title)} — ${san(ride.startLocation)} → ${san(ride.endLocation)}`;
@@ -230,6 +243,6 @@ export async function sendRideAnnouncementEmails(
     }
   }
   console.log(
-    `[T2W] Ride announcement emails: ${sent} sent, ${failures.length} failed (mode: ${notifyMode}, users: ${users.length}, profiles: ${unlinkedRecipients.length})`
+    `[T2W] Ride announcement complete: ${sent} sent, ${failures.length} failed`
   );
 }

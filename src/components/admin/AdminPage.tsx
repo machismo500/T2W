@@ -461,18 +461,6 @@ export function AdminPage() {
     }
   };
 
-  const toggleAdminNotifySelected = async (userId: string) => {
-    const u = allUsers.find((u) => u.id === userId);
-    if (!u || !u.hasAccount) return;
-    const newValue = !(u.adminNotifySelected ?? true);
-    setAllUsers((prev) => prev.map((x) => x.id === userId ? { ...x, adminNotifySelected: newValue } : x));
-    try {
-      await api.users.update(userId, { adminNotifySelected: newValue });
-    } catch {
-      setAllUsers((prev) => prev.map((x) => x.id === userId ? { ...x, adminNotifySelected: !newValue } : x));
-    }
-  };
-
   const toggleUserNotifyRides = async (userId: string) => {
     const u = allUsers.find((u) => u.id === userId);
     if (!u) return;
@@ -1646,8 +1634,8 @@ export function AdminPage() {
                     <p className="text-xs text-t2w-muted mb-3">Choose who receives an email announcement when this ride is published.</p>
                     <div className="flex flex-wrap gap-2">
                       {([
-                        { value: "all", label: "Notify All", desc: "Everyone with notifications on" },
-                        { value: "selected", label: "Notify Selected", desc: "Only members in the Selected group" },
+                        { value: "all", label: "Notify All", desc: "All members with an email address" },
+                        { value: "selected", label: "Notify Selected", desc: "Only members with notifications enabled" },
                         { value: "none", label: "No Notification", desc: "Skip email entirely" },
                       ] as const).map((opt) => (
                         <button
@@ -1669,7 +1657,7 @@ export function AdminPage() {
                       ))}
                     </div>
                     {rideFormNotifyMode === "selected" && (
-                      <p className="mt-2 text-xs text-yellow-400/80">Only users with &quot;Notify Selected&quot; checked in the Users tab will receive this email.</p>
+                      <p className="mt-2 text-xs text-yellow-400/80">Only users with the Notifications toggle ON (in the Users tab) will receive this email.</p>
                     )}
                   </div>
 
