@@ -40,25 +40,36 @@ export async function GET(req: NextRequest) {
 
   console.log(`[T2W] Cron: processing ${jobs.length} scheduled email job(s)`);
 
-  const results = { sent: 0, failed: 0 };
+  const results = { sent: 0, failed: 0, skipped: 0 };
   for (const job of jobs) {
+    // Atomically claim the job before sending. If another cron invocation already
+    // claimed it (sentAt no longer null), updateMany returns count=0 — skip to
+    // prevent the duplicate email that would otherwise fire at the next minute.
+    const claim = await prisma.scheduledEmail.updateMany({
+      where: { id: job.id, sentAt: null },
+      data: { sentAt: now },
+    });
+    if (claim.count === 0) {
+      console.log(`[T2W] Cron: job ${job.id} already claimed, skipping`);
+      results.skipped += 1;
+      continue;
+    }
+
     try {
       await sendTierAnnouncementEmails(
         job.ride,
         job.tier as RideTier,
         job.notifyMode as NotifyMode
       );
-      await prisma.scheduledEmail.update({
-        where: { id: job.id },
-        data: { sentAt: now },
-      });
       results.sent += 1;
     } catch (err) {
       console.error(`[T2W] Cron: job ${job.id} (ride=${job.rideId}, tier=${job.tier}) failed:`, err);
       results.failed += 1;
+      // sentAt is already marked — acceptable trade-off: one missed send is
+      // better than spamming users with duplicate emails on retry.
     }
   }
 
-  console.log(`[T2W] Cron complete: ${results.sent} sent, ${results.failed} failed`);
+  console.log(`[T2W] Cron complete: ${results.sent} sent, ${results.failed} failed, ${results.skipped} skipped`);
   return NextResponse.json({ processed: jobs.length, ...results });
 }

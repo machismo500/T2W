@@ -386,5 +386,6 @@ model ScheduledEmail {
 
   ride        Ride      @relation(fields: [rideId], references: [id], onDelete: Cascade)
 
+  @@unique([rideId, tier])
   @@index([scheduledAt, sentAt])
 }

@@ -301,7 +301,10 @@ export async function sendTierAnnouncementEmails(
     select: { email: true, name: true },
   });
 
-  // For rider_guest tier, also include unlinked profiles (all default to rider role)
+  // For rider_guest tier, also include unlinked profiles (no linked User account).
+  // Dedup against ALL user accounts (not just the rider-role subset) so that a
+  // t2w_rider or core member who also has an unlinked profile doesn't receive a
+  // second copy of the email from this tier.
   let unlinkedRecipients: { email: string; name: string }[] = [];
   if (tier === "rider_guest") {
     const profileWhere: Record<string, unknown> = {
@@ -313,8 +316,13 @@ export async function sendTierAnnouncementEmails(
       where: profileWhere,
       select: { email: true, name: true },
     });
-    const userEmails = new Set(users.map((u) => u.email.toLowerCase()));
-    unlinkedRecipients = profiles.filter((p) => !userEmails.has(p.email.toLowerCase()));
+    // Collect every registered user email (all roles) for deduplication.
+    const allUsers = await prisma.user.findMany({
+      where: { email: { not: "" } },
+      select: { email: true },
+    });
+    const allUserEmails = new Set(allUsers.map((u) => u.email.toLowerCase()));
+    unlinkedRecipients = profiles.filter((p) => !allUserEmails.has(p.email.toLowerCase()));
   }
 
   const allRecipients = [...users, ...unlinkedRecipients];

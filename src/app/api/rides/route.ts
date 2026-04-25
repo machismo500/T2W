@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
           const riderTime = ride.regOpenRider ?? ride.regOpenT2w;
           if (riderTime) jobs.push({ rideId: ride.id, tier: "rider_guest", notifyMode, scheduledAt: riderTime });
           if (jobs.length > 0) {
-            await prisma.scheduledEmail.createMany({ data: jobs });
+            await prisma.scheduledEmail.createMany({ data: jobs, skipDuplicates: true });
             console.log(`[T2W] Scheduled ${jobs.length} tier email job(s) for ride ${ride.id}`);
           }
         } else {
