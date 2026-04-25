@@ -114,7 +114,7 @@ export function RidesPage() {
       if (a.status === "completed") {
         return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
       }
-      return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+      return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
     });
 
   const totalKm = rides
