@@ -137,6 +137,7 @@ describe('POST /api/rides — email scheduling', () => {
         // rider_guest falls back to t2w time
         expect.objectContaining({ tier: 'rider_guest', notifyMode: 'all', scheduledAt: regOpenT2w }),
       ]),
+      skipDuplicates: true,
     });
   });
 

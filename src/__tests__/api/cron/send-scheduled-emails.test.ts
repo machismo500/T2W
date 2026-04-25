@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createNextRequest, parseResponse } from '@/__tests__/helpers';
 
 vi.mock('@/lib/db', () => ({
   prisma: {
     scheduledEmail: {
       findMany: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -19,7 +19,7 @@ import { prisma } from '@/lib/db';
 import { sendTierAnnouncementEmails } from '@/lib/email';
 
 const mockFindMany = prisma.scheduledEmail.findMany as ReturnType<typeof vi.fn>;
-const mockUpdate = prisma.scheduledEmail.update as ReturnType<typeof vi.fn>;
+const mockUpdateMany = prisma.scheduledEmail.updateMany as ReturnType<typeof vi.fn>;
 const mockSendTier = sendTierAnnouncementEmails as ReturnType<typeof vi.fn>;
 
 const BASE_RIDE = {
@@ -59,7 +59,8 @@ describe('GET /api/cron/send-scheduled-emails', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env = { ...originalEnv };
-    mockUpdate.mockResolvedValue({});
+    // By default, claim succeeds (count: 1)
+    mockUpdateMany.mockResolvedValue({ count: 1 });
   });
 
   afterEach(() => {
@@ -114,6 +115,17 @@ describe('GET /api/cron/send-scheduled-emails', () => {
       expect(mockSendTier).not.toHaveBeenCalled();
     });
 
+    it('atomically claims the job before sending by setting sentAt', async () => {
+      mockFindMany.mockResolvedValue([makeJob({ id: 'job-99' })]);
+
+      await parseResponse(await GET(makeRequest()));
+
+      expect(mockUpdateMany).toHaveBeenCalledWith({
+        where: { id: 'job-99', sentAt: null },
+        data: { sentAt: expect.any(Date) },
+      });
+    });
+
     it('calls sendTierAnnouncementEmails with correct ride, tier, and notifyMode', async () => {
       mockFindMany.mockResolvedValue([makeJob({ tier: 'core', notifyMode: 'all' })]);
 
@@ -124,17 +136,6 @@ describe('GET /api/cron/send-scheduled-emails', () => {
         'core',
         'all'
       );
-    });
-
-    it('marks the job as sentAt after successful send', async () => {
-      mockFindMany.mockResolvedValue([makeJob({ id: 'job-99' })]);
-
-      await parseResponse(await GET(makeRequest()));
-
-      expect(mockUpdate).toHaveBeenCalledWith({
-        where: { id: 'job-99' },
-        data: { sentAt: expect.any(Date) },
-      });
     });
 
     it('processes multiple jobs and returns correct counts', async () => {
@@ -152,6 +153,31 @@ describe('GET /api/cron/send-scheduled-emails', () => {
       expect(data.failed).toBe(0);
     });
 
+    it('skips a job and increments skipped when updateMany claim returns count 0', async () => {
+      mockUpdateMany.mockResolvedValue({ count: 0 });
+      mockFindMany.mockResolvedValue([makeJob({ id: 'job-already-claimed' })]);
+
+      const { data } = await parseResponse(await GET(makeRequest()));
+
+      expect(mockSendTier).not.toHaveBeenCalled();
+      expect(data.skipped).toBe(1);
+      expect(data.sent).toBe(0);
+    });
+
+    it('claims job before sending even when the send subsequently fails', async () => {
+      mockSendTier.mockRejectedValue(new Error('SMTP error'));
+      mockFindMany.mockResolvedValue([makeJob({ id: 'job-fail' })]);
+
+      const { data } = await parseResponse(await GET(makeRequest()));
+
+      // sentAt is stamped before the send attempt — avoids retry spam
+      expect(mockUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'job-fail', sentAt: null } })
+      );
+      expect(data.failed).toBe(1);
+      expect(data.sent).toBe(0);
+    });
+
     it('increments failed count and continues when a job throws', async () => {
       mockSendTier
         .mockRejectedValueOnce(new Error('SMTP error'))
@@ -167,20 +193,8 @@ describe('GET /api/cron/send-scheduled-emails', () => {
       expect(data.processed).toBe(2);
       expect(data.sent).toBe(1);
       expect(data.failed).toBe(1);
-      // Second job still processed
-      expect(mockUpdate).toHaveBeenCalledTimes(1);
-      expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'job-2' } }));
-    });
-
-    it('does not mark a failed job as sent', async () => {
-      mockSendTier.mockRejectedValue(new Error('SMTP error'));
-      mockFindMany.mockResolvedValue([makeJob({ id: 'job-fail' })]);
-
-      const { data } = await parseResponse(await GET(makeRequest()));
-
-      expect(mockUpdate).not.toHaveBeenCalled();
-      expect(data.failed).toBe(1);
-      expect(data.sent).toBe(0);
+      // Both jobs are claimed (updateMany called for each)
+      expect(mockUpdateMany).toHaveBeenCalledTimes(2);
     });
 
     it('only queries jobs where scheduledAt <= now AND sentAt is null', async () => {
