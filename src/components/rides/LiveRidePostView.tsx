@@ -2,7 +2,7 @@
 
 import type { LiveRideMetrics as Metrics, LiveRiderLocation } from "@/types";
 import { LiveRideMap } from "./LiveRideMap";
-import { Clock, Route, Gauge, Users, TrendingUp, Coffee } from "lucide-react";
+import { Clock, Route, Gauge, Users, TrendingUp, Coffee, AlertTriangle } from "lucide-react";
 
 interface LiveRidePostViewProps {
   rideTitle: string;
@@ -10,6 +10,8 @@ interface LiveRidePostViewProps {
   leadPath: { lat: number; lng: number }[];
   riders: LiveRiderLocation[];
   metrics: Metrics | null;
+  mapsLoaded?: boolean;
+  mapError?: string | null;
   startLocation?: { lat: number; lng: number };
   endLocation?: { lat: number; lng: number };
 }
@@ -20,6 +22,8 @@ export function LiveRidePostView({
   leadPath,
   riders,
   metrics,
+  mapsLoaded = true,
+  mapError,
   startLocation,
   endLocation,
 }: LiveRidePostViewProps) {
@@ -33,14 +37,30 @@ export function LiveRidePostView({
           </p>
         </div>
         <div className="h-[400px] sm:h-[500px]">
-          <LiveRideMap
-            plannedRoute={plannedRoute}
-            leadPath={leadPath}
-            riders={riders}
-            startLocation={startLocation}
-            endLocation={endLocation}
-            isEnded
-          />
+          {mapsLoaded ? (
+            <LiveRideMap
+              plannedRoute={plannedRoute}
+              leadPath={leadPath}
+              riders={riders}
+              startLocation={startLocation}
+              endLocation={endLocation}
+              isEnded
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center bg-gray-100 dark:bg-gray-800/40">
+              <div className="max-w-xs text-center px-6">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-orange-500/15 text-orange-500">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                  {mapError ?? "Map unavailable"}
+                </p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Ride statistics are shown below.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

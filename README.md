@@ -308,6 +308,11 @@ SMTP_PORT="587"
 SMTP_USER="your@gmail.com"
 SMTP_PASS="your-app-password"
 SMTP_FROM="Tales on 2 Wheels"
+
+# Google Maps JavaScript API — required for Live Ride tracking map
+# Enable "Maps JavaScript API" in Google Cloud Console, restrict the key by
+# HTTP referrer to your production + preview domains, and enable billing.
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY="AIza…"
 ```
 
 ---

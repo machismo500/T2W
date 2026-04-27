@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, WifiOff, Wifi } from "lucide-react";
+import { ArrowLeft, Loader2, WifiOff, Wifi, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/context/AuthContext";
 import { useOnlineStatus } from "@/hooks/use-online-status";
@@ -391,20 +391,8 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
     );
   }
 
-  if (error && !mapsLoaded) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4">
-        <p className="text-red-500 font-medium">{error}</p>
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Go Back
-        </button>
-      </div>
-    );
-  }
+  // Map errors no longer block the page — they're surfaced inline (B + C).
+  // GPS tracking and ride controls still work without the map widget.
 
   // Post-ride view
   if (session?.status === "ended") {
@@ -417,21 +405,21 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
           <ArrowLeft className="w-4 h-4" />
           Back to Ride
         </button>
-        {mapsLoaded && (
-          <LiveRidePostView
-            rideTitle={rideTitle || "Ride"}
-            plannedRoute={session.plannedRoute}
-            leadPath={leadPath}
-            riders={riders}
-            metrics={metrics}
-            startLocation={session.plannedRoute?.[0]}
-            endLocation={
-              session.plannedRoute
-                ? session.plannedRoute[session.plannedRoute.length - 1]
-                : undefined
-            }
-          />
-        )}
+        <LiveRidePostView
+          rideTitle={rideTitle || "Ride"}
+          plannedRoute={session.plannedRoute}
+          leadPath={leadPath}
+          riders={riders}
+          metrics={metrics}
+          mapsLoaded={mapsLoaded}
+          mapError={error}
+          startLocation={session.plannedRoute?.[0]}
+          endLocation={
+            session.plannedRoute
+              ? session.plannedRoute[session.plannedRoute.length - 1]
+              : undefined
+          }
+        />
       </div>
     );
   }
@@ -485,7 +473,7 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
 
       {/* Map */}
       <div className="flex-1 relative">
-        {mapsLoaded && (
+        {mapsLoaded ? (
           <LiveRideMap
             plannedRoute={session?.plannedRoute}
             leadPath={leadPath}
@@ -497,6 +485,22 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
                 : undefined
             }
           />
+        ) : (
+          <div className="flex h-full items-center justify-center bg-gray-100 dark:bg-gray-800/40">
+            <div className="max-w-xs text-center px-6">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-orange-500/15 text-orange-500">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {error ?? "Loading map…"}
+              </p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {error
+                  ? "GPS tracking is still running — your locations are being recorded."
+                  : "If this takes more than a few seconds, check your network connection."}
+              </p>
+            </div>
+          </div>
         )}
 
         {/* Metrics overlay (top-right) */}
