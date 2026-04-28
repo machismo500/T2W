@@ -141,11 +141,10 @@ export function AboutContact() {
 
   // Build crew display list - fully dynamic from DB roles
   const crewDisplay = crewMembers.map((m) => {
-        // Avatar: prefer DB-backed URL from API, fallback to localStorage
+        // Avatar: prefer DB-backed URL from API, fall back to in-memory cache.
+        // Legacy `t2w_avatar_<id>` localStorage keys are purged on first
+        // cache access (see api.avatars), so no per-row localStorage read.
         const localAvatar = m.linkedRiderId ? api.avatars.get(m.linkedRiderId) : null;
-        const legacyAvatar = m.linkedRiderId && typeof window !== "undefined"
-          ? localStorage.getItem(`t2w_avatar_${m.linkedRiderId}`)
-          : null;
         return {
           name: m.name,
           role: ROLE_LABELS[m.role] || m.role,
@@ -156,7 +155,7 @@ export function AboutContact() {
             .toUpperCase()
             .slice(0, 2),
           riderId: m.linkedRiderId,
-          avatarUrl: m.avatarUrl || localAvatar || legacyAvatar,
+          avatarUrl: m.avatarUrl || localAvatar,
         };
       });
 

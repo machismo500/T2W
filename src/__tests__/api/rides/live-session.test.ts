@@ -151,13 +151,13 @@ describe('GET /api/rides/[id]/live', () => {
       { id: 'user-11', name: 'Sweep Rider', avatar: null },
     ]);
 
-    // Lead path locations
-    // Route now queries orderBy: recordedAt desc, take: 2000 and reverses on
-    // the server — so the mock returns newest-first and the test asserts on
-    // the chronological (reversed) output.
+    // Lead path locations.
+    // Route now queries orderBy: recordedAt asc and decimates server-side, so
+    // the mock returns chronological order (oldest first) and the assertion
+    // checks the same.
     mockLocationFindMany.mockResolvedValue([
-      { lat: 12.9716, lng: 77.5946, recordedAt: new Date('2024-06-01T09:30:00Z') },
       { lat: 12.9700, lng: 77.5900, recordedAt: new Date('2024-06-01T08:00:00Z') },
+      { lat: 12.9716, lng: 77.5946, recordedAt: new Date('2024-06-01T09:30:00Z') },
     ]);
 
     const res = await callGET('ride-1');

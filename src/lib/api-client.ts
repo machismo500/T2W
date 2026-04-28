@@ -24,7 +24,56 @@ function setStorage(key: string, value: unknown) {
 }
 
 // ── Storage keys (client-side cache only) ──
-const AVATARS_KEY = "t2w_avatars"; // riderId -> base64 data URL (client-side cache)
+//
+// Avatar caching note: previously stored under `t2w_avatars` (single JSON
+// blob) and per-rider `t2w_avatar_<id>` keys. Both held base64 data URLs
+// (~150KB each — see /api/upload which returns "data:image/...;base64,...")
+// and grew unboundedly into the localStorage 5MB quota. Reading required
+// JSON.parse of the whole blob on every render, OOM-ing iOS WebKit tabs.
+// The cache is now memory-only with an LRU cap, and the constants below
+// exist only so the legacy purge can locate and remove the old keys.
+const LEGACY_AVATARS_BLOB_KEY = "t2w_avatars";
+const LEGACY_AVATAR_KEY_PREFIX = "t2w_avatar_";
+
+const MAX_AVATAR_ENTRIES = 50;
+
+interface AvatarEntry {
+  id: string;
+  url: string;
+  lastUsed: number;
+}
+let avatarMemoryCache: AvatarEntry[] = [];
+let legacyAvatarsPurged = false;
+// Monotonically-increasing counter for LRU ordering. Date.now() has 1ms
+// resolution, so a tight-loop save would tie the timestamps and `sort` would
+// rely on insertion order — fragile. A counter is exact and free.
+let avatarTouchSeq = 0;
+function touchAvatar(): number {
+  return ++avatarTouchSeq;
+}
+
+/**
+ * Removes the legacy localStorage avatar caches once per page load.
+ *
+ * Idempotent and safe to call from multiple paths — the first call
+ * actually does the work, subsequent calls are no-ops. Wrapped in
+ * try/catch because localStorage can throw on private-browsing modes.
+ */
+function purgeLegacyAvatarStorage() {
+  if (legacyAvatarsPurged || typeof window === "undefined") return;
+  legacyAvatarsPurged = true;
+  try {
+    localStorage.removeItem(LEGACY_AVATARS_BLOB_KEY);
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(LEGACY_AVATAR_KEY_PREFIX)) toRemove.push(key);
+    }
+    for (const key of toRemove) localStorage.removeItem(key);
+  } catch {
+    // localStorage unavailable — nothing we can do
+  }
+}
 
 // ── Activity Log ──
 export type ActivityAction =
@@ -830,18 +879,35 @@ export const api = {
     },
   },
 
-  // Avatar storage - persisted to DB via upload API
+  // Avatar storage - persisted to DB via upload API.
+  // Client-side cache is in-memory only (cleared on reload) with an LRU cap.
+  // See the comment above the LEGACY_AVATAR* constants for context.
   avatars: {
     get: (riderId: string): string | null => {
-      // Check localStorage cache first for immediate display
-      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
-      return avatars[riderId] || null;
+      purgeLegacyAvatarStorage();
+      const entry = avatarMemoryCache.find((e) => e.id === riderId);
+      if (!entry) return null;
+      entry.lastUsed = touchAvatar();
+      return entry.url;
     },
-    save: (riderId: string, dataUrl: string) => {
-      // Cache locally for immediate display
-      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
-      avatars[riderId] = dataUrl;
-      setStorage(AVATARS_KEY, avatars);
+    save: (riderId: string, url: string) => {
+      purgeLegacyAvatarStorage();
+      // Empty string = explicit clear (used when user removes their avatar).
+      if (!url) {
+        avatarMemoryCache = avatarMemoryCache.filter((e) => e.id !== riderId);
+        return;
+      }
+      const i = avatarMemoryCache.findIndex((e) => e.id === riderId);
+      if (i >= 0) {
+        avatarMemoryCache[i] = { id: riderId, url, lastUsed: touchAvatar() };
+        return;
+      }
+      avatarMemoryCache.push({ id: riderId, url, lastUsed: touchAvatar() });
+      if (avatarMemoryCache.length > MAX_AVATAR_ENTRIES) {
+        // Evict the least-recently-used entries down to the cap.
+        avatarMemoryCache.sort((a, b) => b.lastUsed - a.lastUsed);
+        avatarMemoryCache.length = MAX_AVATAR_ENTRIES;
+      }
     },
     // Upload a pre-compressed data URL to server and persist in RiderProfile.avatarUrl
     uploadDataUrl: async (riderId: string, dataUrl: string): Promise<string> => {
@@ -852,10 +918,7 @@ export const api = {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to upload avatar");
-      // Cache the URL locally too
-      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
-      avatars[riderId] = data.url;
-      setStorage(AVATARS_KEY, avatars);
+      api.avatars.save(riderId, data.url);
       return data.url as string;
     },
     // Upload raw file to server (legacy — prefer uploadDataUrl with pre-compressed images)
@@ -867,10 +930,7 @@ export const api = {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to upload avatar");
-      // Cache the URL locally too
-      const avatars = getStorage<Record<string, string>>(AVATARS_KEY, {});
-      avatars[riderId] = data.url;
-      setStorage(AVATARS_KEY, avatars);
+      api.avatars.save(riderId, data.url);
       return data.url as string;
     },
   },
