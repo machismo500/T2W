@@ -71,6 +71,7 @@ export async function GET() {
     counts,
     total,
     blobReady: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+    blobAccess: process.env.BLOB_ACCESS === "private" ? "private" : "public",
     done: total === 0,
   });
 }

@@ -11,6 +11,20 @@
 
 import { put } from "@vercel/blob";
 
+// Vercel Blob stores are created as either "public" or "private" and cannot
+// change after creation. The SDK requires `access` on every put() to match
+// the store's mode — passing "public" to a private store (or vice versa)
+// fails with "Cannot use <X> access on a <Y> store".
+//
+// We read the mode from BLOB_ACCESS so a single deployment can target either
+// store type without a code change. Default is "public" because that's what
+// the app's image flow assumes (URLs are rendered directly in <img src>).
+// If you set this to "private", you must also add a server route that
+// streams blobs via get() — private URLs require an auth token and won't
+// load in the browser directly.
+const BLOB_ACCESS: "public" | "private" =
+  process.env.BLOB_ACCESS === "private" ? "private" : "public";
+
 // Map a MIME type to a file extension. Limited to image types we accept.
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
@@ -86,7 +100,7 @@ export async function uploadImage(
     : `${options.type}/${ext}`;
 
   const result = await put(filename, bytes, {
-    access: "public",
+    access: BLOB_ACCESS,
     contentType: options.contentType ?? mime,
     addRandomSuffix: true,
   });

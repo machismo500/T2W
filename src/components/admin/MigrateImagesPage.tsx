@@ -49,6 +49,7 @@ interface StatusResponse {
   counts: Counts;
   total: number;
   blobReady: boolean;
+  blobAccess: "public" | "private";
   done: boolean;
 }
 
@@ -139,12 +140,13 @@ export function MigrateImagesPage() {
         `Batch done in ${result.elapsedMs} ms · remaining ${result.total}` +
           (result.done ? " · 🎉 ALL DONE" : "")
       );
-      setStatus({
+      setStatus((prev) => ({
         counts: result.counts,
         total: result.total,
         blobReady: true,
+        blobAccess: prev?.blobAccess ?? "public",
         done: result.done,
-      });
+      }));
     }
     setRunning(false);
   }, [running, runBatch, appendLog]);
@@ -166,12 +168,13 @@ export function MigrateImagesPage() {
       setFailedCount((c) => c + result.failed.length);
       for (const m of result.migrated) appendLog(`✓ ${m.table} ${m.id}`);
       for (const f of result.failed) appendLog(`✗ ${f.table} ${f.id} — ${f.error}`);
-      setStatus({
+      setStatus((prev) => ({
         counts: result.counts,
         total: result.total,
         blobReady: true,
+        blobAccess: prev?.blobAccess ?? "public",
         done: result.done,
-      });
+      }));
       if (result.done) {
         appendLog("🎉 All rows migrated.");
         break;
@@ -242,6 +245,31 @@ export function MigrateImagesPage() {
               Connect the Blob store to this project in the Vercel dashboard
               (Storage → t2w-images → Connect Project), then redeploy.
             </p>
+          </div>
+        </div>
+      )}
+
+      {status?.blobReady && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-t2w-border bg-t2w-surface p-3 text-xs text-t2w-muted">
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-t2w-muted" />
+          <div>
+            Uploading with{" "}
+            <code className="rounded bg-t2w-bg px-1.5 py-0.5 font-mono text-white">
+              access: &quot;{status.blobAccess}&quot;
+            </code>{" "}
+            (set via <code>BLOB_ACCESS</code>). Must match the store&apos;s mode
+            in the Vercel dashboard, otherwise every upload fails with{" "}
+            <em>&quot;Cannot use {status.blobAccess} access on a{" "}
+            {status.blobAccess === "public" ? "private" : "public"} store&quot;</em>.
+            {status.blobAccess === "private" && (
+              <>
+                {" "}
+                <strong className="text-amber-300">
+                  Heads up: private blob URLs require a server proxy to render
+                  in &lt;img&gt; tags.
+                </strong>
+              </>
+            )}
           </div>
         </div>
       )}
