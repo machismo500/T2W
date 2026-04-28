@@ -100,7 +100,11 @@ export async function uploadImage(
     : `${options.type}/${ext}`;
 
   const result = await put(filename, bytes, {
-    access: BLOB_ACCESS,
+    // @vercel/blob@1.1.1 types `access` as the literal "public", but the
+    // runtime SDK forwards whatever value we pass to Vercel's API, which
+    // accepts both "public" and "private" depending on the store's mode.
+    // The cast is intentional — see BLOB_ACCESS comment above.
+    access: BLOB_ACCESS as "public",
     contentType: options.contentType ?? mime,
     addRandomSuffix: true,
   });
