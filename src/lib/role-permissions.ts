@@ -23,6 +23,7 @@ export type RolePermissions = {
     canManageRegistrations: boolean;
     canExportRegistrations: boolean;
     canControlLiveTracking: boolean;
+    canEditRideMap: boolean;
     canApproveContent: boolean;
     canApproveUsers: boolean;
     canViewActivityLog: boolean;
@@ -50,6 +51,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
     canManageRegistrations: true,
     canExportRegistrations: true,
     canControlLiveTracking: true,
+    canEditRideMap: true,
     canApproveContent: true,
     canApproveUsers: true,
     canViewActivityLog: true,

@@ -36,6 +36,7 @@ describe('DEFAULT_ROLE_PERMISSIONS', () => {
     expect(core_member.canManageRegistrations).toBe(true);
     expect(core_member.canExportRegistrations).toBe(true);
     expect(core_member.canControlLiveTracking).toBe(true);
+    expect(core_member.canEditRideMap).toBe(true);
     expect(core_member.canApproveContent).toBe(true);
     expect(core_member.canApproveUsers).toBe(true);
   });

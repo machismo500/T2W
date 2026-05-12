@@ -98,6 +98,46 @@ describe('GET /api/rides/[id]/live/metrics', () => {
     expect(data.riderCount).toBe(3);
   });
 
+  it('returns admin-set overrides instead of computed values', async () => {
+    const { pathDistanceKm } = await import('@/lib/geo-utils');
+    vi.mocked(pathDistanceKm).mockReturnValue(12.3); // pretend the raw points yield 12.3 km
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+
+    const now = new Date();
+    const twoHoursAgo = new Date(now.getTime() - 120 * 60000);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', rideId: 'ride-1', status: 'ended',
+      startedAt: twoHoursAgo, createdAt: twoHoursAgo, endedAt: now,
+      leadRiderId: 'u1', sweepRiderId: 'u2', breaks: [],
+      // Admin overrode all four computed-able stats
+      distanceKmOverride: 845.3,
+      avgSpeedKmhOverride: 38.4,
+      maxSpeedKmhOverride: 92.1,
+      movingMinutesOverride: 1860,
+    } as any);
+
+    vi.mocked(prisma.liveRideLocation.findMany)
+      .mockResolvedValueOnce([{ lat: 12.9, lng: 77.6 }, { lat: 13.0, lng: 77.7 }] as any)
+      .mockResolvedValueOnce([{ userId: 'u1' }] as any);
+    vi.mocked(prisma.liveRideLocation.aggregate).mockResolvedValue({
+      _avg: { speed: 50 }, _max: { speed: 90 },
+    } as any);
+
+    const res = await GET(makeReq(), makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(200);
+    expect(data.distanceKm).toBe(845.3);
+    expect(data.distanceSource).toBe('override');
+    expect(data.avgSpeedKmh).toBe(38.4);
+    expect(data.maxSpeedKmh).toBe(92.1);
+    expect(data.movingMinutes).toBe(1860);
+    // The original computed values are still exposed for diagnostics
+    expect(data.computed.distanceKm).toBe(12.3);
+    expect(data.computed.avgSpeedKmh).toBe(50);
+    expect(data.computed.maxSpeedKmh).toBe(90);
+    expect(data.overrides.distanceKm).toBe(845.3);
+  });
+
   it('prefers the smoothed/gap-filled series for distance when one exists', async () => {
     const { pathDistanceKm } = await import('@/lib/geo-utils');
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);

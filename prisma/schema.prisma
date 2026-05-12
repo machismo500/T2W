@@ -289,6 +289,15 @@ model LiveRideSession {
   plannedRouteEditedBy   String?
   elevationGainM         Int?      // backfilled after end via Google Elevation API
   elevationLossM         Int?      // backfilled after end via Google Elevation API
+  // Manual stat overrides — set by super-admin / core member in the editor
+  // when the auto-computed values are off (e.g. GPS gaps producing 0 km,
+  // bunched timestamps producing 149 h moving time). The metrics endpoint
+  // returns these instead of the computed values when present. Set to null
+  // to fall back to computed.
+  distanceKmOverride     Float?
+  avgSpeedKmhOverride    Float?
+  maxSpeedKmhOverride    Float?
+  movingMinutesOverride  Int?
   // Per-rider smoothed/gap-filled tracks live in LiveRideLocationSmoothed;
   // these fields record when the most recent smoothing run finished for
   // any rider on this session (used to gate the "Revert to raw" affordance

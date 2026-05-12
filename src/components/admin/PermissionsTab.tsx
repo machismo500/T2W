@@ -61,6 +61,7 @@ const SECTIONS: Section[] = [
       { key: "canManageRegistrations", label: "Manage Registrations", description: "Can approve, reject, and manually add riders to rides" },
       { key: "canExportRegistrations", label: "Export Registrations", description: "Can download the rider list as a spreadsheet" },
       { key: "canControlLiveTracking", label: "Control Live Tracking", description: "Can start, pause, call breaks, and end live ride sessions" },
+      { key: "canEditRideMap", label: "Edit Ride Map & Stats", description: "Can open the post-ride map editor to fix planned route, recorded tracks (snap, smooth, fill gaps), session times, breaks, and override ride statistics" },
       { key: "canApproveContent", label: "Approve Content", description: "Can approve/reject blog posts and ride tales" },
       { key: "canApproveUsers", label: "Approve New Members", description: "Can approve or reject pending user sign-ups" },
       { key: "canViewActivityLog", label: "View Activity Log", description: "Can access the admin activity log showing all recent actions" },
