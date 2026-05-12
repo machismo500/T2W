@@ -43,15 +43,29 @@ test.describe("Home page CTAs respect login state", () => {
     await expect(cta).toHaveAttribute("href", "/register");
   });
 
-  test("logged-in rider: hero CTA becomes 'View Profile' → /profile", async ({ page }) => {
-    await mockAuthAs(page, USERS.rider);
+  test("logged-in rider with a linked rider profile: CTA targets /rider/<id>", async ({ page }) => {
+    // Earlier version of this test only asserted href="/profile" — a route
+    // that doesn't exist in the app — and the user caught the 404 manually.
+    // The contract that matters is that the link points at a route the
+    // app actually serves: /rider/<linkedRiderId> when linked, else /rides.
+    await mockAuthAs(page, { ...USERS.rider, linkedRiderId: "rider-rider" });
     await mockHome(page);
     await page.goto("/");
 
     await expect(page.getByRole("link", { name: /Start Your Journey/i })).toHaveCount(0);
     const cta = page.getByRole("link", { name: /View Profile/i });
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveAttribute("href", "/profile");
+    // Specifically must NOT be /profile — that's the bug.
+    await expect(cta).not.toHaveAttribute("href", "/profile");
+    await expect(cta).toHaveAttribute("href", "/rider/rider-rider");
+  });
+
+  test("logged-in user without linkedRiderId falls back to /rides", async ({ page }) => {
+    await mockAuthAs(page, { ...USERS.rider, linkedRiderId: null });
+    await mockHome(page);
+    await page.goto("/");
+    const cta = page.getByRole("link", { name: /View Profile/i });
+    await expect(cta).toHaveAttribute("href", "/rides");
   });
 
   test("anonymous: 'How to Join the Ride Group?' onboarding section is shown", async ({ page }) => {

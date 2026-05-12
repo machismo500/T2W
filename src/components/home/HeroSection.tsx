@@ -23,7 +23,11 @@ interface HeroStats {
 }
 
 export function HeroSection() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
+  // Mirrors the UserMenu "My Profile" link — public rider page when the
+  // user has a linked rider profile, otherwise fall back to /rides so we
+  // never 404 a logged-in member.
+  const profileHref = user?.linkedRiderId ? `/rider/${user.linkedRiderId}` : "/rides";
   const [nextRide, setNextRide] = useState<{ title: string; date: string } | null>(null);
   const [stats, setStats] = useState<HeroStats>({
     activeRiders: 0,
@@ -127,7 +131,7 @@ export function HeroSection() {
             style={{ animationDelay: "300ms", animationFillMode: "both" }}
           >
             <Link
-              href={isLoggedIn ? "/profile" : "/register"}
+              href={isLoggedIn ? profileHref : "/register"}
               className="btn-primary group flex items-center justify-center gap-2 text-lg"
             >
               {isLoggedIn ? "View Profile" : "Start Your Journey"}
