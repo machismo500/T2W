@@ -25,7 +25,7 @@ interface LiveRideMapEditorProps {
   onSaved: () => void;
 }
 
-type Tab = "planned" | "track" | "meta";
+type Tab = "planned" | "track" | "meta" | "stats";
 
 export function LiveRideMapEditor({
   rideId,
@@ -43,8 +43,8 @@ export function LiveRideMapEditor({
       <div className="relative w-full max-w-5xl rounded-2xl border border-t2w-border bg-t2w-surface">
         <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b border-t2w-border bg-t2w-surface px-6 py-4">
           <div>
-            <h2 className="font-display text-lg font-bold text-white">Edit Ride Map</h2>
-            <p className="text-xs text-t2w-muted">Super-admin only — changes are visible to all registered riders.</p>
+            <h2 className="font-display text-lg font-bold text-white">Edit Ride Map &amp; Stats</h2>
+            <p className="text-xs text-t2w-muted">Super-admin and authorised core members — changes are visible to all registered riders.</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-t2w-muted hover:bg-white/10 hover:text-white">
             Close
@@ -56,6 +56,7 @@ export function LiveRideMapEditor({
             [
               ["planned", "Planned route"],
               ["track", "Recorded track"],
+              ["stats", "Statistics"],
               ["meta", "Session & breaks"],
             ] as [Tab, string][]
           ).map(([key, label]) => (
@@ -83,6 +84,9 @@ export function LiveRideMapEditor({
           )}
           {tab === "track" && (
             <TrackTab rideId={rideId} session={session} riders={riders} registrants={registrants} onSaved={onSaved} />
+          )}
+          {tab === "stats" && (
+            <StatsTab rideId={rideId} session={session} onSaved={onSaved} />
           )}
           {tab === "meta" && (
             <MetaTab rideId={rideId} session={session} registrants={registrants} onSaved={onSaved} />
@@ -312,7 +316,12 @@ function PlannedRouteTab({
           </button>
         </div>
       </div>
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+          <strong className="block text-xs uppercase tracking-wide text-red-400">Action failed</strong>
+          <span className="break-words">{error}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -455,8 +464,17 @@ function TrackTab({
 
       <SmoothFillSection rideId={rideId} userId={targetUserId} disabled={busy || !targetUserId} onChanged={onSaved} />
 
-      {msg && <p className="text-sm text-green-400">{msg}</p>}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {msg && (
+        <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-300">
+          {msg}
+        </div>
+      )}
+      {error && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+          <strong className="block text-xs uppercase tracking-wide text-red-400">Action failed</strong>
+          <span className="break-words">{error}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -574,7 +592,12 @@ function SmoothFillSection({
           <Stat label="Gap time" value={`${Math.round(stats.gapsTotalSeconds / 60)} min`} />
         </div>
       )}
-      {error && <p className="mt-2 text-xs text-amber-400">{error}</p>}
+      {error && (
+        <div className="mt-3 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-xs text-amber-300">
+          <strong className="block uppercase tracking-wide text-amber-400">Heads up</strong>
+          <span className="break-words">{error}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -744,4 +767,240 @@ function toLocalInput(iso?: string | null): string {
   // strip seconds and timezone for <input type="datetime-local">
   const pad = (n: number) => n.toString().padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ---------------------------------------------------------------------------
+// Statistics — override the computed metrics when auto-computation is off
+// (GPS gaps producing 0 km, bunched offline timestamps blowing up moving
+// time, etc.). Each override is independent — clear with the button next
+// to the input to fall back to the computed value.
+// ---------------------------------------------------------------------------
+interface MetricsPayload {
+  elapsedMinutes: number;
+  movingMinutes: number;
+  distanceKm: number;
+  avgSpeedKmh: number;
+  maxSpeedKmh: number;
+  elevationGainM: number | null;
+  elevationLossM: number | null;
+  overrides?: {
+    distanceKm: number | null;
+    avgSpeedKmh: number | null;
+    maxSpeedKmh: number | null;
+    movingMinutes: number | null;
+  };
+  computed?: {
+    distanceKm: number;
+    avgSpeedKmh: number;
+    maxSpeedKmh: number;
+    movingMinutes: number;
+  };
+}
+
+function StatsTab({
+  rideId,
+  session,
+  onSaved,
+}: {
+  rideId: string;
+  session: LiveRideSession & { breaks?: Break[] };
+  onSaved: () => void;
+}) {
+  // Use a string-keyed shape so empty inputs map to "" (= "clear override")
+  // and number inputs round-trip without NaN games.
+  const [form, setForm] = useState({
+    distanceKm: "",
+    avgSpeedKmh: "",
+    maxSpeedKmh: "",
+    movingMinutes: "",
+    elevationGainM: "",
+    elevationLossM: "",
+  });
+  const [metrics, setMetrics] = useState<MetricsPayload | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  // Hydrate from /metrics on mount so we show the live numbers alongside
+  // any existing overrides. Re-fetch after save so badges update.
+  const refresh = async () => {
+    try {
+      const m: MetricsPayload = await api.liveSession.metrics(rideId);
+      setMetrics(m);
+      setForm({
+        distanceKm: m.overrides?.distanceKm != null ? String(m.overrides.distanceKm) : "",
+        avgSpeedKmh: m.overrides?.avgSpeedKmh != null ? String(m.overrides.avgSpeedKmh) : "",
+        maxSpeedKmh: m.overrides?.maxSpeedKmh != null ? String(m.overrides.maxSpeedKmh) : "",
+        movingMinutes: m.overrides?.movingMinutes != null ? String(m.overrides.movingMinutes) : "",
+        elevationGainM: m.elevationGainM != null ? String(m.elevationGainM) : "",
+        elevationLossM: m.elevationLossM != null ? String(m.elevationLossM) : "",
+      });
+    } catch {
+      // ignore — page header already renders metrics
+    }
+  };
+  useEffect(() => {
+    void refresh();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rideId]);
+
+  // Convert a form field to the payload value: "" → null (clear), valid
+  // numeric string → number, anything else → undefined (don't touch).
+  const numOr = (raw: string, integer = false): number | null | undefined => {
+    if (raw === "") return null;
+    const n = integer ? parseInt(raw, 10) : parseFloat(raw);
+    if (!Number.isFinite(n) || n < 0) return undefined;
+    return n;
+  };
+
+  const handleSave = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const payload: Record<string, number | null> = {};
+      const fields: { key: keyof typeof form; out: string; integer?: boolean }[] = [
+        { key: "distanceKm", out: "distanceKmOverride" },
+        { key: "avgSpeedKmh", out: "avgSpeedKmhOverride" },
+        { key: "maxSpeedKmh", out: "maxSpeedKmhOverride" },
+        { key: "movingMinutes", out: "movingMinutesOverride", integer: true },
+        { key: "elevationGainM", out: "elevationGainM", integer: true },
+        { key: "elevationLossM", out: "elevationLossM", integer: true },
+      ];
+      for (const f of fields) {
+        const v = numOr(form[f.key], f.integer);
+        if (v === undefined) {
+          setError(`${f.key} must be a non-negative number or empty (to clear)`);
+          setBusy(false);
+          return;
+        }
+        payload[f.out] = v;
+      }
+      await api.mapEdit.updateStats(rideId, payload);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2000);
+      await refresh();
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clearOne = (key: keyof typeof form) => {
+    setForm((f) => ({ ...f, [key]: "" }));
+  };
+
+  // Single-row renderer for an override input. Shows the current effective
+  // value, the computed fallback, and a Clear button when an override is set.
+  const Row = ({
+    label,
+    field,
+    suffix,
+    integer,
+    computed,
+  }: {
+    label: string;
+    field: keyof typeof form;
+    suffix: string;
+    integer?: boolean;
+    computed?: number | null;
+  }) => (
+    <div className="grid grid-cols-12 items-center gap-3 border-b border-t2w-border/60 py-2 text-sm last:border-b-0">
+      <label className="col-span-4 text-t2w-muted">{label}</label>
+      <div className="col-span-5 flex items-center gap-2">
+        <input
+          type="number"
+          inputMode={integer ? "numeric" : "decimal"}
+          step={integer ? 1 : 0.1}
+          min={0}
+          value={form[field]}
+          onChange={(e) => setForm({ ...form, [field]: e.target.value })}
+          placeholder={computed != null ? `computed: ${computed}` : "—"}
+          className="input-field w-32"
+        />
+        <span className="text-xs text-t2w-muted">{suffix}</span>
+        {form[field] !== "" && (
+          <button
+            type="button"
+            onClick={() => clearOne(field)}
+            className="text-xs text-t2w-muted underline hover:text-white"
+          >
+            clear
+          </button>
+        )}
+      </div>
+      <div className="col-span-3 text-right text-xs text-t2w-muted">
+        {computed != null ? `auto: ${computed} ${suffix}` : "auto: n/a"}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 text-sm">
+      <p className="text-t2w-muted">
+        Override the auto-computed ride statistics. Leave an input blank (or click <em>clear</em>) to fall back to the auto value. Elevation fields directly replace the Google-API-backfilled numbers — they don&apos;t fall back.
+      </p>
+
+      <div className="rounded-xl border border-t2w-border bg-t2w-surface-light/30 p-4">
+        <Row
+          label="Distance"
+          field="distanceKm"
+          suffix="km"
+          computed={metrics?.computed?.distanceKm ?? null}
+        />
+        <Row
+          label="Moving time"
+          field="movingMinutes"
+          suffix="min"
+          integer
+          computed={metrics?.computed?.movingMinutes ?? null}
+        />
+        <Row
+          label="Average speed"
+          field="avgSpeedKmh"
+          suffix="km/h"
+          computed={metrics?.computed?.avgSpeedKmh ?? null}
+        />
+        <Row
+          label="Max speed"
+          field="maxSpeedKmh"
+          suffix="km/h"
+          computed={metrics?.computed?.maxSpeedKmh ?? null}
+        />
+        <Row
+          label="Elevation gain"
+          field="elevationGainM"
+          suffix="m"
+          integer
+          computed={session.elevationGainM ?? null}
+        />
+        <Row
+          label="Elevation loss"
+          field="elevationLossM"
+          suffix="m"
+          integer
+          computed={session.elevationLossM ?? null}
+        />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleSave}
+          disabled={busy}
+          data-testid="save-stats"
+          className="btn-primary disabled:opacity-50"
+        >
+          {busy ? "Saving…" : "Save stats"}
+        </button>
+        {savedFlash && <span className="text-xs text-green-400">Saved ✓</span>}
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+          {error}
+        </div>
+      )}
+    </div>
+  );
 }

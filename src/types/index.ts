@@ -192,6 +192,12 @@ export interface LiveRideSession {
   plannedRoute?: { lat: number; lng: number }[];
   breaks?: { id: string; startedAt: string; endedAt?: string; reason?: string | null }[];
   smoothedAt?: string | null;
+  elevationGainM?: number | null;
+  elevationLossM?: number | null;
+  distanceKmOverride?: number | null;
+  avgSpeedKmhOverride?: number | null;
+  maxSpeedKmhOverride?: number | null;
+  movingMinutesOverride?: number | null;
 }
 
 export interface LiveRiderLocation {

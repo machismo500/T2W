@@ -33,7 +33,7 @@ interface LiveRidePageProps {
 
 export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, canEditRideMap } = useAuth();
   const [session, setSession] = useState<LiveRideSession | null>(null);
   const [riders, setRiders] = useState<LiveRiderLocation[]>([]);
   const [leadPath, setLeadPath] = useState<{ lat: number; lng: number }[]>([]);
@@ -479,6 +479,7 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
               : undefined
           }
           isSuperAdmin={user?.role === "superadmin"}
+          canEditMap={canEditRideMap}
           session={session}
           registrants={riders.map((r) => ({ userId: r.userId, name: r.userName }))}
           onMapDataChanged={() => {

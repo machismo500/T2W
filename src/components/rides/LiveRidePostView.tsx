@@ -39,6 +39,10 @@ interface LiveRidePostViewProps {
   startLocation?: { lat: number; lng: number };
   endLocation?: { lat: number; lng: number };
   isSuperAdmin?: boolean;
+  // Gate for map / track / stats edits. Defaults to isSuperAdmin for backward
+  // compat — pass canEditRideMap from the auth context to also allow core
+  // members when the permission is enabled.
+  canEditMap?: boolean;
   session?: LiveRideSession | null;
   registrants?: { userId: string; name: string }[];
   onMapDataChanged?: () => void;
@@ -58,6 +62,7 @@ export function LiveRidePostView({
   startLocation,
   endLocation,
   isSuperAdmin = false,
+  canEditMap,
   session = null,
   registrants = [],
   onMapDataChanged,
@@ -235,7 +240,7 @@ export function LiveRidePostView({
                 {syncing ? "Syncing…" : `Sync now (${pendingPings})`}
               </button>
             )}
-            {isSuperAdmin && session && (
+            {(canEditMap ?? isSuperAdmin) && session && (
               <button
                 type="button"
                 onClick={() => setEditorOpen(true)}
@@ -243,7 +248,7 @@ export function LiveRidePostView({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-t2w-accent/40 bg-t2w-accent/10 px-3 py-1.5 text-xs font-medium text-t2w-accent hover:bg-t2w-accent/20"
               >
                 <Pencil className="h-3.5 w-3.5" />
-                Edit map
+                Edit map &amp; stats
               </button>
             )}
           </div>

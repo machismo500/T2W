@@ -1173,6 +1173,25 @@ export const api = {
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to update meta");
       return res.json();
     },
+    updateStats: async (
+      rideId: string,
+      body: {
+        distanceKmOverride?: number | null;
+        avgSpeedKmhOverride?: number | null;
+        maxSpeedKmhOverride?: number | null;
+        movingMinutesOverride?: number | null;
+        elevationGainM?: number | null;
+        elevationLossM?: number | null;
+      }
+    ) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/stats`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to update stats");
+      return res.json();
+    },
     addBreak: async (rideId: string, body: { startedAt: string; endedAt?: string; reason?: string }) => {
       const res = await fetch(`/api/rides/${rideId}/live/map-edit/breaks`, {
         method: "POST",

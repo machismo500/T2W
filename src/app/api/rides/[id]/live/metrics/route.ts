@@ -79,26 +79,50 @@ export async function GET(
       }),
     ]);
 
-    const usedSmoothedDistance = smoothedLeadPoints.length > 1;
+    // Distance: prefer manual override > smoothed series > raw points.
+    const usedSmoothedDistance =
+      session.distanceKmOverride == null && smoothedLeadPoints.length > 1;
     const distancePoints = usedSmoothedDistance ? smoothedLeadPoints : leadPoints;
-    const distanceKm = session.leadRiderId
+    const computedDistanceKm = session.leadRiderId
       ? Math.round(pathDistanceKm(distancePoints) * 10) / 10
       : 0;
+    const distanceKm =
+      session.distanceKmOverride != null
+        ? Math.round(session.distanceKmOverride * 10) / 10
+        : computedDistanceKm;
+    const distanceSource: "override" | "smoothed" | "raw" =
+      session.distanceKmOverride != null
+        ? "override"
+        : usedSmoothedDistance
+          ? "smoothed"
+          : "raw";
 
     // Moving Time excludes break time. Clamped at 0 in case of clock skew or
     // a paused-then-ended session where break minutes briefly exceed elapsed.
-    const movingMinutes = Math.max(0, elapsedMinutes - breakMinutes);
+    const computedMovingMinutes = Math.max(0, elapsedMinutes - breakMinutes);
+    const movingMinutes =
+      session.movingMinutesOverride != null
+        ? session.movingMinutesOverride
+        : computedMovingMinutes;
+
+    const computedAvgSpeedKmh = Math.round((speedStats._avg.speed || 0) * 10) / 10;
+    const computedMaxSpeedKmh = Math.round((speedStats._max.speed || 0) * 10) / 10;
+    const avgSpeedKmh =
+      session.avgSpeedKmhOverride != null
+        ? Math.round(session.avgSpeedKmhOverride * 10) / 10
+        : computedAvgSpeedKmh;
+    const maxSpeedKmh =
+      session.maxSpeedKmhOverride != null
+        ? Math.round(session.maxSpeedKmhOverride * 10) / 10
+        : computedMaxSpeedKmh;
 
     return NextResponse.json({
       elapsedMinutes,
       movingMinutes,
       distanceKm,
-      // Flag so the UI can surface "post-processed" badge next to distance
-      // if it wants — the number always comes from whichever series is
-      // available and more accurate.
-      distanceSource: usedSmoothedDistance ? "smoothed" : "raw",
-      avgSpeedKmh: Math.round((speedStats._avg.speed || 0) * 10) / 10,
-      maxSpeedKmh: Math.round((speedStats._max.speed || 0) * 10) / 10,
+      distanceSource,
+      avgSpeedKmh,
+      maxSpeedKmh,
       breakCount: closedBreakCount,
       breakMinutes,
       riderCount: riderCountRows.length,
@@ -106,6 +130,21 @@ export async function GET(
       endedAt: session.endedAt?.toISOString() ?? null,
       elevationGainM: session.elevationGainM,
       elevationLossM: session.elevationLossM,
+      // Diagnostics — let the UI badge an override or fall back to computed.
+      // `computed*` are the underlying values so admins can sanity-check
+      // their overrides without leaving the page.
+      overrides: {
+        distanceKm: session.distanceKmOverride,
+        avgSpeedKmh: session.avgSpeedKmhOverride,
+        maxSpeedKmh: session.maxSpeedKmhOverride,
+        movingMinutes: session.movingMinutesOverride,
+      },
+      computed: {
+        distanceKm: computedDistanceKm,
+        avgSpeedKmh: computedAvgSpeedKmh,
+        maxSpeedKmh: computedMaxSpeedKmh,
+        movingMinutes: computedMovingMinutes,
+      },
     });
   } catch (error) {
     console.error("[T2W] Metrics error:", error);

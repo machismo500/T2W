@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { getRolePermissions } from "@/lib/role-permissions";
 
-// Shared gate for every super-admin map-edit endpoint. Returns either an
-// authoritative NextResponse (error) or the resolved user + session.
+// Shared gate for every map-edit endpoint. Returns either an authoritative
+// NextResponse (error) or the resolved user + session.
+//
+// Access rules:
+//  - super-admin: always allowed
+//  - core member: allowed when role_permissions.core_member.canEditRideMap
+//    is true (default true; super-admin can toggle in Admin → Permissions)
+//  - everyone else: 403
 export async function requireMapEditor(rideId: string): Promise<
   | { ok: false; res: NextResponse }
   | {
@@ -15,7 +22,19 @@ export async function requireMapEditor(rideId: string): Promise<
     }
 > {
   const user = await getCurrentUser();
-  if (!user || user.role !== "superadmin") {
+  if (!user) {
+    return {
+      ok: false,
+      res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+  const isSuperAdmin = user.role === "superadmin";
+  let allowed = isSuperAdmin;
+  if (!allowed && user.role === "core_member") {
+    const perms = await getRolePermissions();
+    allowed = perms.core_member.canEditRideMap;
+  }
+  if (!allowed) {
     return {
       ok: false,
       res: NextResponse.json({ error: "Forbidden" }, { status: 403 }),

@@ -71,6 +71,7 @@ interface AuthContextType {
   canManageRegistrations: boolean;
   canExportRegistrations: boolean;
   canControlLiveTracking: boolean;
+  canEditRideMap: boolean;
   canApproveUsers: boolean;
   canRegisterForRides: boolean;
   resolvedRolePerms: import("@/lib/role-permissions").RolePermissions;
@@ -207,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canManageRegistrations = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canManageRegistrations);
   const canExportRegistrations = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canExportRegistrations);
   const canControlLiveTracking = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canControlLiveTracking);
+  const canEditRideMap   = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canEditRideMap);
   const canApproveUsers  = isSuperAdmin || (role === "core_member" && rolePerms.core_member.canApproveUsers);
 
   // T2W Rider permissions
@@ -268,6 +270,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canManageRegistrations,
         canExportRegistrations,
         canControlLiveTracking,
+        canEditRideMap,
         canApproveUsers,
         canRegisterForRides,
         resolvedRolePerms,
