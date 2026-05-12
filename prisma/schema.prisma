@@ -172,6 +172,8 @@ model Ride {
   liveSession      LiveRideSession?
   ridePosts        RidePost[]
   scheduledEmails  ScheduledEmail[]
+  gpxAttachments   RideGpxAttachment[]
+  videoExports     RideVideoExport[]
 
   @@index([status])
   @@index([startDate])
@@ -274,23 +276,27 @@ model Guideline {
 }
 
 model LiveRideSession {
-  id              String    @id @default(cuid())
-  rideId          String    @unique
-  status          String    @default("waiting") // waiting | live | paused | ended
-  startedAt       DateTime?
-  endedAt         DateTime?
-  startedBy       String    // userId who started the session
-  leadRiderId     String?   // userId of lead rider
-  sweepRiderId    String?   // userId of sweep rider
-  plannedRoute    String?   // JSON: [{lat,lng},...] for deviation detection
-  elevationGainM  Int?      // backfilled after end via Google Elevation API
-  elevationLossM  Int?      // backfilled after end via Google Elevation API
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                     String    @id @default(cuid())
+  rideId                 String    @unique
+  status                 String    @default("waiting") // waiting | live | paused | ended
+  startedAt              DateTime?
+  endedAt                DateTime?
+  startedBy              String    // userId who started the session
+  leadRiderId            String?   // userId of lead rider
+  sweepRiderId           String?   // userId of sweep rider
+  plannedRoute           String?   // JSON: [{lat,lng},...] for deviation detection
+  plannedRouteEditedAt   DateTime?
+  plannedRouteEditedBy   String?
+  elevationGainM         Int?      // backfilled after end via Google Elevation API
+  elevationLossM         Int?      // backfilled after end via Google Elevation API
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  ride      Ride               @relation(fields: [rideId], references: [id], onDelete: Cascade)
-  locations LiveRideLocation[]
-  breaks    LiveRideBreak[]
+  ride        Ride                @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  locations   LiveRideLocation[]
+  breaks      LiveRideBreak[]
+  mapEdits    RideMapEdit[]
+  attachments RideGpxAttachment[]
 
   @@index([status])
 }
@@ -390,4 +396,62 @@ model ScheduledEmail {
 
   @@unique([rideId, tier])
   @@index([scheduledAt, sentAt])
+}
+
+// Audit log for super-admin edits to a ride's live-session map data.
+// Captures who changed what — written in the same transaction as the edit.
+model RideMapEdit {
+  id           String   @id @default(cuid())
+  sessionId    String
+  editedBy     String   // userId
+  editedByName String
+  action       String   // planned_route_replaced | track_points_deleted | track_points_edited | track_replaced_from_gpx | session_meta_changed | break_added | break_edited | break_deleted
+  details      String?  @db.Text // JSON summary (counts, file URL, first/last 5 points) — cap 64 KB
+  createdAt    DateTime @default(now())
+
+  session LiveRideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+// Uploaded GPX file metadata. Kept around for audit / re-download.
+model RideGpxAttachment {
+  id         String   @id @default(cuid())
+  rideId     String
+  sessionId  String?
+  kind       String   // planned | recorded_replacement
+  fileUrl    String   // Vercel Blob URL
+  filename   String
+  uploadedBy String
+  pointCount Int
+  distanceKm Float
+  createdAt  DateTime @default(now())
+
+  ride    Ride             @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  session LiveRideSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([rideId])
+}
+
+// One row per video export request. Lifecycle managed by the renderer (server
+// worker or client browser via MediaRecorder + PATCH).
+model RideVideoExport {
+  id            String   @id @default(cuid())
+  rideId        String
+  userId        String
+  orientation   String   // landscape | portrait
+  resolution    String   // 1080p
+  status        String   @default("queued") // queued | rendering | ready | failed
+  videoUrl      String?
+  thumbnailUrl  String?
+  durationSec   Int?
+  fileSizeBytes Int?
+  error         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([rideId, userId])
+  @@index([status])
 }

@@ -417,6 +417,7 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
           Back to Ride
         </button>
         <LiveRidePostView
+          rideId={rideId}
           rideTitle={rideTitle || "Ride"}
           riderName={user?.name || "Rider"}
           plannedRoute={session.plannedRoute}
@@ -432,6 +433,13 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
               ? session.plannedRoute[session.plannedRoute.length - 1]
               : undefined
           }
+          isSuperAdmin={user?.role === "superadmin"}
+          session={session}
+          registrants={riders.map((r) => ({ userId: r.userId, name: r.userName }))}
+          onMapDataChanged={() => {
+            lastLeadPathTimestampRef.current = null;
+            void fetchSession();
+          }}
         />
       </div>
     );

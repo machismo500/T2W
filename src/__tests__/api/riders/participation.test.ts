@@ -10,7 +10,7 @@ vi.mock('@/lib/db', () => {
       update: vi.fn(),
     },
     user: { findMany: vi.fn(), update: vi.fn() },
-    rideRegistration: { findMany: vi.fn() },
+    rideRegistration: { findMany: vi.fn(), updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     ride: { update: vi.fn() },
     $transaction: null,
   };

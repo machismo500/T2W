@@ -178,7 +178,35 @@ export async function POST(
     const randomPart = randomBytes(8).toString("hex").toUpperCase();
     const confirmationCode = `T2W-${rideId.toUpperCase().slice(0, 10)}-${randomPart}`;
 
-    // Wrap capacity re-check + insert in a transaction to prevent TOCTOU race conditions
+    // Wrap capacity re-check + insert in a transaction to prevent TOCTOU race conditions.
+    // Use upsert so users who previously dropped-out (registration rejected by the
+    // drop-out cascade) can re-register without hitting the userId_rideId unique
+    // constraint. Also clears RideParticipation.droppedOut so the round-trip is
+    // self-healing.
+    const registrationData = {
+      riderName,
+      address: riderAddress,
+      email: riderEmail,
+      phone: riderPhone,
+      emergencyContactName,
+      emergencyContactPhone,
+      bloodGroup,
+      referredBy,
+      foodPreference,
+      ridingType,
+      vehicleModel,
+      vehicleRegNumber,
+      tshirtSize,
+      accommodationType: autoAccommodationType,
+      agreedCancellationTerms: Boolean(data.agreedCancellationTerms),
+      agreedIndemnity: Boolean(data.agreedIndemnity),
+      paymentScreenshot: String(data.paymentScreenshot || ""),
+      upiTransactionId: String(data.upiTransactionId || ""),
+      confirmationCode,
+      approvalStatus: "pending",
+      registeredAt: new Date(),
+    };
+
     const registration = await prisma.$transaction(async (tx) => {
       const activeCount = await tx.rideRegistration.count({
         where: {
@@ -190,32 +218,20 @@ export async function POST(
         throw Object.assign(new Error("RIDE_FULL"), { code: "RIDE_FULL" });
       }
 
-      return tx.rideRegistration.create({
-        data: {
-          userId: user.id,
-          rideId,
-          riderName,
-          address: riderAddress,
-          email: riderEmail,
-          phone: riderPhone,
-          emergencyContactName,
-          emergencyContactPhone,
-          bloodGroup,
-          referredBy,
-          foodPreference,
-          ridingType,
-          vehicleModel,
-          vehicleRegNumber,
-          tshirtSize,
-          accommodationType: autoAccommodationType,
-          agreedCancellationTerms: Boolean(data.agreedCancellationTerms),
-          agreedIndemnity: Boolean(data.agreedIndemnity),
-          paymentScreenshot: String(data.paymentScreenshot || ""),
-          upiTransactionId: String(data.upiTransactionId || ""),
-          confirmationCode,
-          approvalStatus: "pending",
-        },
+      const reg = await tx.rideRegistration.upsert({
+        where: { userId_rideId: { userId: user.id, rideId } },
+        update: registrationData,
+        create: { userId: user.id, rideId, ...registrationData },
       });
+
+      if (user.linkedRiderId) {
+        await tx.rideParticipation.updateMany({
+          where: { riderProfileId: user.linkedRiderId, rideId, droppedOut: true },
+          data: { droppedOut: false },
+        });
+      }
+
+      return reg;
     });
 
     // Send registration confirmation emails (best-effort, don't block response)

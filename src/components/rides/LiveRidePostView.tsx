@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { LiveRideMetrics as Metrics, LiveRiderLocation } from "@/types";
+import type { LiveRideMetrics as Metrics, LiveRideSession, LiveRiderLocation } from "@/types";
 import { LiveRideMap } from "./LiveRideMap";
+import { LiveRideMapEditor } from "./LiveRideMapEditor";
 import { ShareableRideCard, type ShareStatKey } from "./ShareableRideCard";
+import { api } from "@/lib/api-client";
 import {
   Clock,
   Route,
@@ -17,9 +19,12 @@ import {
   Sunset,
   Timer,
   Share2,
+  Download,
+  Pencil,
 } from "lucide-react";
 
 interface LiveRidePostViewProps {
+  rideId: string;
   rideTitle: string;
   riderName: string;
   plannedRoute?: { lat: number; lng: number }[];
@@ -31,9 +36,14 @@ interface LiveRidePostViewProps {
   mapError?: string | null;
   startLocation?: { lat: number; lng: number };
   endLocation?: { lat: number; lng: number };
+  isSuperAdmin?: boolean;
+  session?: LiveRideSession | null;
+  registrants?: { userId: string; name: string }[];
+  onMapDataChanged?: () => void;
 }
 
 export function LiveRidePostView({
+  rideId,
   rideTitle,
   riderName,
   plannedRoute,
@@ -45,7 +55,13 @@ export function LiveRidePostView({
   mapError,
   startLocation,
   endLocation,
+  isSuperAdmin = false,
+  session = null,
+  registrants = [],
+  onMapDataChanged,
 }: LiveRidePostViewProps) {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [gpxMenuOpen, setGpxMenuOpen] = useState(false);
   // Default the toggle to whichever path actually has data. Solo rides where
   // leadRiderId never matched will land on "mine" automatically.
   const initialView: "lead" | "mine" =
@@ -76,36 +92,85 @@ export function LiveRidePostView({
               Post-ride view showing the completed route
             </p>
           </div>
-          {showToggle && (
-            <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-0.5 text-xs font-medium">
+          <div className="flex flex-wrap items-center gap-2">
+            {showToggle && (
+              <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 p-0.5 text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => setPathView("lead")}
+                  disabled={leadDisabled}
+                  data-testid="path-toggle-lead"
+                  className={`px-3 py-1.5 rounded-md transition-colors ${
+                    pathView === "lead"
+                      ? "bg-green-500/15 text-green-600 dark:text-green-400"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  } ${leadDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                >
+                  Lead&rsquo;s route
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPathView("mine")}
+                  disabled={mineDisabled}
+                  data-testid="path-toggle-mine"
+                  className={`px-3 py-1.5 rounded-md transition-colors ${
+                    pathView === "mine"
+                      ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                  } ${mineDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                >
+                  My route
+                </button>
+              </div>
+            )}
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => setPathView("lead")}
-                disabled={leadDisabled}
-                data-testid="path-toggle-lead"
-                className={`px-3 py-1.5 rounded-md transition-colors ${
-                  pathView === "lead"
-                    ? "bg-green-500/15 text-green-600 dark:text-green-400"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                } ${leadDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
+                onClick={() => setGpxMenuOpen((v) => !v)}
+                data-testid="gpx-download-toggle"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/40"
               >
-                Lead&rsquo;s route
+                <Download className="h-3.5 w-3.5" />
+                GPX
               </button>
-              <button
-                type="button"
-                onClick={() => setPathView("mine")}
-                disabled={mineDisabled}
-                data-testid="path-toggle-mine"
-                className={`px-3 py-1.5 rounded-md transition-colors ${
-                  pathView === "mine"
-                    ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                } ${mineDisabled ? "opacity-40 cursor-not-allowed" : ""}`}
-              >
-                My route
-              </button>
+              {gpxMenuOpen && (
+                <div className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs shadow-lg">
+                  <a
+                    href={api.liveSession.downloadGpxUrl(rideId, "lead")}
+                    onClick={() => setGpxMenuOpen(false)}
+                    className="block px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                  >
+                    Lead&rsquo;s track
+                  </a>
+                  <a
+                    href={api.liveSession.downloadGpxUrl(rideId, "mine")}
+                    onClick={() => setGpxMenuOpen(false)}
+                    className="block px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                  >
+                    My track
+                  </a>
+                  <a
+                    href={api.liveSession.downloadGpxUrl(rideId, "planned")}
+                    onClick={() => setGpxMenuOpen(false)}
+                    className="block px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                  >
+                    Planned route
+                  </a>
+                </div>
+              )}
             </div>
-          )}
+            {isSuperAdmin && session && (
+              <button
+                type="button"
+                onClick={() => setEditorOpen(true)}
+                data-testid="open-map-editor"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-t2w-accent/40 bg-t2w-accent/10 px-3 py-1.5 text-xs font-medium text-t2w-accent hover:bg-t2w-accent/20"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit map
+              </button>
+            )}
+          </div>
         </div>
         <div className="h-[400px] sm:h-[500px]">
           {mapsLoaded ? (
@@ -173,6 +238,21 @@ export function LiveRidePostView({
           riderName={riderName}
           metrics={metrics}
           onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {editorOpen && session && (
+        <LiveRideMapEditor
+          rideId={rideId}
+          session={session}
+          riders={riders}
+          registrants={registrants}
+          initialPlannedRoute={plannedRoute ?? []}
+          onClose={() => setEditorOpen(false)}
+          onSaved={() => {
+            setEditorOpen(false);
+            onMapDataChanged?.();
+          }}
         />
       )}
     </div>

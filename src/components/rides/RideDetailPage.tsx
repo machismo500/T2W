@@ -314,6 +314,7 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
   const [registered, setRegistered] = useState(false);
   const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
+  const [droppedOut, setDroppedOut] = useState(false);
   const [registering, setRegistering] = useState(false);
 
   // Visibility gating: Route, Quick Info, and Riders List are restricted.
@@ -530,12 +531,13 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
         }
         setRide(r);
         // Check if current user is already registered (from DB)
-        const fullResult = rideData as { ride: Ride & { currentUserRegistered?: boolean; currentUserConfirmationCode?: string | null; currentUserApprovalStatus?: string | null } };
+        const fullResult = rideData as { ride: Ride & { currentUserRegistered?: boolean; currentUserConfirmationCode?: string | null; currentUserApprovalStatus?: string | null; currentUserDroppedOut?: boolean } };
         if (fullResult.ride?.currentUserRegistered) {
           setRegistered(true);
           setConfirmationCode(fullResult.ride.currentUserConfirmationCode || null);
           setApprovalStatus(fullResult.ride.currentUserApprovalStatus || "pending");
         }
+        setDroppedOut(Boolean(fullResult.ride?.currentUserDroppedOut));
         setRidePosts((postsData as { posts: RidePost[] }).posts);
       })
       .catch((err) => {
@@ -1299,6 +1301,11 @@ export function RideDetailPage({ rideId }: { rideId: string }) {
                   if (spotsLeft > 0) {
                     return (
                       <>
+                        {droppedOut && (
+                          <div className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-300">
+                            You were marked as dropped-out from this ride. You can register again.
+                          </div>
+                        )}
                         <div className="mb-4 rounded-xl bg-t2w-accent/10 p-4">
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-t2w-muted">Registration Fee</span>

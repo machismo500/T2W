@@ -32,15 +32,30 @@ export async function GET(
       return NextResponse.json({ error: "Ride not found" }, { status: 404 });
     }
 
-    // Check if current user is registered
+    // Check if current user is registered. If they've been marked dropped-out
+    // by an admin (RideParticipation.droppedOut = true), they should see the
+    // Register button again — so we override the registration signal.
     let currentUserRegistered = false;
     let currentUserConfirmationCode: string | null = null;
     let currentUserApprovalStatus: string | null = null;
+    let currentUserDroppedOut = false;
     try {
       const currentUser = await getCurrentUser();
       if (currentUser) {
-        const userReg = ride.registrations.find((r) => r.userId === currentUser.id);
-        if (userReg) {
+        const userReg = ride.registrations.find(
+          (r) => r.userId === currentUser.id && r.approvalStatus !== "rejected"
+        );
+
+        let droppedOut = false;
+        if (currentUser.linkedRiderId) {
+          droppedOut = ride.participations.some(
+            (p) =>
+              p.riderProfileId === currentUser.linkedRiderId && p.droppedOut
+          );
+        }
+        currentUserDroppedOut = droppedOut;
+
+        if (userReg && !droppedOut) {
           currentUserRegistered = true;
           currentUserConfirmationCode = userReg.confirmationCode || null;
           currentUserApprovalStatus = userReg.approvalStatus || "pending";
@@ -108,6 +123,7 @@ export async function GET(
       currentUserRegistered,
       currentUserConfirmationCode,
       currentUserApprovalStatus,
+      currentUserDroppedOut,
     };
 
     return NextResponse.json({ ride: result });

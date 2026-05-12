@@ -5,8 +5,11 @@ vi.mock('@/lib/db', () => {
   const mock: Record<string, unknown> = {
     ride: { findUnique: vi.fn() },
     rideRegistration: {
-      create: vi.fn(),
+      upsert: vi.fn(),
       count: vi.fn(),
+    },
+    rideParticipation: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     $transaction: null,
   };
@@ -32,7 +35,7 @@ import { getCurrentUser } from '@/lib/auth';
 
 const mockGetCurrentUser = getCurrentUser as ReturnType<typeof vi.fn>;
 const mockFindUnique = prisma.ride.findUnique as ReturnType<typeof vi.fn>;
-const mockCreateRegistration = prisma.rideRegistration.create as ReturnType<typeof vi.fn>;
+const mockCreateRegistration = prisma.rideRegistration.upsert as ReturnType<typeof vi.fn>;
 const mockCountRegistration = prisma.rideRegistration.count as ReturnType<typeof vi.fn>;
 
 // Helper to call the route handler with params
@@ -361,24 +364,9 @@ describe('POST /api/rides/[id]/register', () => {
     expect(data.error).toContain('not yet open');
   });
 
-  // ── Duplicate registration ──
-
-  it('returns 409 for duplicate registration (P2002 error)', async () => {
-    mockGetCurrentUser.mockResolvedValue(mockRider);
-    mockFindUnique.mockResolvedValue(baseRide);
-    const prismaError = new Error('Unique constraint failed');
-    Object.assign(prismaError, { code: 'P2002' });
-    mockCreateRegistration.mockRejectedValue(prismaError);
-
-    const { status, data } = await parseResponse(await callPOST('ride-1', baseRegBody));
-
-    expect(status).toBe(409);
-    expect(data.error).toBe('You are already registered for this ride');
-  });
-
   // ── Registration data passed to prisma correctly ──
 
-  it('passes correct registration data to prisma', async () => {
+  it('passes correct registration data to prisma (upsert create branch)', async () => {
     mockGetCurrentUser.mockResolvedValue(mockRider);
     mockFindUnique.mockResolvedValue(baseRide);
     mockCreateRegistration.mockResolvedValue({
@@ -395,15 +383,20 @@ describe('POST /api/rides/[id]/register', () => {
     });
 
     expect(mockCreateRegistration).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        userId: mockRider.id,
-        rideId: 'ride-1',
+      where: { userId_rideId: { userId: mockRider.id, rideId: 'ride-1' } },
+      update: expect.objectContaining({
         riderName: 'Test Rider',
         email: 'test@example.com',
         phone: '9999999999',
         address: '123 Main St',
         bloodGroup: 'O+',
         vehicleModel: 'Royal Enfield Himalayan',
+        approvalStatus: 'pending',
+      }),
+      create: expect.objectContaining({
+        userId: mockRider.id,
+        rideId: 'ride-1',
+        riderName: 'Test Rider',
         approvalStatus: 'pending',
       }),
     });

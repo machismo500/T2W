@@ -1101,6 +1101,102 @@ export const api = {
       if (!res.ok) throw new Error("Failed to fetch metrics");
       return res.json();
     },
+    downloadGpxUrl: (rideId: string, path: "lead" | "mine" | "planned", userId?: string) => {
+      const base = `/api/rides/${rideId}/live/gpx?path=${path}`;
+      return userId ? `${base}&userId=${encodeURIComponent(userId)}` : base;
+    },
+  },
+
+  // ── Super-admin Map Edit ──
+  mapEdit: {
+    setPlannedRoute: async (rideId: string, waypoints: { lat: number; lng: number }[]) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/planned-route`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ waypoints }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to update planned route");
+      return res.json();
+    },
+    uploadPlannedFromGpx: async (rideId: string, file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/planned-route/from-gpx`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to upload planned route GPX");
+      return res.json();
+    },
+    uploadRecordedFromGpx: async (rideId: string, file: File, userId: string) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("userId", userId);
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/track-from-gpx`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to upload recorded GPX");
+      return res.json();
+    },
+    deleteTrackPoints: async (
+      rideId: string,
+      body: { pointIds?: string[]; userId?: string; before?: string; after?: string }
+    ) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/track-points`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to delete points");
+      return res.json();
+    },
+    updateSessionMeta: async (
+      rideId: string,
+      body: { leadRiderId?: string | null; sweepRiderId?: string | null; startedAt?: string | null; endedAt?: string | null }
+    ) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/session-meta`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to update meta");
+      return res.json();
+    },
+    addBreak: async (rideId: string, body: { startedAt: string; endedAt?: string; reason?: string }) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/breaks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to add break");
+      return res.json();
+    },
+    updateBreak: async (
+      rideId: string,
+      breakId: string,
+      body: { startedAt?: string; endedAt?: string | null; reason?: string | null }
+    ) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/breaks/${breakId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to update break");
+      return res.json();
+    },
+    deleteBreak: async (rideId: string, breakId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/breaks/${breakId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to delete break");
+      return res.json();
+    },
+    audit: async (rideId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/audit`);
+      if (!res.ok) throw new Error("Failed to load audit log");
+      return res.json();
+    },
   },
 
   seed: async () => {

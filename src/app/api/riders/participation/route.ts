@@ -119,9 +119,30 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "riderProfileId and rideId are required" }, { status: 400 });
     }
 
-    await prisma.rideParticipation.update({
-      where: { riderProfileId_rideId: { riderProfileId, rideId } },
-      data: { droppedOut: Boolean(droppedOut) },
+    const isDroppedOut = Boolean(droppedOut);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.rideParticipation.update({
+        where: { riderProfileId_rideId: { riderProfileId, rideId } },
+        data: { droppedOut: isDroppedOut },
+      });
+
+      // When marking dropped-out, also reject the user's RideRegistration so the
+      // Register button reappears for them. The reverse path (droppedOut=false)
+      // leaves the registration alone — admins must re-confirm it manually.
+      if (isDroppedOut) {
+        const linkedUsers = await tx.user.findMany({
+          where: { linkedRiderId: riderProfileId },
+          select: { id: true },
+        });
+        const linkedUserIds = linkedUsers.map((u) => u.id);
+        if (linkedUserIds.length > 0) {
+          await tx.rideRegistration.updateMany({
+            where: { rideId, userId: { in: linkedUserIds } },
+            data: { approvalStatus: "rejected" },
+          });
+        }
+      }
     });
 
     // Re-sync user stats (excluding dropped-out rides)
@@ -129,7 +150,7 @@ export async function PATCH(req: NextRequest) {
     // Sync the ride's riders JSON field
     await syncRideRidersList(rideId);
 
-    return NextResponse.json({ success: true, droppedOut: Boolean(droppedOut) });
+    return NextResponse.json({ success: true, droppedOut: isDroppedOut });
   } catch (error) {
     console.error("[T2W] Drop-out error:", error);
     return NextResponse.json({ error: "Failed to update drop-out status" }, { status: 500 });
