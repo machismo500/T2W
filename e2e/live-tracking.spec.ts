@@ -919,7 +919,7 @@ test.describe("Post-ride view — path toggle + share card", () => {
     });
   }
 
-  test("renders path toggle and shareable-card button after End Ride", async ({
+  test("renders path toggle and shareable-card button after End Ride @smoke", async ({
     page,
   }) => {
     await mockAuthAs(page, USERS.superAdmin);

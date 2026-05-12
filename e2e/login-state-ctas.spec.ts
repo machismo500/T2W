@@ -33,7 +33,7 @@ async function mockHome(page: Page) {
 }
 
 test.describe("Home page CTAs respect login state", () => {
-  test("anonymous: 'Start Your Journey' targets /register", async ({ page }) => {
+  test("anonymous: 'Start Your Journey' targets /register @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.unauthenticated);
     await mockHome(page);
     await page.goto("/");
@@ -43,7 +43,7 @@ test.describe("Home page CTAs respect login state", () => {
     await expect(cta).toHaveAttribute("href", "/register");
   });
 
-  test("logged-in rider with a linked rider profile: CTA targets /rider/<id>", async ({ page }) => {
+  test("logged-in rider with a linked rider profile: CTA targets /rider/<id> @smoke", async ({ page }) => {
     // Earlier version of this test only asserted href="/profile" — a route
     // that doesn't exist in the app — and the user caught the 404 manually.
     // The contract that matters is that the link points at a route the
@@ -60,7 +60,7 @@ test.describe("Home page CTAs respect login state", () => {
     await expect(cta).toHaveAttribute("href", "/rider/rider-rider");
   });
 
-  test("logged-in user without linkedRiderId falls back to /rides", async ({ page }) => {
+  test("logged-in user without linkedRiderId falls back to /rides @smoke", async ({ page }) => {
     await mockAuthAs(page, { ...USERS.rider, linkedRiderId: null });
     await mockHome(page);
     await page.goto("/");
@@ -68,7 +68,7 @@ test.describe("Home page CTAs respect login state", () => {
     await expect(cta).toHaveAttribute("href", "/rides");
   });
 
-  test("anonymous: 'How to Join the Ride Group?' onboarding section is shown", async ({ page }) => {
+  test("anonymous: 'How to Join the Ride Group?' onboarding section is shown @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.unauthenticated);
     await mockHome(page);
     await page.goto("/");
@@ -77,7 +77,7 @@ test.describe("Home page CTAs respect login state", () => {
     await expect(page.getByRole("link", { name: /Join Now/i })).toBeVisible();
   });
 
-  test("logged-in: onboarding section is hidden", async ({ page }) => {
+  test("logged-in: onboarding section is hidden @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.rider);
     await mockHome(page);
     await page.goto("/");
@@ -96,7 +96,7 @@ test.describe("Rides list reflects my registration status", () => {
     { ...MOCK_RIDES[0], id: "ride-open", status: "upcoming", myRegistrationStatus: null },
   ];
 
-  test("renders a 'Registered' pill instead of 'Register →' when confirmed", async ({ page }) => {
+  test("renders a 'Registered' pill instead of 'Register →' when confirmed @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.rider);
     await mockRolePermissions(page);
     await mockRidesList(page, RIDES);
@@ -108,7 +108,7 @@ test.describe("Rides list reflects my registration status", () => {
     await expect(confirmedCard.getByText(/^Register$/)).toHaveCount(0);
   });
 
-  test("renders 'Pending approval' on a pending registration", async ({ page }) => {
+  test("renders 'Pending approval' on a pending registration @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.rider);
     await mockRolePermissions(page);
     await mockRidesList(page, RIDES);
@@ -118,7 +118,7 @@ test.describe("Rides list reflects my registration status", () => {
     await expect(pendingCard.getByText(/Pending approval/i)).toBeVisible();
   });
 
-  test("renders 'Register →' on rides the user has not joined", async ({ page }) => {
+  test("renders 'Register →' on rides the user has not joined @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.rider);
     await mockRolePermissions(page);
     await mockRidesList(page, RIDES);

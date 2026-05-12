@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { mockAuthAs, USERS } from "./helpers";
 
 test.describe("Authentication flows", () => {
-  test("login page loads", async ({ page }) => {
+  test("login page loads @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.unauthenticated);
     await page.goto("/login");
     await page.waitForLoadState("networkidle");
@@ -46,7 +46,7 @@ test.describe("Authentication flows", () => {
     await expect(page.getByText(/invalid|incorrect|error/i).first()).toBeVisible();
   });
 
-  test("register page loads", async ({ page }) => {
+  test("register page loads @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.unauthenticated);
     await page.goto("/register");
     await page.waitForLoadState("networkidle");
@@ -83,7 +83,7 @@ test.describe("Authentication flows", () => {
     await expect(nav).toBeVisible();
   });
 
-  test("logout clears session", async ({ page }) => {
+  test("logout clears session @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.t2wRider);
     await page.route("/api/auth/logout", (route) => {
       route.fulfill({

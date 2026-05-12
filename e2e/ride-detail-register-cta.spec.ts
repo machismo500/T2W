@@ -51,7 +51,7 @@ async function mockDetail(
 }
 
 test.describe("Ride detail — Register Now visibility reflects currentUserRegistered", () => {
-  test("hides the Register Now button when the user is already registered (confirmed)", async ({ page }) => {
+  test("hides the Register Now button when the user is already registered (confirmed) @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.rider);
     await mockDetail(page, {
       currentUserRegistered: true,
@@ -68,7 +68,7 @@ test.describe("Ride detail — Register Now visibility reflects currentUserRegis
     await expect(page.getByRole("heading", { name: /Register for this Ride/i })).toHaveCount(0);
   });
 
-  test("hides Register Now when pending (not yet approved but already submitted)", async ({ page }) => {
+  test("hides Register Now when pending (not yet approved but already submitted) @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.rider);
     await mockDetail(page, {
       currentUserRegistered: true,
@@ -83,7 +83,7 @@ test.describe("Ride detail — Register Now visibility reflects currentUserRegis
     await expect(page.getByRole("button", { name: /Register Now/i })).toHaveCount(0);
   });
 
-  test("shows Register Now when the user has not registered", async ({ page }) => {
+  test("shows Register Now when the user has not registered @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.rider);
     await mockDetail(page, {
       currentUserRegistered: false,
@@ -97,7 +97,7 @@ test.describe("Ride detail — Register Now visibility reflects currentUserRegis
     await expect(page.getByRole("button", { name: /Register Now/i })).toBeVisible();
   });
 
-  test("shows Register Now again when the user was dropped out by an admin", async ({ page }) => {
+  test("shows Register Now again when the user was dropped out by an admin @smoke", async ({ page }) => {
     await mockAuthAs(page, USERS.rider);
     await mockDetail(page, {
       // Server logic: a dropped-out rider sees currentUserRegistered=false
