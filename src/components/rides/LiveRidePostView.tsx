@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LiveRideMetrics as Metrics, LiveRideSession, LiveRiderLocation, TrackPoint } from "@/types";
 import { LiveRideMap } from "./LiveRideMap";
 import { LiveRideMapEditor } from "./LiveRideMapEditor";
@@ -121,6 +121,24 @@ export function LiveRidePostView({
     lng: number;
     label?: string;
   } | null>(null);
+  // Stable callback so TrackScrubber's effect doesn't re-trigger on every
+  // parent render — otherwise we hit "Maximum update depth exceeded".
+  const handleScrubberPosition = useCallback(
+    (
+      p: { point: TrackPoint; index: number; cumulativeKm: number } | null
+    ) => {
+      if (!p) {
+        setScrubberPos(null);
+        return;
+      }
+      setScrubberPos({
+        lat: p.point.lat,
+        lng: p.point.lng,
+        label: `${p.cumulativeKm.toFixed(1)} km · ${p.point.recordedAt ?? ""}`,
+      });
+    },
+    []
+  );
 
   // Smoothed track for the active rider, when one has been built post-ride.
   // When present, the map renders this instead of the raw recorded points.
@@ -324,17 +342,7 @@ export function LiveRidePostView({
             <TrackScrubber
               path={replayPath}
               className="mt-3"
-              onPosition={(p) => {
-                if (!p) {
-                  setScrubberPos(null);
-                  return;
-                }
-                setScrubberPos({
-                  lat: p.point.lat,
-                  lng: p.point.lng,
-                  label: `${p.cumulativeKm.toFixed(1)} km · ${p.point.recordedAt ?? ""}`,
-                });
-              }}
+              onPosition={handleScrubberPosition}
             />
           );
         })()}
