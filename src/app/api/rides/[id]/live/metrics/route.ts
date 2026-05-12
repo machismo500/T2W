@@ -42,8 +42,11 @@ export async function GET(
     }
     const breakMinutes = Math.round(breakMs / 60000);
 
-    // Run all location queries in parallel
-    const [leadPoints, speedStats, riderCountRows] = await Promise.all([
+    // Run all location queries in parallel.
+    // For distance, prefer the smoothed/gap-filled series for the lead rider
+    // when one exists — raw recorded points have straight-line shortcuts
+    // across no-signal stretches and under-count switchback distance.
+    const [leadPoints, smoothedLeadPoints, speedStats, riderCountRows] = await Promise.all([
       // For distance we aggregate every point (decimation distorts totals),
       // but the projection is trivially indexed and only 2 floats each —
       // 100k points is ~1.5 MB. No pagination here; see /live for the UI cap.
@@ -51,6 +54,13 @@ export async function GET(
         ? prisma.liveRideLocation.findMany({
             where: { sessionId: session.id, userId: session.leadRiderId },
             orderBy: { recordedAt: "asc" },
+            select: { lat: true, lng: true },
+          })
+        : Promise.resolve([]),
+      session.leadRiderId
+        ? prisma.liveRideLocationSmoothed.findMany({
+            where: { sessionId: session.id, userId: session.leadRiderId },
+            orderBy: { sourceOrder: "asc" },
             select: { lat: true, lng: true },
           })
         : Promise.resolve([]),
@@ -69,8 +79,10 @@ export async function GET(
       }),
     ]);
 
+    const usedSmoothedDistance = smoothedLeadPoints.length > 1;
+    const distancePoints = usedSmoothedDistance ? smoothedLeadPoints : leadPoints;
     const distanceKm = session.leadRiderId
-      ? Math.round(pathDistanceKm(leadPoints) * 10) / 10
+      ? Math.round(pathDistanceKm(distancePoints) * 10) / 10
       : 0;
 
     // Moving Time excludes break time. Clamped at 0 in case of clock skew or
@@ -81,6 +93,10 @@ export async function GET(
       elapsedMinutes,
       movingMinutes,
       distanceKm,
+      // Flag so the UI can surface "post-processed" badge next to distance
+      // if it wants — the number always comes from whichever series is
+      // available and more accurate.
+      distanceSource: usedSmoothedDistance ? "smoothed" : "raw",
       avgSpeedKmh: Math.round((speedStats._avg.speed || 0) * 10) / 10,
       maxSpeedKmh: Math.round((speedStats._max.speed || 0) * 10) / 10,
       breakCount: closedBreakCount,

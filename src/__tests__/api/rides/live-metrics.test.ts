@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({
   prisma: {
     liveRideSession: { findUnique: vi.fn() },
     liveRideLocation: { findMany: vi.fn(), aggregate: vi.fn() },
+    liveRideLocationSmoothed: { findMany: vi.fn() },
   },
 }));
 
@@ -26,7 +27,12 @@ const makeReq = () =>
 const makeParams = () => ({ params: Promise.resolve({ id: 'ride-1' }) });
 
 describe('GET /api/rides/[id]/live/metrics', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Default: no smoothed series exists, so the route falls back to raw.
+    // Individual tests can override this to assert smoothed-preferred behaviour.
+    vi.mocked(prisma.liveRideLocationSmoothed.findMany).mockResolvedValue([] as any);
+  });
 
   it('returns 401 when not authenticated', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(null);
@@ -85,10 +91,64 @@ describe('GET /api/rides/[id]/live/metrics', () => {
     expect(data.elapsedMinutes).toBe(120);
     expect(data.breakMinutes).toBe(30);
     expect(data.distanceKm).toBe(45.7); // rounded to 1 decimal
+    expect(data.distanceSource).toBe('raw');
     expect(data.avgSpeedKmh).toBe(42.5);
     expect(data.maxSpeedKmh).toBe(85.0);
     expect(data.breakCount).toBe(1);
     expect(data.riderCount).toBe(3);
+  });
+
+  it('prefers the smoothed/gap-filled series for distance when one exists', async () => {
+    const { pathDistanceKm } = await import('@/lib/geo-utils');
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+
+    const now = new Date();
+    const twoHoursAgo = new Date(now.getTime() - 120 * 60000);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1',
+      rideId: 'ride-1',
+      status: 'ended',
+      startedAt: twoHoursAgo,
+      createdAt: twoHoursAgo,
+      endedAt: now,
+      leadRiderId: 'u1',
+      sweepRiderId: 'u2',
+      breaks: [],
+    } as any);
+
+    // 2 raw points (sparse, straight-line shortcut across a gap) and 5
+    // smoothed/gap-filled points along the actual road segment.
+    vi.mocked(prisma.liveRideLocation.findMany)
+      .mockResolvedValueOnce([
+        { lat: 12.9, lng: 77.6 },
+        { lat: 13.5, lng: 78.2 },
+      ] as any)
+      .mockResolvedValueOnce([{ userId: 'u1' }, { userId: 'u2' }] as any);
+    vi.mocked(prisma.liveRideLocationSmoothed.findMany).mockResolvedValue([
+      { lat: 12.9, lng: 77.6 },
+      { lat: 13.0, lng: 77.7 },
+      { lat: 13.2, lng: 77.9 },
+      { lat: 13.4, lng: 78.1 },
+      { lat: 13.5, lng: 78.2 },
+    ] as any);
+    vi.mocked(prisma.liveRideLocation.aggregate).mockResolvedValue({
+      _avg: { speed: 50 }, _max: { speed: 90 },
+    } as any);
+
+    // Tag the smoothed path's distance differently so we can prove which
+    // array the route hands to pathDistanceKm.
+    vi.mocked(pathDistanceKm).mockImplementation((pts: any[]) =>
+      pts.length === 5 ? 78.3 : 45.678
+    );
+
+    const res = await GET(makeReq(), makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(200);
+    expect(data.distanceSource).toBe('smoothed');
+    expect(data.distanceKm).toBe(78.3);
+    // Speed comes from raw aggregate; smoothed table has no speed.
+    expect(data.avgSpeedKmh).toBe(50);
+    expect(data.maxSpeedKmh).toBe(90);
   });
 
   it('falls back to createdAt when startedAt is null', async () => {
