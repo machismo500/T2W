@@ -111,6 +111,7 @@ import {
   removeLocations,
   getPendingCount,
   flushLocationQueue,
+  getOldestPingAge,
 } from '@/lib/location-queue';
 
 // ── enqueueLocation ─────────────────────────────────────────────────────────
@@ -233,6 +234,25 @@ describe('getPendingCount', () => {
   });
 });
 
+// ── getOldestPingAge ────────────────────────────────────────────────────────
+
+describe('getOldestPingAge', () => {
+  it('returns null when nothing queued', async () => {
+    expect(await getOldestPingAge('ride-1')).toBeNull();
+  });
+
+  it('returns the age of the oldest ping in ms', async () => {
+    const now = Date.now();
+    await enqueueLocation({ rideId: 'ride-1', lat: 12.97, lng: 77.59, timestamp: now - 60_000 });
+    await enqueueLocation({ rideId: 'ride-1', lat: 12.98, lng: 77.60, timestamp: now - 1000 });
+
+    const age = await getOldestPingAge('ride-1');
+    expect(age).not.toBeNull();
+    expect(age!).toBeGreaterThanOrEqual(60_000);
+    expect(age!).toBeLessThan(70_000);
+  });
+});
+
 // ── flushLocationQueue ──────────────────────────────────────────────────────
 
 describe('flushLocationQueue', () => {
@@ -317,9 +337,27 @@ describe('flushLocationQueue', () => {
     expect(submitFn).toHaveBeenCalledWith(
       expect.objectContaining({ lat: 12.97, lng: 77.59, speed: 55, heading: 90, accuracy: 8 })
     );
-    // timestamp and rideId should NOT be passed to submitFn
-    expect(submitFn.mock.calls[0][0]).not.toHaveProperty('timestamp');
+    // rideId is not passed to submitFn (the caller already knows it).
     expect(submitFn.mock.calls[0][0]).not.toHaveProperty('rideId');
+    // The original GPS time must be forwarded as recordedAt so flushed pings
+    // don't all bunch up at the reconnect instant on the server.
+    expect(submitFn.mock.calls[0][0].recordedAt).toBe(new Date(1000).toISOString());
+  });
+
+  it('forwards each queued ping recordedAt in chronological order', async () => {
+    await enqueueLocation({ rideId: 'ride-1', lat: 12.97, lng: 77.59, timestamp: 3000 });
+    await enqueueLocation({ rideId: 'ride-1', lat: 12.98, lng: 77.60, timestamp: 1000 });
+    await enqueueLocation({ rideId: 'ride-1', lat: 12.99, lng: 77.61, timestamp: 2000 });
+
+    const submitFn = vi.fn().mockResolvedValue(undefined);
+    await flushLocationQueue('ride-1', submitFn);
+
+    const calls = submitFn.mock.calls.map((c) => c[0]);
+    expect(calls.map((c) => c.recordedAt)).toEqual([
+      new Date(1000).toISOString(),
+      new Date(2000).toISOString(),
+      new Date(3000).toISOString(),
+    ]);
   });
 
   it('only flushes pings for the specified rideId', async () => {

@@ -191,6 +191,7 @@ export interface LiveRideSession {
   sweepRiderId?: string;
   plannedRoute?: { lat: number; lng: number }[];
   breaks?: { id: string; startedAt: string; endedAt?: string; reason?: string | null }[];
+  smoothedAt?: string | null;
 }
 
 export interface LiveRiderLocation {

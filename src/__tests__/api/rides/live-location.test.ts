@@ -169,4 +169,87 @@ describe('POST /api/rides/[id]/live/location', () => {
     expect(data.isDeviated).toBe(true);
     expect(isOnRoute).toHaveBeenCalledWith({ lat: 14.0, lng: 78.0 }, expect.any(Array), 200);
   });
+
+  // ── recordedAt handling ───────────────────────────────────────────────────
+
+  it('stores client-supplied recordedAt for offline-replayed pings', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'live', plannedRoute: null,
+    } as any);
+    vi.mocked(prisma.liveRideLocation.create).mockResolvedValue({} as any);
+
+    const captured = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/location', {
+      method: 'POST',
+      body: { lat: 12.9, lng: 77.6, recordedAt: captured },
+    });
+    const res = await POST(req, makeParams());
+    const { status } = await parseResponse(res);
+    expect(status).toBe(200);
+    expect(prisma.liveRideLocation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recordedAt: new Date(captured),
+        }),
+      })
+    );
+  });
+
+  it('omits recordedAt from create when not supplied (Prisma default applies)', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+    vi.mocked(prisma.liveRideSession.findUnique).mockResolvedValue({
+      id: 'sess-1', status: 'live', plannedRoute: null,
+    } as any);
+    vi.mocked(prisma.liveRideLocation.create).mockResolvedValue({} as any);
+
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/location', {
+      method: 'POST',
+      body: { lat: 12.9, lng: 77.6 },
+    });
+    const res = await POST(req, makeParams());
+    const { status } = await parseResponse(res);
+    expect(status).toBe(200);
+    expect(prisma.liveRideLocation.create).toHaveBeenCalledTimes(1);
+    const arg = vi.mocked(prisma.liveRideLocation.create).mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(arg.data).not.toHaveProperty('recordedAt');
+  });
+
+  it('rejects recordedAt in the future', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+    const future = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/location', {
+      method: 'POST',
+      body: { lat: 12.9, lng: 77.6, recordedAt: future },
+    });
+    const res = await POST(req, makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(400);
+    expect(data.error).toContain('future');
+  });
+
+  it('rejects recordedAt older than 24h', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+    const old = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/location', {
+      method: 'POST',
+      body: { lat: 12.9, lng: 77.6, recordedAt: old },
+    });
+    const res = await POST(req, makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(400);
+    expect(data.error).toContain('24h');
+  });
+
+  it('rejects unparseable recordedAt', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'u1' } as any);
+    const req = createNextRequest('http://localhost:3000/api/rides/ride-1/live/location', {
+      method: 'POST',
+      body: { lat: 12.9, lng: 77.6, recordedAt: 'not-a-date' },
+    });
+    const res = await POST(req, makeParams());
+    const { status, data } = await parseResponse(res);
+    expect(status).toBe(400);
+    expect(data.error).toContain('Invalid');
+  });
 });

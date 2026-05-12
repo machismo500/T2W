@@ -15,13 +15,43 @@ export async function POST(
     }
 
     const { id: rideId } = await params;
-    const { lat, lng, speed, heading, accuracy } = await req.json();
+    const { lat, lng, speed, heading, accuracy, recordedAt } = await req.json();
 
     if (typeof lat !== "number" || typeof lng !== "number") {
       return NextResponse.json(
         { error: "lat and lng are required numbers" },
         { status: 400 }
       );
+    }
+
+    // Optional client-supplied GPS recording time. Used for offline-queued
+    // pings that flush long after they were captured — without it the DB
+    // would stamp every flushed point at the reconnect instant. Reject
+    // unparseable / future / >24h-old values rather than silently dropping
+    // them, so a clock-skewed client can't corrupt the timeline.
+    let recordedAtDate: Date | undefined;
+    if (recordedAt !== undefined && recordedAt !== null) {
+      if (typeof recordedAt !== "string") {
+        return NextResponse.json(
+          { error: "recordedAt must be an ISO date string" },
+          { status: 400 }
+        );
+      }
+      const parsed = new Date(recordedAt);
+      const now = Date.now();
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "Invalid recordedAt" }, { status: 400 });
+      }
+      if (parsed.getTime() > now + 60_000) {
+        return NextResponse.json({ error: "recordedAt is in the future" }, { status: 400 });
+      }
+      if (now - parsed.getTime() > 24 * 60 * 60 * 1000) {
+        return NextResponse.json(
+          { error: "recordedAt is more than 24h old" },
+          { status: 400 }
+        );
+      }
+      recordedAtDate = parsed;
     }
 
     const session = await prisma.liveRideSession.findUnique({
@@ -58,6 +88,7 @@ export async function POST(
         heading: heading ?? null,
         accuracy: accuracy ?? null,
         isDeviated,
+        ...(recordedAtDate ? { recordedAt: recordedAtDate } : {}),
       },
     });
 

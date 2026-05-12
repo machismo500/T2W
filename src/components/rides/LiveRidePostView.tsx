@@ -6,6 +6,7 @@ import { LiveRideMap } from "./LiveRideMap";
 import { LiveRideMapEditor } from "./LiveRideMapEditor";
 import { ShareableRideCard, type ShareStatKey } from "./ShareableRideCard";
 import { api } from "@/lib/api-client";
+import { flushLocationQueue, getPendingCount } from "@/lib/location-queue";
 import {
   Clock,
   Route,
@@ -21,6 +22,7 @@ import {
   Share2,
   Download,
   Pencil,
+  RefreshCw,
 } from "lucide-react";
 
 interface LiveRidePostViewProps {
@@ -62,12 +64,73 @@ export function LiveRidePostView({
 }: LiveRidePostViewProps) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [gpxMenuOpen, setGpxMenuOpen] = useState(false);
+  const [pendingPings, setPendingPings] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
+  // Surface queued offline pings from any device-local session so the rider
+  // can manually retry the upload from the post-ride view.
+  useEffect(() => {
+    let cancelled = false;
+    getPendingCount(rideId)
+      .then((n) => { if (!cancelled) setPendingPings(n); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [rideId]);
+
+  const handleSyncNow = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const flushed = await flushLocationQueue(rideId, (coords) =>
+        api.liveSession.submitLocation(rideId, {
+          lat: coords.lat,
+          lng: coords.lng,
+          speed: coords.speed ?? undefined,
+          heading: coords.heading ?? undefined,
+          accuracy: coords.accuracy ?? undefined,
+          recordedAt: coords.recordedAt,
+        })
+      );
+      const remaining = await getPendingCount(rideId);
+      setPendingPings(remaining);
+      if (flushed === 0 && remaining > 0) {
+        alert("Could not sync — the ride may have ended on the server. Queued pings will be cleared.");
+      }
+    } catch (err) {
+      console.error("[T2W] Manual flush failed:", err);
+      alert("Sync failed. Check your connection and try again.");
+    } finally {
+      setSyncing(false);
+    }
+  };
   // Default the toggle to whichever path actually has data. Solo rides where
   // leadRiderId never matched will land on "mine" automatically.
   const initialView: "lead" | "mine" =
     leadPath.length > 0 ? "lead" : myPath.length > 0 ? "mine" : "lead";
   const [pathView, setPathView] = useState<"lead" | "mine">(initialView);
   const [shareOpen, setShareOpen] = useState(false);
+
+  // Smoothed track for the active rider, when one has been built post-ride.
+  // When present, the map renders this instead of the raw recorded points.
+  const activeRiderId = pathView === "lead" ? session?.leadRiderId : undefined;
+  const [smoothedPath, setSmoothedPath] = useState<{ lat: number; lng: number }[]>([]);
+  useEffect(() => {
+    if (!activeRiderId) {
+      setSmoothedPath([]);
+      return;
+    }
+    let cancelled = false;
+    api.liveSmoothed
+      .get(rideId, activeRiderId)
+      .then((data) => {
+        if (cancelled) return;
+        setSmoothedPath(
+          (data.points ?? []).map((p: { lat: number; lng: number }) => ({ lat: p.lat, lng: p.lng }))
+        );
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [rideId, activeRiderId, session?.smoothedAt]);
 
   useEffect(() => {
     // Re-resolve the default if data arrives after first render.
@@ -159,6 +222,19 @@ export function LiveRidePostView({
                 </div>
               )}
             </div>
+            {pendingPings > 0 && (
+              <button
+                type="button"
+                onClick={handleSyncNow}
+                disabled={syncing}
+                data-testid="sync-now"
+                title="Upload location pings that were captured offline on this device"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-400/20 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? "Syncing…" : `Sync now (${pendingPings})`}
+              </button>
+            )}
             {isSuperAdmin && session && (
               <button
                 type="button"
@@ -176,7 +252,13 @@ export function LiveRidePostView({
           {mapsLoaded ? (
             <LiveRideMap
               plannedRoute={plannedRoute}
-              leadPath={leadPath}
+              // Render smoothed track when one exists for the active rider —
+              // otherwise fall back to the raw recorded path.
+              leadPath={
+                pathView === "lead" && smoothedPath.length > 0
+                  ? smoothedPath
+                  : leadPath
+              }
               myPath={myPath}
               pathView={pathView}
               riders={riders}

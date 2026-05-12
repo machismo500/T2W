@@ -10,6 +10,7 @@ import {
   enqueueLocation,
   flushLocationQueue,
   getPendingCount,
+  getOldestPingAge,
   clearQueueForRide,
 } from "@/lib/location-queue";
 import { LiveRideMap } from "./LiveRideMap";
@@ -46,11 +47,13 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
 
   const isOnline = useOnlineStatus();
   const [queuedCount, setQueuedCount] = useState(0);
+  const [oldestPingAgeMs, setOldestPingAgeMs] = useState<number | null>(null);
   const [justReconnected, setJustReconnected] = useState(false);
+  const [resumedFromPrevSession, setResumedFromPrevSession] = useState(0);
 
   const watchIdRef = useRef<number | null>(null);
   const locationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastCoordsRef = useRef<{ lat: number; lng: number; speed: number | null; heading: number | null; accuracy: number | null } | null>(null);
+  const lastCoordsRef = useRef<{ lat: number; lng: number; speed: number | null; heading: number | null; accuracy: number | null; capturedAt: number } | null>(null);
   const sessionStatusRef = useRef<string | null>(null);
   // Tracks the most recent leadPath point's timestamp for delta-fetch
   const lastLeadPathTimestampRef = useRef<string | null>(null);
@@ -173,8 +176,11 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   // Skips silently when the session is paused/ended so we don't queue up
   // dead pings that can never be flushed (queue only replays on reconnect).
   const submitLocationOrQueue = useCallback(
-    async (coords: { lat: number; lng: number; speed?: number | null; heading?: number | null; accuracy?: number | null }) => {
+    async (coords: { lat: number; lng: number; speed?: number | null; heading?: number | null; accuracy?: number | null; capturedAt?: number }) => {
       if (sessionStatusRef.current !== "live") return;
+      // Prefer the browser-supplied GPS fix time; fall back to wall clock for
+      // callers that don't have one (manual triggers).
+      const recordedAtMs = coords.capturedAt ?? Date.now();
       try {
         await api.liveSession.submitLocation(rideId, {
           lat: coords.lat,
@@ -182,6 +188,7 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
           speed: coords.speed ?? undefined,
           heading: coords.heading ?? undefined,
           accuracy: coords.accuracy ?? undefined,
+          recordedAt: new Date(recordedAtMs).toISOString(),
         });
       } catch {
         // Network failed — queue the ping for later replay
@@ -192,7 +199,7 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
           speed: coords.speed,
           heading: coords.heading,
           accuracy: coords.accuracy,
-          timestamp: Date.now(),
+          timestamp: recordedAtMs,
         });
         setQueuedCount((c) => c + 1);
 
@@ -225,6 +232,9 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
           speed: position.coords.speed ? position.coords.speed * 3.6 : null, // m/s → km/h
           heading: position.coords.heading,
           accuracy: position.coords.accuracy,
+          // Real GPS fix time from the browser (unix ms). Used as recordedAt
+          // so a 5s submit interval doesn't shift each point's recorded time.
+          capturedAt: position.timestamp,
         };
       },
       (err) => {
@@ -269,14 +279,39 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
     };
   }, [stopTracking]);
 
-  // Refresh queued count on mount and after re-render
+  // Refresh queued count + oldest-ping age. Re-runs every 30 s while offline
+  // so the escalated banner reflects how long the device has been queueing.
   useEffect(() => {
-    getPendingCount(rideId).then(setQueuedCount).catch(() => {});
-  }, [rideId]);
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const [count, age] = await Promise.all([
+          getPendingCount(rideId),
+          getOldestPingAge(rideId),
+        ]);
+        if (!cancelled) {
+          setQueuedCount(count);
+          setOldestPingAgeMs(age);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void refresh();
+    if (isOnline) return () => { cancelled = true; };
+    const interval = setInterval(refresh, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [rideId, isOnline]);
 
-  // When connectivity is restored, flush the offline queue
+  // When connectivity is restored, flush the offline queue.
+  // On mount, this also picks up pings stranded by a previous session that
+  // crashed mid-ride — IndexedDB survives tab close, so we just replay them.
   useEffect(() => {
     if (!isOnline) return;
+    const startingCount = queuedCount;
     flushLocationQueue(rideId, (coords) =>
       api.liveSession.submitLocation(rideId, {
         lat: coords.lat,
@@ -284,13 +319,22 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
         speed: coords.speed ?? undefined,
         heading: coords.heading ?? undefined,
         accuracy: coords.accuracy ?? undefined,
+        recordedAt: coords.recordedAt,
       })
     )
       .then((flushed) => {
         if (flushed > 0) {
           setQueuedCount(0);
-          setJustReconnected(true);
-          setTimeout(() => setJustReconnected(false), 4000);
+          setOldestPingAgeMs(null);
+          // If the flush happened on first mount (we weren't tracking yet and
+          // hadn't enqueued anything this session), surface the resume toast.
+          if (!isTracking && startingCount === flushed) {
+            setResumedFromPrevSession(flushed);
+            setTimeout(() => setResumedFromPrevSession(0), 5000);
+          } else {
+            setJustReconnected(true);
+            setTimeout(() => setJustReconnected(false), 4000);
+          }
         }
       })
       .catch(() => {});
@@ -339,6 +383,7 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
             speed: coords.speed ?? undefined,
             heading: coords.heading ?? undefined,
             accuracy: coords.accuracy ?? undefined,
+            recordedAt: coords.recordedAt,
           })
         ).then(() => setQueuedCount(0)).catch(() => {});
       }
@@ -477,20 +522,36 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
             Back online · synced
           </div>
         )}
+        {isOnline && resumedFromPrevSession > 0 && !justReconnected && (
+          <div className="flex items-center gap-1.5 rounded-full bg-blue-500/20 px-2.5 py-1 text-xs font-medium text-blue-400">
+            <Wifi className="h-3.5 w-3.5" />
+            Synced {resumedFromPrevSession} ping{resumedFromPrevSession !== 1 ? "s" : ""} from previous session
+          </div>
+        )}
       </div>
 
-      {/* Offline notice banner — shown when tracking but no network */}
-      {!isOnline && isTracking && (
-        <div className="flex items-start gap-2 bg-orange-500/10 border-b border-orange-500/20 px-4 py-2.5 text-xs text-orange-300">
-          <WifiOff className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            No network — GPS is still running.{" "}
-            {queuedCount > 0
-              ? `${queuedCount} location ping${queuedCount !== 1 ? "s" : ""} saved on device and will upload automatically when signal returns.`
-              : "Your location will be saved on device and uploaded when signal returns."}
-          </span>
-        </div>
-      )}
+      {/* Offline notice banner — shown when tracking but no network.
+          Banner colour escalates after the oldest queued ping is >5 min old,
+          so the rider can see at a glance that GPS data has been waiting a
+          while and isn't being silently dropped. */}
+      {!isOnline && isTracking && (() => {
+        const escalated = oldestPingAgeMs !== null && oldestPingAgeMs > 5 * 60_000;
+        const ageMin = oldestPingAgeMs ? Math.floor(oldestPingAgeMs / 60_000) : 0;
+        const cls = escalated
+          ? "bg-red-500/15 border-red-500/30 text-red-300"
+          : "bg-orange-500/10 border-orange-500/20 text-orange-300";
+        return (
+          <div className={`flex items-start gap-2 ${cls} border-b px-4 py-2.5 text-xs`}>
+            <WifiOff className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              No network — GPS is still running.{" "}
+              {queuedCount > 0
+                ? `${queuedCount} location ping${queuedCount !== 1 ? "s" : ""} saved on device${escalated ? ` (oldest ${ageMin} min ago)` : ""} and will upload automatically when signal returns.`
+                : "Your location will be saved on device and uploaded when signal returns."}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Map */}
       <div className="flex-1 relative">

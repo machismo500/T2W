@@ -126,10 +126,21 @@ export async function getPendingCount(rideId: string): Promise<number> {
  * Flush all queued pings for a ride by calling the provided submit function.
  * Returns the number of pings successfully uploaded.
  * Stops early if any upload fails (network still down).
+ *
+ * The original GPS recording time is converted to an ISO string and passed as
+ * `recordedAt`, so the server can store each flushed point at its real capture
+ * moment rather than the reconnect instant.
  */
 export async function flushLocationQueue(
   rideId: string,
-  submitFn: (loc: Omit<QueuedLocation, "id" | "rideId" | "timestamp">) => Promise<void>
+  submitFn: (loc: {
+    lat: number;
+    lng: number;
+    speed?: number | null;
+    heading?: number | null;
+    accuracy?: number | null;
+    recordedAt: string;
+  }) => Promise<void>
 ): Promise<number> {
   const pending = await getPendingLocations(rideId);
   if (!pending.length) return 0;
@@ -137,7 +148,14 @@ export async function flushLocationQueue(
   const sentIds: number[] = [];
   for (const loc of pending) {
     try {
-      await submitFn({ lat: loc.lat, lng: loc.lng, speed: loc.speed, heading: loc.heading, accuracy: loc.accuracy });
+      await submitFn({
+        lat: loc.lat,
+        lng: loc.lng,
+        speed: loc.speed,
+        heading: loc.heading,
+        accuracy: loc.accuracy,
+        recordedAt: new Date(loc.timestamp).toISOString(),
+      });
       if (loc.id !== undefined) sentIds.push(loc.id);
     } catch {
       break; // network still unavailable — stop, keep remaining in queue
@@ -146,4 +164,15 @@ export async function flushLocationQueue(
 
   await removeLocations(sentIds);
   return sentIds.length;
+}
+
+/**
+ * Age in milliseconds of the oldest queued ping for a ride, or null if the
+ * queue is empty. Lets the UI escalate the offline banner when GPS data has
+ * been waiting for an unusually long time.
+ */
+export async function getOldestPingAge(rideId: string): Promise<number | null> {
+  const pending = await getPendingLocations(rideId);
+  if (!pending.length) return null;
+  return Date.now() - pending[0].timestamp;
 }

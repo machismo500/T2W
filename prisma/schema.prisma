@@ -289,16 +289,48 @@ model LiveRideSession {
   plannedRouteEditedBy   String?
   elevationGainM         Int?      // backfilled after end via Google Elevation API
   elevationLossM         Int?      // backfilled after end via Google Elevation API
+  // Per-rider smoothed/gap-filled tracks live in LiveRideLocationSmoothed;
+  // these fields record when the most recent smoothing run finished for
+  // any rider on this session (used to gate the "Revert to raw" affordance
+  // in the editor).
+  smoothedAt             DateTime?
+  smoothedBy             String?   // userId who triggered the last smoothing run
+  smoothedStats          String?   // JSON summary: { rawCount, snappedCount, interpolatedCount, gapsFilled, gapsTotalSeconds, userIds }
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  ride        Ride                @relation(fields: [rideId], references: [id], onDelete: Cascade)
-  locations   LiveRideLocation[]
-  breaks      LiveRideBreak[]
-  mapEdits    RideMapEdit[]
-  attachments RideGpxAttachment[]
+  ride             Ride                       @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  locations        LiveRideLocation[]
+  smoothedTracks   LiveRideLocationSmoothed[]
+  breaks           LiveRideBreak[]
+  mapEdits         RideMapEdit[]
+  attachments      RideGpxAttachment[]
 
   @@index([status])
+}
+
+// Per-rider post-processed track. Built by the super-admin "Smooth & fill
+// gaps" action: raw points are snapped to roads via Roads API, then gaps
+// (>60s between consecutive points) are filled with synthetic points along
+// the road network via Directions API. Original LiveRideLocation rows are
+// left untouched so the action is fully reversible.
+model LiveRideLocationSmoothed {
+  id             String   @id @default(cuid())
+  sessionId      String
+  userId         String
+  lat            Float
+  lng            Float
+  speed          Float?
+  recordedAt     DateTime
+  isInterpolated Boolean  @default(false)  // synthesised by gap-fill
+  isSnapped      Boolean  @default(false)  // moved by Roads API
+  sourceOrder    Int      // 0-indexed ordering within the rider's series
+  createdAt      DateTime @default(now())
+
+  session LiveRideSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, userId, sourceOrder])
+  @@index([sessionId, userId, recordedAt])
 }
 
 model LiveRideLocation {

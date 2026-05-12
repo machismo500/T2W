@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
+import { snapWaypointsToRoads, type DirectionsServiceLike } from "@/lib/route-snap";
 import type { LiveRideSession, LiveRiderLocation } from "@/types";
 
 type LatLng = { lat: number; lng: number };
@@ -205,10 +206,85 @@ function PlannedRouteTab({
     setWaypoints([]);
   };
 
+  // Snap waypoints to actual driving roads via Google Directions API. This
+  // also gives an accurate ride kilometer count — straight-line haversine
+  // under-counts switchback-heavy mountain rides by 20-60%.
+  const handleSnapToRoads = async () => {
+    if (waypoints.length < 2) return;
+    if (!window.google?.maps?.DirectionsService) {
+      setError("Google Maps is still loading — please retry in a moment.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const gms = window.google.maps;
+      // Adapt the official DirectionsService to our test-friendly interface.
+      const native = new gms.DirectionsService();
+      const adapter: DirectionsServiceLike = {
+        route: async (req) => {
+          const result = await native.route({
+            origin: req.origin,
+            destination: req.destination,
+            waypoints: req.waypoints?.map((w) => ({
+              location: w.location,
+              stopover: w.stopover,
+            })),
+            travelMode: gms.TravelMode.DRIVING,
+          });
+          return {
+            routes: result.routes.map((r) => ({
+              legs: r.legs.map((leg) => ({
+                distance: { value: leg.distance?.value ?? 0 },
+                steps: leg.steps.map((s) => ({
+                  path: s.path.map((p) => ({ lat: p.lat(), lng: p.lng() })),
+                })),
+              })),
+              overview_path: r.overview_path.map((p) => ({
+                lat: p.lat(),
+                lng: p.lng(),
+              })),
+            })),
+          };
+        },
+      };
+
+      const snapped = await snapWaypointsToRoads(waypoints, adapter);
+      const proceed = window.confirm(
+        `Snap will replace your ${waypoints.length} waypoints with ${snapped.path.length} road-following points.\n\n` +
+          `Ride distance will update to ${snapped.distanceKm.toFixed(1)} km (from straight-line distance).\n\n` +
+          `Continue?`
+      );
+      if (!proceed) return;
+
+      await api.mapEdit.setPlannedRoute(rideId, snapped.path);
+      await api.rides.update(rideId, { distanceKm: snapped.distanceKm });
+      polyRef.current?.setPath(snapped.path);
+      setWaypoints(snapped.path);
+      onSaved();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Snap failed";
+      if (/OVER_QUERY_LIMIT|REQUEST_DENIED/i.test(msg)) {
+        setError(
+          "Directions API is not enabled or over quota. Ask the admin to enable Directions API on the Google Maps key."
+        );
+      } else if (/ZERO_RESULTS|no route/i.test(msg)) {
+        setError(
+          "Google couldn't find a road route between some waypoints. Check that none of them are off-road."
+        );
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <p className="text-sm text-t2w-muted">
         Drag the red polyline to reshape the planned route. Click the map to add waypoints. Mid-segment handles let you insert new ones.
+        Use <span className="font-medium text-white">Snap to roads</span> to follow the actual driving path and get the real kilometer count.
       </p>
       <div
         ref={mapDivRef}
@@ -223,6 +299,14 @@ function PlannedRouteTab({
             Upload GPX
             <input type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" className="hidden" onChange={handleUploadGpx} />
           </label>
+          <button
+            onClick={handleSnapToRoads}
+            disabled={saving || waypoints.length < 2}
+            data-testid="snap-to-roads"
+            className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-emerald-300 hover:bg-emerald-400/20 disabled:opacity-50"
+          >
+            Snap to roads
+          </button>
           <button onClick={handleSave} disabled={saving || waypoints.length === 0} className="btn-primary disabled:opacity-50">
             {saving ? "Saving…" : "Save planned route"}
           </button>
@@ -369,8 +453,137 @@ function TrackTab({
         )}
       </div>
 
+      <SmoothFillSection rideId={rideId} userId={targetUserId} disabled={busy || !targetUserId} onChanged={onSaved} />
+
       {msg && <p className="text-sm text-green-400">{msg}</p>}
       {error && <p className="text-sm text-red-400">{error}</p>}
+    </div>
+  );
+}
+
+interface SmoothStats {
+  rawCount: number;
+  snappedCount: number;
+  interpolatedCount: number;
+  gapsFilled: number;
+  gapsSkipped: number;
+  gapsTotalSeconds: number;
+  movedPercent: number;
+}
+
+function SmoothFillSection({
+  rideId,
+  userId,
+  disabled,
+  onChanged,
+}: {
+  rideId: string;
+  userId: string;
+  disabled: boolean;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [stats, setStats] = useState<SmoothStats | null>(null);
+  const [hasSmoothed, setHasSmoothed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-poll the smoothed read endpoint whenever the rider changes so the
+  // "Revert to raw" button reflects reality.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    api.liveSmoothed
+      .get(rideId, userId)
+      .then((data) => {
+        if (cancelled) return;
+        setHasSmoothed((data.points ?? []).length > 0);
+        setStats((data.stats as SmoothStats) ?? null);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [rideId, userId]);
+
+  const handleSmooth = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.mapEdit.smoothTrack(rideId, userId);
+      setStats(result.stats);
+      setHasSmoothed(true);
+      if ((result.stats?.movedPercent ?? 0) > 10) {
+        // Heads-up: Roads moved a lot of points, which usually means the
+        // ride went off-road and the snap result may be wrong.
+        setError(
+          `Roads API moved ${result.stats.movedPercent}% of points by a noticeable amount — this often happens on off-road sections. Inspect the result and click "Revert to raw" if it looks wrong.`
+        );
+      }
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Smooth & fill failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRevert = async () => {
+    if (!confirm("Revert to raw recorded track for this rider?")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.mapEdit.revertSmoothedTrack(rideId, userId);
+      setStats(null);
+      setHasSmoothed(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Revert failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-t2w-border p-3">
+      <h4 className="mb-1 text-sm font-semibold text-white">Smooth &amp; fill gaps</h4>
+      <p className="mb-3 text-xs text-t2w-muted">
+        Snaps recorded GPS to actual roads (Roads API) and fills any signal-loss gaps with the road segment between the surrounding points (Directions API). Raw data is preserved &mdash; revert any time.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={handleSmooth}
+          disabled={busy || disabled}
+          data-testid="smooth-track"
+          className="rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-1.5 text-sm text-sky-300 hover:bg-sky-400/20 disabled:opacity-50"
+        >
+          {busy ? "Processing…" : hasSmoothed ? "Re-run smooth & fill" : "Smooth & fill"}
+        </button>
+        {hasSmoothed && (
+          <button
+            onClick={handleRevert}
+            disabled={busy}
+            className="rounded-lg border border-t2w-border px-3 py-1.5 text-sm text-white hover:bg-white/10 disabled:opacity-50"
+          >
+            Revert to raw
+          </button>
+        )}
+      </div>
+      {stats && (
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-t2w-muted sm:grid-cols-4">
+          <Stat label="Raw points" value={String(stats.rawCount)} />
+          <Stat label="Smoothed points" value={String(stats.snappedCount + stats.interpolatedCount)} />
+          <Stat label="Gaps filled" value={`${stats.gapsFilled}${stats.gapsSkipped ? ` (+${stats.gapsSkipped} skipped)` : ""}`} />
+          <Stat label="Gap time" value={`${Math.round(stats.gapsTotalSeconds / 60)} min`} />
+        </div>
+      )}
+      {error && <p className="mt-2 text-xs text-amber-400">{error}</p>}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-t2w-border bg-white/5 p-2">
+      <p className="text-[11px] uppercase tracking-wide text-t2w-muted">{label}</p>
+      <p className="text-sm font-semibold text-white">{value}</p>
     </div>
   );
 }

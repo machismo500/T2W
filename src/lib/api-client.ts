@@ -1070,11 +1070,21 @@ export const api = {
       if (!res.ok) throw new Error("Failed to control session");
       return res.json();
     },
-    submitLocation: async (rideId: string, coords: { lat: number; lng: number; speed?: number; heading?: number; accuracy?: number }) => {
+    submitLocation: async (
+      rideId: string,
+      coords: { lat: number; lng: number; speed?: number; heading?: number; accuracy?: number; recordedAt?: string }
+    ) => {
+      const body = {
+        ...coords,
+        // Default to "now" so offline-replayed pings (which pass an explicit
+        // older recordedAt) keep their original GPS time while live pings
+        // still get an accurate stamp without each caller having to remember.
+        recordedAt: coords.recordedAt ?? new Date().toISOString(),
+      };
       const res = await fetch(`/api/rides/${rideId}/live/location`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(coords),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Failed to submit location");
       return res.json();
@@ -1195,6 +1205,33 @@ export const api = {
     audit: async (rideId: string) => {
       const res = await fetch(`/api/rides/${rideId}/live/map-edit/audit`);
       if (!res.ok) throw new Error("Failed to load audit log");
+      return res.json();
+    },
+    smoothTrack: async (rideId: string, userId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/smooth-track`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Smooth & fill failed");
+      return res.json();
+    },
+    revertSmoothedTrack: async (rideId: string, userId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/smooth-track`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Revert failed");
+      return res.json();
+    },
+  },
+
+  liveSmoothed: {
+    get: async (rideId: string, userId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/smoothed?userId=${encodeURIComponent(userId)}`);
+      if (res.status === 404) return { points: [], smoothedAt: null, stats: null };
+      if (!res.ok) throw new Error("Failed to load smoothed track");
       return res.json();
     },
   },

@@ -172,6 +172,9 @@ async function flushLocationQueue() {
           speed: loc.speed ?? null,
           heading: loc.heading ?? null,
           accuracy: loc.accuracy ?? null,
+          // Preserve original GPS time so a flush hours later doesn't bunch
+          // every queued point at the reconnect instant.
+          recordedAt: new Date(loc.timestamp).toISOString(),
         }),
       });
 
