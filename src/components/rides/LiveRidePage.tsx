@@ -485,6 +485,10 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
           onMapDataChanged={() => {
             lastLeadPathTimestampRef.current = null;
             void fetchSession();
+            // Stats tab edits don't affect the session payload but they do
+            // change every number on the post-ride card — re-fetch metrics
+            // alongside so the user sees their override take effect.
+            void fetchMetrics();
           }}
         />
       </div>
