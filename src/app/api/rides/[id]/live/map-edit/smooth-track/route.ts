@@ -201,6 +201,24 @@ export async function POST(
   const movedCount = stamped.filter((p) => p.isSnapped).length;
   stats.movedPercent = Math.round((movedCount / Math.max(1, snapped.length)) * 100);
 
+  // Preview mode: skip persistence and return the proposed track so the
+  // admin can inspect it on the map before committing. Useful for off-road
+  // sections where Roads API might pull the polyline onto the wrong road.
+  const previewMode = req.nextUrl.searchParams.get("preview") === "1";
+  if (previewMode) {
+    return NextResponse.json({
+      preview: true,
+      stats,
+      points: withFills.map((p) => ({
+        lat: p.lat,
+        lng: p.lng,
+        recordedAt: p.recordedAt.toISOString(),
+        isInterpolated: p.isInterpolated,
+        isSnapped: p.isSnapped,
+      })),
+    });
+  }
+
   // Persist: drop any prior smoothed rows for this rider, insert the new
   // series, update session bookkeeping, and write an audit row.
   await prisma.$transaction(async (tx) => {

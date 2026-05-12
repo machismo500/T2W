@@ -365,6 +365,48 @@ function TrackTab({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Progress reporter for the bulk-smooth action. null = not running.
+  const [bulkProgress, setBulkProgress] = useState<{
+    done: number;
+    total: number;
+    failed: string[];
+  } | null>(null);
+
+  // Bulk smooth: run the smooth-track pipeline for every known rider in one
+  // click. Each call is sequential because each ride spans several API
+  // requests (Roads + Directions) and we'd rather queue politely than
+  // hammer Google's per-second quota.
+  const handleSmoothAll = async () => {
+    if (candidates.length === 0) return;
+    if (
+      !confirm(
+        `Run Smooth & fill for all ${candidates.length} rider${candidates.length !== 1 ? "s" : ""}? This commits directly (no preview) and may take a minute.`
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setMsg(null);
+    setBulkProgress({ done: 0, total: candidates.length, failed: [] });
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      try {
+        await api.mapEdit.smoothTrack(rideId, c.userId);
+      } catch (err) {
+        const label = `${c.label}: ${err instanceof Error ? err.message : "failed"}`;
+        setBulkProgress((p) => p && { ...p, failed: [...p.failed, label] });
+      }
+      setBulkProgress((p) => p && { ...p, done: i + 1 });
+    }
+    setBulkProgress((p) => {
+      if (!p) return null;
+      setMsg(
+        `Smoothed ${p.done - p.failed.length}/${p.total} riders.${p.failed.length ? ` ${p.failed.length} failed — see below.` : ""}`
+      );
+      return p;
+    });
+    onSaved();
+  };
 
   const handleDelete = async () => {
     setBusy(true);
@@ -412,6 +454,39 @@ function TrackTab({
       <p className="text-t2w-muted">
         Pick a rider, then trim noisy points by time range or replace the whole track from an uploaded GPX file.
       </p>
+
+      {/* Bulk smooth across every rider — useful for a 20-rider ride where
+          clicking Smooth & fill 20 times is tedious. Commits without
+          preview; failures per rider are reported below. */}
+      {candidates.length > 1 && (
+        <div className="rounded-xl border border-sky-400/30 bg-sky-400/5 p-3 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="font-semibold text-sky-200">Smooth all riders</p>
+              <p className="text-sky-300/70">
+                Runs the Roads + Directions pipeline for every tracked rider. Commits directly.
+              </p>
+            </div>
+            <button
+              onClick={handleSmoothAll}
+              disabled={!!bulkProgress && bulkProgress.done < bulkProgress.total}
+              data-testid="smooth-all"
+              className="rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-1.5 text-sky-200 hover:bg-sky-400/20 disabled:opacity-50"
+            >
+              {bulkProgress && bulkProgress.done < bulkProgress.total
+                ? `Smoothing ${bulkProgress.done + 1} / ${bulkProgress.total}…`
+                : `Smooth all ${candidates.length}`}
+            </button>
+          </div>
+          {bulkProgress && bulkProgress.failed.length > 0 && (
+            <ul className="mt-2 list-disc pl-5 text-amber-300">
+              {bulkProgress.failed.map((f, i) => (
+                <li key={i}>{f}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div>
         <label className="mb-1 block text-xs font-medium text-t2w-muted">Rider</label>
@@ -521,26 +596,51 @@ function SmoothFillSection({
     return () => { cancelled = true; };
   }, [rideId, userId]);
 
-  const handleSmooth = async () => {
+  // Preview state: when set, the user has run smooth-with-preview but not
+  // yet committed. The Track tab shows a yellow overlay (via parent state)
+  // and offers Commit / Discard.
+  const [previewStats, setPreviewStats] = useState<SmoothStats | null>(null);
+  const [previewPoints, setPreviewPoints] = useState<number>(0);
+
+  const handlePreview = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.mapEdit.smoothTrack(rideId, userId, { preview: true });
+      setPreviewStats(result.stats);
+      setPreviewPoints(result.points?.length ?? 0);
+      if ((result.stats?.movedPercent ?? 0) > 10) {
+        setError(
+          `Roads API moved ${result.stats.movedPercent}% of points by a noticeable amount — this often happens on off-road sections. Inspect the preview before committing.`
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Preview failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCommit = async () => {
     setBusy(true);
     setError(null);
     try {
       const result = await api.mapEdit.smoothTrack(rideId, userId);
       setStats(result.stats);
       setHasSmoothed(true);
-      if ((result.stats?.movedPercent ?? 0) > 10) {
-        // Heads-up: Roads moved a lot of points, which usually means the
-        // ride went off-road and the snap result may be wrong.
-        setError(
-          `Roads API moved ${result.stats.movedPercent}% of points by a noticeable amount — this often happens on off-road sections. Inspect the result and click "Revert to raw" if it looks wrong.`
-        );
-      }
+      setPreviewStats(null);
+      setPreviewPoints(0);
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Smooth & fill failed");
+      setError(err instanceof Error ? err.message : "Commit failed");
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleDiscardPreview = () => {
+    setPreviewStats(null);
+    setPreviewPoints(0);
   };
 
   const handleRevert = async () => {
@@ -567,14 +667,33 @@ function SmoothFillSection({
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={handleSmooth}
-          disabled={busy || disabled}
-          data-testid="smooth-track"
+          onClick={handlePreview}
+          disabled={busy || disabled || !!previewStats}
+          data-testid="smooth-track-preview"
           className="rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-1.5 text-sm text-sky-300 hover:bg-sky-400/20 disabled:opacity-50"
         >
-          {busy ? "Processing…" : hasSmoothed ? "Re-run smooth & fill" : "Smooth & fill"}
+          {busy ? "Processing…" : hasSmoothed ? "Re-run preview" : "Preview smooth & fill"}
         </button>
-        {hasSmoothed && (
+        {previewStats && (
+          <>
+            <button
+              onClick={handleCommit}
+              disabled={busy}
+              data-testid="smooth-track-commit"
+              className="rounded-lg border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-sm text-green-300 hover:bg-green-500/20 disabled:opacity-50"
+            >
+              Commit preview
+            </button>
+            <button
+              onClick={handleDiscardPreview}
+              disabled={busy}
+              className="rounded-lg border border-t2w-border px-3 py-1.5 text-sm text-white hover:bg-white/10 disabled:opacity-50"
+            >
+              Discard preview
+            </button>
+          </>
+        )}
+        {hasSmoothed && !previewStats && (
           <button
             onClick={handleRevert}
             disabled={busy}
@@ -584,6 +703,13 @@ function SmoothFillSection({
           </button>
         )}
       </div>
+      {previewStats && (
+        <div className="mt-2 rounded-lg border border-sky-400/30 bg-sky-400/5 p-2 text-xs text-sky-200">
+          Preview ready: {previewPoints} points · {previewStats.gapsFilled} gaps filled ·
+          {" "}
+          {Math.round(previewStats.gapsTotalSeconds / 60)} min of gaps. Click <strong>Commit preview</strong> to save.
+        </div>
+      )}
       {stats && (
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-t2w-muted sm:grid-cols-4">
           <Stat label="Raw points" value={String(stats.rawCount)} />

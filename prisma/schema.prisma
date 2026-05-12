@@ -289,6 +289,11 @@ model LiveRideSession {
   plannedRouteEditedBy   String?
   elevationGainM         Int?      // backfilled after end via Google Elevation API
   elevationLossM         Int?      // backfilled after end via Google Elevation API
+  // Cached per-sample elevation profile for the lead rider. JSON array of
+  // { distKm: number, elev: number } points, one row per ~256 samples along
+  // the recorded path. Computed on demand by /live/elevation-profile and
+  // invalidated by any editor action that mutates the recorded track.
+  elevationProfile       String?
   // Manual stat overrides — set by super-admin / core member in the editor
   // when the auto-computed values are off (e.g. GPS gaps producing 0 km,
   // bunched timestamps producing 149 h moving time). The metrics endpoint

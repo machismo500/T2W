@@ -1226,8 +1226,9 @@ export const api = {
       if (!res.ok) throw new Error("Failed to load audit log");
       return res.json();
     },
-    smoothTrack: async (rideId: string, userId: string) => {
-      const res = await fetch(`/api/rides/${rideId}/live/map-edit/smooth-track`, {
+    smoothTrack: async (rideId: string, userId: string, opts: { preview?: boolean } = {}) => {
+      const qs = opts.preview ? "?preview=1" : "";
+      const res = await fetch(`/api/rides/${rideId}/live/map-edit/smooth-track${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId }),
@@ -1252,6 +1253,22 @@ export const api = {
       if (res.status === 404) return { points: [], smoothedAt: null, stats: null };
       if (!res.ok) throw new Error("Failed to load smoothed track");
       return res.json();
+    },
+  },
+
+  liveElevation: {
+    profile: async (rideId: string, userId: string) => {
+      const res = await fetch(
+        `/api/rides/${rideId}/live/elevation-profile?userId=${encodeURIComponent(userId)}`
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to load elevation profile");
+      }
+      return res.json() as Promise<{
+        profile: { distKm: number; elev: number }[];
+        cached: boolean;
+      }>;
     },
   },
 

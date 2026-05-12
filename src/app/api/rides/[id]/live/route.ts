@@ -141,30 +141,36 @@ async function loadUserPath(
   sessionId: string,
   userId: string,
   sinceDate: Date | null
-): Promise<{ lat: number; lng: number; recordedAt: string }[]> {
+): Promise<{ lat: number; lng: number; recordedAt: string; speed: number | null; accuracy: number | null }[]> {
   if (sinceDate) {
     const newPoints = await prisma.liveRideLocation.findMany({
       where: { sessionId, userId, recordedAt: { gt: sinceDate } },
       orderBy: { recordedAt: "asc" },
-      select: { lat: true, lng: true, recordedAt: true },
+      select: { lat: true, lng: true, recordedAt: true, speed: true, accuracy: true },
     });
     return newPoints.map((l) => ({
       lat: l.lat,
       lng: l.lng,
       recordedAt: l.recordedAt.toISOString(),
+      speed: l.speed,
+      accuracy: l.accuracy,
     }));
   }
 
   const all = await prisma.liveRideLocation.findMany({
     where: { sessionId, userId },
     orderBy: { recordedAt: "asc" },
-    select: { lat: true, lng: true, recordedAt: true },
+    select: { lat: true, lng: true, recordedAt: true, speed: true, accuracy: true },
   });
+  // decimatePath is generic and preserves all fields on retained points, so
+  // speed/accuracy travel through to the renderer without an extra pass.
   const decimated = decimatePath(all, MAX_PATH_POINTS);
   return decimated.map((l) => ({
     lat: l.lat,
     lng: l.lng,
     recordedAt: l.recordedAt.toISOString(),
+    speed: l.speed,
+    accuracy: l.accuracy,
   }));
 }
 

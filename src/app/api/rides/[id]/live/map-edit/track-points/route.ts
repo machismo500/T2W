@@ -63,6 +63,12 @@ export async function DELETE(
 
   const deleted = await prisma.$transaction(async (tx) => {
     const result = await tx.liveRideLocation.deleteMany({ where });
+    // Trimming changes total elevation gain/loss along the path — drop the
+    // cached profile so the next view refetches.
+    await tx.liveRideSession.update({
+      where: { id: session.id },
+      data: { elevationProfile: null },
+    });
     await tx.rideMapEdit.create({
       data: {
         sessionId: session.id,

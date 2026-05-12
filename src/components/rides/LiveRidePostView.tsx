@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { LiveRideMetrics as Metrics, LiveRideSession, LiveRiderLocation } from "@/types";
+import type { LiveRideMetrics as Metrics, LiveRideSession, LiveRiderLocation, TrackPoint } from "@/types";
 import { LiveRideMap } from "./LiveRideMap";
 import { LiveRideMapEditor } from "./LiveRideMapEditor";
+import { ElevationProfile } from "./ElevationProfile";
+import { TrackScrubber } from "./TrackScrubber";
 import { ShareableRideCard, type ShareStatKey } from "./ShareableRideCard";
 import { api } from "@/lib/api-client";
 import { flushLocationQueue, getPendingCount } from "@/lib/location-queue";
@@ -30,8 +32,8 @@ interface LiveRidePostViewProps {
   rideTitle: string;
   riderName: string;
   plannedRoute?: { lat: number; lng: number }[];
-  leadPath: { lat: number; lng: number }[];
-  myPath?: { lat: number; lng: number }[];
+  leadPath: TrackPoint[];
+  myPath?: TrackPoint[];
   riders: LiveRiderLocation[];
   metrics: Metrics | null;
   mapsLoaded?: boolean;
@@ -114,11 +116,16 @@ export function LiveRidePostView({
     leadPath.length > 0 ? "lead" : myPath.length > 0 ? "mine" : "lead";
   const [pathView, setPathView] = useState<"lead" | "mine">(initialView);
   const [shareOpen, setShareOpen] = useState(false);
+  const [scrubberPos, setScrubberPos] = useState<{
+    lat: number;
+    lng: number;
+    label?: string;
+  } | null>(null);
 
   // Smoothed track for the active rider, when one has been built post-ride.
   // When present, the map renders this instead of the raw recorded points.
   const activeRiderId = pathView === "lead" ? session?.leadRiderId : undefined;
-  const [smoothedPath, setSmoothedPath] = useState<{ lat: number; lng: number }[]>([]);
+  const [smoothedPath, setSmoothedPath] = useState<TrackPoint[]>([]);
   useEffect(() => {
     if (!activeRiderId) {
       setSmoothedPath([]);
@@ -130,7 +137,21 @@ export function LiveRidePostView({
       .then((data) => {
         if (cancelled) return;
         setSmoothedPath(
-          (data.points ?? []).map((p: { lat: number; lng: number }) => ({ lat: p.lat, lng: p.lng }))
+          (data.points ?? []).map(
+            (p: {
+              lat: number;
+              lng: number;
+              recordedAt?: string;
+              isInterpolated?: boolean;
+              isSnapped?: boolean;
+            }) => ({
+              lat: p.lat,
+              lng: p.lng,
+              recordedAt: p.recordedAt,
+              isInterpolated: p.isInterpolated,
+              isSnapped: p.isSnapped,
+            })
+          )
         );
       })
       .catch(() => {});
@@ -270,6 +291,7 @@ export function LiveRidePostView({
               startLocation={startLocation}
               endLocation={endLocation}
               isEnded
+              scrubberPosition={scrubberPos}
             />
           ) : (
             <div className="flex h-full items-center justify-center bg-gray-100 dark:bg-gray-800/40">
@@ -287,6 +309,35 @@ export function LiveRidePostView({
             </div>
           )}
         </div>
+        {activeRiderId && mapsLoaded && (
+          <ElevationProfile rideId={rideId} userId={activeRiderId} className="mt-3" />
+        )}
+        {mapsLoaded && (() => {
+          const replayPath =
+            pathView === "lead" && smoothedPath.length > 0
+              ? smoothedPath
+              : pathView === "lead"
+                ? leadPath
+                : myPath;
+          if (!replayPath || replayPath.length < 2) return null;
+          return (
+            <TrackScrubber
+              path={replayPath}
+              className="mt-3"
+              onPosition={(p) => {
+                if (!p) {
+                  setScrubberPos(null);
+                  return;
+                }
+                setScrubberPos({
+                  lat: p.point.lat,
+                  lng: p.point.lng,
+                  label: `${p.cumulativeKm.toFixed(1)} km · ${p.point.recordedAt ?? ""}`,
+                });
+              }}
+            />
+          );
+        })()}
       </div>
 
       {metrics && (

@@ -87,6 +87,11 @@ export async function POST(
         : new Date(startTimestamp + i * 5_000),
     }));
     await tx.liveRideLocation.createMany({ data: rows });
+    // Replacing the recorded track invalidates the cached elevation profile.
+    await tx.liveRideSession.update({
+      where: { id: session.id },
+      data: { elevationProfile: null },
+    });
 
     let attachmentId: string | null = null;
     if (blobUrl) {

@@ -200,6 +200,24 @@ export interface LiveRideSession {
   movingMinutesOverride?: number | null;
 }
 
+// Track point shape used everywhere the recorded path travels through the
+// client. Server endpoints (live/route, smoothed/route) emit this; the map
+// renderer reads it to colour segments, mark interpolated stretches, and
+// dim low-accuracy fixes.
+export interface TrackPoint {
+  lat: number;
+  lng: number;
+  recordedAt?: string;
+  // GPS-fix speed in km/h. Null when the device didn't report speed (e.g.
+  // very low movement or older readings).
+  speed?: number | null;
+  // GPS accuracy radius in metres. Null on smoothed/interpolated points.
+  accuracy?: number | null;
+  // Smoothed-track flags, set only by the LiveRideLocationSmoothed source.
+  isInterpolated?: boolean;
+  isSnapped?: boolean;
+}
+
 export interface LiveRiderLocation {
   userId: string;
   userName: string;

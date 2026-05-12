@@ -21,6 +21,7 @@ import type {
   LiveRideSession,
   LiveRiderLocation,
   LiveRideMetrics as Metrics,
+  TrackPoint,
 } from "@/types";
 
 const POLL_INTERVAL = 5000; // 5 seconds
@@ -36,8 +37,8 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
   const { user, canEditRideMap } = useAuth();
   const [session, setSession] = useState<LiveRideSession | null>(null);
   const [riders, setRiders] = useState<LiveRiderLocation[]>([]);
-  const [leadPath, setLeadPath] = useState<{ lat: number; lng: number }[]>([]);
-  const [myPath, setMyPath] = useState<{ lat: number; lng: number }[]>([]);
+  const [leadPath, setLeadPath] = useState<TrackPoint[]>([]);
+  const [myPath, setMyPath] = useState<TrackPoint[]>([]);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
@@ -101,26 +102,16 @@ export function LiveRidePage({ rideId, rideTitle }: LiveRidePageProps) {
       const data = await api.liveSession.get(rideId, since ?? undefined);
       setSession(data.session);
       setRiders(data.riders || []);
-      const newLead: { lat: number; lng: number; recordedAt?: string }[] = data.leadPath || [];
-      const newMine: { lat: number; lng: number; recordedAt?: string }[] = data.myPath || [];
+      const newLead: TrackPoint[] = data.leadPath || [];
+      const newMine: TrackPoint[] = data.myPath || [];
       if (since) {
         // Delta mode: append only new points to whichever paths grew.
-        if (newLead.length > 0) {
-          setLeadPath((prev) => [
-            ...prev,
-            ...newLead.map(({ lat, lng }) => ({ lat, lng })),
-          ]);
-        }
-        if (newMine.length > 0) {
-          setMyPath((prev) => [
-            ...prev,
-            ...newMine.map(({ lat, lng }) => ({ lat, lng })),
-          ]);
-        }
+        if (newLead.length > 0) setLeadPath((prev) => [...prev, ...newLead]);
+        if (newMine.length > 0) setMyPath((prev) => [...prev, ...newMine]);
       } else {
         // Full mode (first load or session restart) — replace both paths.
-        setLeadPath(newLead.map(({ lat, lng }) => ({ lat, lng })));
-        setMyPath(newMine.map(({ lat, lng }) => ({ lat, lng })));
+        setLeadPath(newLead);
+        setMyPath(newMine);
       }
       // Advance the cursor to the newest point we've seen across either path.
       const newest =
