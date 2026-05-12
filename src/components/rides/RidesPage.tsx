@@ -359,9 +359,23 @@ export function RidesPage() {
                     <span className="text-sm font-semibold text-t2w-gold">
                       ₹{ride.fee.toLocaleString()}
                     </span>
-                    <span className="flex items-center gap-1 text-sm font-medium text-t2w-accent">
-                      Register <ArrowRight className="h-4 w-4" />
-                    </span>
+                    {ride.myRegistrationStatus === "confirmed" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-300">
+                        ✓ Registered
+                      </span>
+                    ) : ride.myRegistrationStatus === "pending" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300">
+                        Pending approval
+                      </span>
+                    ) : ride.myRegistrationStatus === "rejected" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-medium text-red-300">
+                        Not approved
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-sm font-medium text-t2w-accent">
+                        Register <ArrowRight className="h-4 w-4" />
+                      </span>
+                    )}
                   </div>
                 )}
               </Link>

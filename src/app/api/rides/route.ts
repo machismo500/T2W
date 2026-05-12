@@ -22,6 +22,11 @@ export async function GET(req: NextRequest) {
       dbWhereStatus.status = status;
     }
 
+    // Look up the current user so we can include their registration status
+    // per ride — used by the listing card CTA to swap "Register →" for a
+    // "Registered" / "Pending" pill without an extra round-trip per card.
+    const currentUser = await getCurrentUser();
+
     const rides = await prisma.ride.findMany({
       where: Object.keys(dbWhereStatus).length ? dbWhereStatus : undefined,
       include: {
@@ -29,14 +34,18 @@ export async function GET(req: NextRequest) {
           select: { riderProfileId: true, droppedOut: true },
         },
         registrations: {
-          select: { id: true, approvalStatus: true },
+          select: { id: true, userId: true, approvalStatus: true },
         },
       },
       orderBy: { startDate: "desc" },
     });
 
-    let result = rides.map((r) => ({
-      id: r.id,
+    let result = rides.map((r) => {
+      const myReg = currentUser
+        ? r.registrations.find((reg) => reg.userId === currentUser.id)
+        : null;
+      return {
+        id: r.id,
       title: r.title,
       rideNumber: r.rideNumber,
       type: r.type,
@@ -74,7 +83,11 @@ export async function GET(req: NextRequest) {
       regOpenT2w: r.regOpenT2w?.toISOString() || null,
       regOpenRider: r.regOpenRider?.toISOString() || null,
       detailsVisible: r.detailsVisible,
-    }));
+        // null when no user is logged in OR the user hasn't registered.
+        // One of "pending" | "confirmed" | "rejected" otherwise.
+        myRegistrationStatus: myReg?.approvalStatus ?? null,
+      };
+    });
 
     // Apply status filter after dynamic status computation
     if (status && status !== "all") {

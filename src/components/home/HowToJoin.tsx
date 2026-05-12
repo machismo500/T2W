@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { UserPlus, Bell, MapPin, ArrowRight } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 const steps = [
   {
@@ -50,6 +51,11 @@ const itemVariants = {
 };
 
 export function HowToJoin() {
+  const { isLoggedIn } = useAuth();
+  // Onboarding section — nothing for an already-joined member to do here.
+  // Hide once they're logged in so the home page jumps straight to the next
+  // section (the rides feed) instead of telling them how to register again.
+  if (isLoggedIn) return null;
   return (
     <section className="relative py-24 overflow-hidden">
       {/* Subtle background glow */}

@@ -65,6 +65,8 @@ export interface Ride {
   regOpenCore?: string | null;
   regOpenT2w?: string | null;
   regOpenRider?: string | null;
+  /** Set when the request is authenticated and the user has registered for this ride. */
+  myRegistrationStatus?: "pending" | "confirmed" | "rejected" | null;
   participations?: {
     id: string;
     riderProfileId: string;
