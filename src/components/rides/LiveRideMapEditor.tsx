@@ -1017,51 +1017,6 @@ function StatsTab({
     setForm((f) => ({ ...f, [key]: "" }));
   };
 
-  // Single-row renderer for an override input. Shows the current effective
-  // value, the computed fallback, and a Clear button when an override is set.
-  const Row = ({
-    label,
-    field,
-    suffix,
-    integer,
-    computed,
-  }: {
-    label: string;
-    field: keyof typeof form;
-    suffix: string;
-    integer?: boolean;
-    computed?: number | null;
-  }) => (
-    <div className="grid grid-cols-12 items-center gap-3 border-b border-t2w-border/60 py-2 text-sm last:border-b-0">
-      <label className="col-span-4 text-t2w-muted">{label}</label>
-      <div className="col-span-5 flex items-center gap-2">
-        <input
-          type="number"
-          inputMode={integer ? "numeric" : "decimal"}
-          step={integer ? 1 : 0.1}
-          min={0}
-          value={form[field]}
-          onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-          placeholder={computed != null ? `computed: ${computed}` : "—"}
-          className="input-field w-32"
-        />
-        <span className="text-xs text-t2w-muted">{suffix}</span>
-        {form[field] !== "" && (
-          <button
-            type="button"
-            onClick={() => clearOne(field)}
-            className="text-xs text-t2w-muted underline hover:text-white"
-          >
-            clear
-          </button>
-        )}
-      </div>
-      <div className="col-span-3 text-right text-xs text-t2w-muted">
-        {computed != null ? `auto: ${computed} ${suffix}` : "auto: n/a"}
-      </div>
-    </div>
-  );
-
   return (
     <div className="space-y-4 text-sm">
       <p className="text-t2w-muted">
@@ -1069,43 +1024,61 @@ function StatsTab({
       </p>
 
       <div className="rounded-xl border border-t2w-border bg-t2w-surface-light/30 p-4">
-        <Row
+        <StatsRow
           label="Distance"
           field="distanceKm"
           suffix="km"
+          value={form.distanceKm}
+          onChange={(v) => setForm({ ...form, distanceKm: v })}
+          onClear={() => clearOne("distanceKm")}
           computed={metrics?.computed?.distanceKm ?? null}
         />
-        <Row
+        <StatsRow
           label="Moving time"
           field="movingMinutes"
           suffix="min"
           integer
+          value={form.movingMinutes}
+          onChange={(v) => setForm({ ...form, movingMinutes: v })}
+          onClear={() => clearOne("movingMinutes")}
           computed={metrics?.computed?.movingMinutes ?? null}
         />
-        <Row
+        <StatsRow
           label="Average speed"
           field="avgSpeedKmh"
           suffix="km/h"
+          value={form.avgSpeedKmh}
+          onChange={(v) => setForm({ ...form, avgSpeedKmh: v })}
+          onClear={() => clearOne("avgSpeedKmh")}
           computed={metrics?.computed?.avgSpeedKmh ?? null}
         />
-        <Row
+        <StatsRow
           label="Max speed"
           field="maxSpeedKmh"
           suffix="km/h"
+          value={form.maxSpeedKmh}
+          onChange={(v) => setForm({ ...form, maxSpeedKmh: v })}
+          onClear={() => clearOne("maxSpeedKmh")}
           computed={metrics?.computed?.maxSpeedKmh ?? null}
         />
-        <Row
+        <StatsRow
           label="Elevation gain"
           field="elevationGainM"
           suffix="m"
           integer
+          value={form.elevationGainM}
+          onChange={(v) => setForm({ ...form, elevationGainM: v })}
+          onClear={() => clearOne("elevationGainM")}
           computed={session.elevationGainM ?? null}
         />
-        <Row
+        <StatsRow
           label="Elevation loss"
           field="elevationLossM"
           suffix="m"
           integer
+          value={form.elevationLossM}
+          onChange={(v) => setForm({ ...form, elevationLossM: v })}
+          onClear={() => clearOne("elevationLossM")}
           computed={session.elevationLossM ?? null}
         />
       </div>
@@ -1127,6 +1100,63 @@ function StatsTab({
           {error}
         </div>
       )}
+    </div>
+  );
+}
+
+// Single-row override input. Defined at module scope so React doesn't
+// remount the input on every parent re-render — keeping focus during typing
+// and avoiding the "element detached from DOM" race that broke
+// element.fill() under tests.
+function StatsRow({
+  label,
+  field,
+  suffix,
+  value,
+  computed,
+  integer,
+  onChange,
+  onClear,
+}: {
+  label: string;
+  field: string;
+  suffix: string;
+  value: string;
+  computed: number | null;
+  integer?: boolean;
+  onChange: (v: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="grid grid-cols-12 items-center gap-3 border-b border-t2w-border/60 py-2 text-sm last:border-b-0">
+      <label className="col-span-4 text-t2w-muted" htmlFor={`stats-${field}`}>{label}</label>
+      <div className="col-span-5 flex items-center gap-2">
+        <input
+          id={`stats-${field}`}
+          data-testid={`stats-${field}`}
+          type="number"
+          inputMode={integer ? "numeric" : "decimal"}
+          step={integer ? 1 : 0.1}
+          min={0}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={computed != null ? `computed: ${computed}` : "—"}
+          className="input-field w-32"
+        />
+        <span className="text-xs text-t2w-muted">{suffix}</span>
+        {value !== "" && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-xs text-t2w-muted underline hover:text-white"
+          >
+            clear
+          </button>
+        )}
+      </div>
+      <div className="col-span-3 text-right text-xs text-t2w-muted">
+        {computed != null ? `auto: ${computed} ${suffix}` : "auto: n/a"}
+      </div>
     </div>
   );
 }
