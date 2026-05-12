@@ -286,6 +286,71 @@ describe('GET /api/rides', () => {
 
     expect(data.rides).toHaveLength(1);
   });
+
+  it('includes myRegistrationStatus when the user is authenticated', async () => {
+    mockGetCurrentUser.mockResolvedValue({ id: 'user-1', role: 'rider' } as any);
+    const rides = [
+      {
+        id: 'ride-1', title: 'Already registered', rideNumber: '#001', type: 'day', status: 'upcoming',
+        startDate: new Date(Date.now() + 86_400_000), endDate: new Date(Date.now() + 2 * 86_400_000),
+        startLocation: 'A', startLocationUrl: null, endLocation: 'B', endLocationUrl: null,
+        route: '[]', distanceKm: 100, maxRiders: 10, difficulty: 'easy',
+        description: 'x', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [],
+        registrations: [
+          { id: 'r1', userId: 'user-1', approvalStatus: 'confirmed' },
+          { id: 'r2', userId: 'user-2', approvalStatus: 'pending' },
+        ],
+      },
+      {
+        id: 'ride-2', title: 'Not registered', rideNumber: '#002', type: 'day', status: 'upcoming',
+        startDate: new Date(Date.now() + 86_400_000), endDate: new Date(Date.now() + 2 * 86_400_000),
+        startLocation: 'A', startLocationUrl: null, endLocation: 'B', endLocationUrl: null,
+        route: '[]', distanceKm: 100, maxRiders: 10, difficulty: 'easy',
+        description: 'x', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [],
+        registrations: [{ id: 'r3', userId: 'user-2', approvalStatus: 'pending' }],
+      },
+    ];
+    mockFindMany.mockResolvedValue(rides);
+
+    const req = createNextRequest('http://localhost:3000/api/rides');
+    const { data } = await parseResponse(await GET(req));
+
+    const r1 = data.rides.find((r: { id: string }) => r.id === 'ride-1');
+    const r2 = data.rides.find((r: { id: string }) => r.id === 'ride-2');
+    expect(r1.myRegistrationStatus).toBe('confirmed');
+    expect(r2.myRegistrationStatus).toBeNull();
+  });
+
+  it('omits myRegistrationStatus for anonymous viewers', async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+    const rides = [
+      {
+        id: 'ride-1', title: 'x', rideNumber: '#001', type: 'day', status: 'upcoming',
+        startDate: new Date(), endDate: new Date(),
+        startLocation: 'A', startLocationUrl: null, endLocation: 'B', endLocationUrl: null,
+        route: '[]', distanceKm: 100, maxRiders: 10, difficulty: 'easy',
+        description: 'x', highlights: '[]', posterUrl: null, fee: 0,
+        leadRider: '', sweepRider: '', organisedBy: null, accountsBy: null,
+        meetupTime: null, rideStartTime: null, startingPoint: null, riders: null,
+        regOpenCore: null, regOpenT2w: null, regOpenRider: null,
+        participations: [],
+        registrations: [{ id: 'r1', userId: 'user-1', approvalStatus: 'confirmed' }],
+      },
+    ];
+    mockFindMany.mockResolvedValue(rides);
+
+    const req = createNextRequest('http://localhost:3000/api/rides');
+    const { data } = await parseResponse(await GET(req));
+    expect(data.rides[0].myRegistrationStatus).toBeNull();
+  });
 });
 
 const defaultRolePerms = {

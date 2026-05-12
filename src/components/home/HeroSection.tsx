@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { CountUp } from "@/components/shared/CountUp";
+import { useAuth } from "@/context/AuthContext";
 
 interface HeroStats {
   activeRiders: number;
@@ -22,6 +23,7 @@ interface HeroStats {
 }
 
 export function HeroSection() {
+  const { isLoggedIn } = useAuth();
   const [nextRide, setNextRide] = useState<{ title: string; date: string } | null>(null);
   const [stats, setStats] = useState<HeroStats>({
     activeRiders: 0,
@@ -125,10 +127,10 @@ export function HeroSection() {
             style={{ animationDelay: "300ms", animationFillMode: "both" }}
           >
             <Link
-              href="/register"
+              href={isLoggedIn ? "/profile" : "/register"}
               className="btn-primary group flex items-center justify-center gap-2 text-lg"
             >
-              Start Your Journey
+              {isLoggedIn ? "View Profile" : "Start Your Journey"}
               <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
             </Link>
             <Link
