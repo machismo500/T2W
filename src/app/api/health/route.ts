@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // `?test_sentry=1` deliberately throws so the operator can verify Sentry
+  // is wired correctly post-deploy. The error appears in the Sentry
+  // dashboard within ~30s. Returns 500 to the caller as a side effect.
+  if (req.nextUrl.searchParams.get("test_sentry") === "1") {
+    throw new Error("Sentry verification trigger from /api/health");
+  }
   const checks: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     env: {

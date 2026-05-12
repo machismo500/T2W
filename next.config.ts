@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 // Build a strict Content-Security-Policy that allows exactly the third-party
 // origins this app uses (Google Analytics, Google Fonts) and nothing else.
@@ -13,8 +14,8 @@ const CSP = [
   "font-src 'self' https://fonts.gstatic.com",
   // Images: self, data URIs (base64 avatars), blob (canvas), any HTTPS CDN
   "img-src 'self' data: blob: https:",
-  // Fetch / XHR: self + GA telemetry + Google Maps API + Vercel Speed Insights
-  "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://maps.googleapis.com https://maps.gstatic.com https://vitals.vercel-insights.com",
+  // Fetch / XHR: self + GA telemetry + Google Maps API + Vercel Speed Insights + Sentry ingest
+  "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://maps.googleapis.com https://maps.gstatic.com https://vitals.vercel-insights.com https://*.ingest.sentry.io https://*.sentry.io",
   // Service workers (offline support + Background Sync)
   "worker-src 'self'",
   // No plugins (Flash, Silverlight, etc.)
@@ -117,4 +118,21 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry build-time wrap. Without a DSN this is essentially a no-op: the
+// wrapper still injects its instrumentation client, but no events ever
+// transmit because sentry.{client,server,edge}.config.ts short-circuits on
+// missing DSN. Source-map upload + release tagging happens only when
+// SENTRY_ORG / SENTRY_PROJECT / SENTRY_AUTH_TOKEN are present.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  // Silence the build-step source-map upload when running locally without
+  // credentials.
+  silent: !process.env.CI,
+  // Strip source-map upload references from the public bundle (so the
+  // SourceMappingURL hint doesn't leak our internal build path).
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  // Don't fail the build if Sentry's CLI step errors — instrumentation
+  // still works without source maps.
+  disableLogger: true,
+});
