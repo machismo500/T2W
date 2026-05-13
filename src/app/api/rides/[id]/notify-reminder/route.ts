@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { sendRideReminderEmails } from "@/lib/email";
+import { notifyMany } from "@/lib/push/dispatch";
 import { after } from "next/server";
 
 // POST /api/rides/:id/notify-reminder
@@ -41,6 +42,44 @@ export async function POST(
         await sendRideReminderEmails(rideId, ride, notifyMode);
       } catch (err) {
         console.error("[T2W] Reminder email error:", err);
+      }
+    });
+
+    // Push notification fan-out to the same audience as the reminder email:
+    // approved users with notifyRides on, optionally filtered to
+    // adminNotifySelected, excluding anyone already registered.
+    after(async () => {
+      try {
+        const registered = new Set(
+          (
+            await prisma.rideRegistration.findMany({
+              where: { rideId, approvalStatus: { not: "rejected" } },
+              select: { userId: true },
+            })
+          ).map((r) => r.userId),
+        );
+
+        const where: Record<string, unknown> = {
+          isApproved: true,
+          notifyRides: true,
+          id: { notIn: Array.from(registered) },
+        };
+        if (notifyMode === "selected") where.adminNotifySelected = true;
+
+        const users = await prisma.user.findMany({ where, select: { id: true } });
+        if (users.length === 0) return;
+
+        await notifyMany(
+          users.map((u) => u.id),
+          {
+            type: "ride",
+            title: `Don't forget: ${ride.title}`,
+            message: `${ride.startLocation} → ${ride.endLocation} on ${new Date(ride.startDate).toLocaleDateString()}. Tap to register.`,
+            data: { kind: "ride", rideId },
+          },
+        );
+      } catch (err) {
+        console.error("[T2W] Reminder push error:", err);
       }
     });
 

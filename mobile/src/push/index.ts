@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
+import { router } from "expo-router";
 import { apiFetch } from "@/api/client";
 import { deviceStorage } from "@/api/storage";
 
@@ -14,6 +15,51 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+/**
+ * Route a push payload (or cold-start `data`) to the right screen. Called
+ * from the notification-tap subscription and also when the app launches
+ * from a killed state via `getLastNotificationResponseAsync`.
+ */
+export function routeFromPushData(data: unknown) {
+  if (!data || typeof data !== "object") return;
+  const d = data as Record<string, unknown>;
+  const kind = d.kind;
+  if (kind === "ride" && typeof d.rideId === "string") {
+    router.push(`/ride/${d.rideId}`);
+  } else if (kind === "blog" && typeof d.blogId === "string") {
+    router.push(`/blog/${d.blogId}`);
+  } else if (kind === "account_approved") {
+    router.push("/(tabs)");
+  }
+}
+
+let tapSubscription: Notifications.Subscription | null = null;
+
+/**
+ * Wire up the global notification-tap handler. Returns a cleanup that
+ * AuthProvider can call on sign-out — though leaving it attached is also
+ * fine since unauth users won't receive pushes.
+ */
+export function installNotificationHandlers(): () => void {
+  if (tapSubscription) {
+    return () => {
+      tapSubscription?.remove();
+      tapSubscription = null;
+    };
+  }
+  tapSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    routeFromPushData(response.notification.request.content.data);
+  });
+  // Cold-start: if the app was launched by tapping a push, route once on mount.
+  Notifications.getLastNotificationResponseAsync().then((response) => {
+    if (response) routeFromPushData(response.notification.request.content.data);
+  });
+  return () => {
+    tapSubscription?.remove();
+    tapSubscription = null;
+  };
+}
 
 /**
  * Ask for push permission, obtain an Expo push token, and register it with

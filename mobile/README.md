@@ -105,18 +105,57 @@ mobile/
 - **Guidelines** and **Blogs** (read-only).
 - **API client** with single-flight refresh and one-shot 401 retry.
 
+## Push notifications
+
+Push is now end-to-end:
+
+1. Mobile registers an Expo push token at login via
+   `POST /api/v1/devices`. Tokens are stored per `(userId, deviceId)`.
+2. Server-side dispatch lives in `src/lib/push/dispatch.ts` and is called
+   from every notification-creation path on the backend (account approval,
+   bulk approval, ride registration approval / rejection / drop-out, blog
+   approval, ride-post approval, ride reminder fan-out).
+3. Each dispatch both inserts a `Notification` row (durable record for the
+   in-app feed) and pushes to every active device. Tokens that come back as
+   `DeviceNotRegistered` are pruned automatically.
+4. Tap handling: `installNotificationHandlers()` in `src/push/index.ts`
+   listens for `addNotificationResponseReceivedListener` and routes by the
+   `data.kind` field (`ride`, `blog`, `account_approved`). Cold-start taps
+   are handled via `getLastNotificationResponseAsync` on app launch.
+
+## Sentry
+
+Initialised once at startup from `src/sentry.ts`. Set
+`EXPO_PUBLIC_SENTRY_DSN` in `.env` to enable; without a DSN the module
+no-ops. User identity is attached on auth transition (`AuthProvider`) so
+crashes are tied to the rider.
+
+## Post-ride share card
+
+`app/ride/[id]/share.tsx` renders a 1080×1920 card off-screen,
+captures it with `react-native-view-shot`, and opens the native share
+sheet via `expo-sharing`. The same screen lets the rider pick a
+background photo and up to 4 stats from the live-metrics endpoint.
+
 ## What's not done yet
 
 - Ride post-ride summary (smoothed distance, splits, elevation) — currently
   uses the lighter `/api/v1/rides/:id/live/metrics` shape.
-- Share card via `react-native-view-shot` (`react-native-view-shot` is in
-  `package.json` for this).
-- Server-side push **dispatch** — `POST /api/v1/devices` records the token,
-  but the actual FCM/APNs send from a notification-creation path is still TBD.
 - Ride posts (community photo posts).
 - Admin moderation surfaces.
-- Sentry init.
 - E2E with Maestro.
+
+## A note on Expo dependency versions
+
+`package.json` pins compatible versions for Expo SDK 53 / RN 0.76, but Expo
+sometimes ships patch bumps within an SDK. After `npm install`, run:
+
+```bash
+npx expo install --check
+```
+
+to align any drift before building. This is a no-op if everything is in
+range.
 
 ## Submitting to TestFlight
 

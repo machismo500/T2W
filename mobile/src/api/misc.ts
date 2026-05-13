@@ -80,3 +80,11 @@ export async function listBlogs(cursor?: string | null) {
     query: { cursor },
   });
 }
+
+export async function markNotificationRead(id: string) {
+  return apiFetch<{ success: true }>(`/api/v1/notifications/${id}/read`, { method: "POST", body: {} });
+}
+
+export async function markAllNotificationsRead() {
+  return apiFetch<{ updated: number }>(`/api/v1/notifications/read-all`, { method: "POST", body: {} });
+}

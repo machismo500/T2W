@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { notifyUser } from "@/lib/push/dispatch";
 
 // PUT /api/ride-posts/[id] - update approval status or content
 export async function PUT(
@@ -26,10 +27,36 @@ export async function PUT(
     }
     if (data.content !== undefined) updateData.content = data.content;
 
+    const before = await prisma.ridePost.findUnique({
+      where: { id },
+      select: { approvalStatus: true, authorId: true, rideId: true },
+    });
     const post = await prisma.ridePost.update({
       where: { id },
       data: updateData,
     });
+
+    if (
+      before?.authorId &&
+      data.approvalStatus &&
+      before.approvalStatus !== data.approvalStatus &&
+      (data.approvalStatus === "approved" || data.approvalStatus === "rejected")
+    ) {
+      const isApproved = data.approvalStatus === "approved";
+      const authorId = before.authorId;
+      const rideId = before.rideId;
+      after(() =>
+        notifyUser({
+          userId: authorId,
+          type: isApproved ? "success" : "warning",
+          title: isApproved ? "Ride post approved" : "Ride post needs changes",
+          message: isApproved
+            ? "Your photo post is live for everyone to see."
+            : "Your photo post wasn't approved. Tap for details.",
+          data: { kind: "ride", rideId },
+        }).catch((err) => console.warn("[T2W] ride-post push failed:", err)),
+      );
+    }
 
     return NextResponse.json({
       post: {

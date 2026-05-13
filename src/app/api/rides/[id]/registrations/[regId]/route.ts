@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { notifyUser } from "@/lib/push/dispatch";
 
 // PATCH /api/rides/[id]/registrations/[regId] - approve or reject a registration
 export async function PATCH(
@@ -161,6 +162,49 @@ export async function PATCH(
 
       return upd;
     });
+
+    if (isStatusUpdate && registration.userId) {
+      // Only notify on a real status change — admins can re-PATCH the same
+      // value while doing other field updates and we shouldn't spam.
+      const changed = registration.approvalStatus !== approvalStatus;
+      if (changed) {
+        const ride = await prisma.ride.findUnique({
+          where: { id: rideId },
+          select: { title: true },
+        });
+        const rideTitle = ride?.title ?? "your ride";
+        let title = "";
+        let message = "";
+        let type: "info" | "success" | "warning" | "ride" = "ride";
+        if (approvalStatus === "confirmed") {
+          title = "Registration confirmed";
+          message = `Your spot for "${rideTitle}" is confirmed. See you on the road.`;
+          type = "success";
+        } else if (approvalStatus === "rejected") {
+          title = "Registration rejected";
+          message = `Your registration for "${rideTitle}" wasn't approved. Tap for details.`;
+          type = "warning";
+        } else if (approvalStatus === "dropout") {
+          title = "Marked as dropped out";
+          message = `You've been marked as a drop-out for "${rideTitle}". Reach out to the crew if this is wrong.`;
+          type = "warning";
+        }
+        if (title) {
+          const targetUserId = registration.userId;
+          after(() =>
+            notifyUser({
+              userId: targetUserId,
+              type,
+              title,
+              message,
+              data: { kind: "ride", rideId },
+            }).catch((err) =>
+              console.warn("[T2W] registration push failed:", err),
+            ),
+          );
+        }
+      }
+    }
 
     return NextResponse.json({
       registration: {

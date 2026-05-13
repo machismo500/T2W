@@ -130,6 +130,15 @@ export default function RideDetailScreen() {
               style={{ marginTop: spacing.md }}
             />
           ) : null}
+
+          {ride.status === "completed" || ride.status === "ongoing" ? (
+            <Button
+              label="Share your ride"
+              variant="secondary"
+              onPress={() => router.push(`/ride/${ride.id}/share`)}
+              style={{ marginTop: spacing.md }}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </Screen>

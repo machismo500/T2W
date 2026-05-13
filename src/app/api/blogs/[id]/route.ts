@@ -67,10 +67,40 @@ export async function PUT(
       updateData.publishDate = new Date(updateData.publishDate as string);
     }
 
+    const before = await prisma.blogPost.findUnique({
+      where: { id },
+      select: { approvalStatus: true, authorId: true, title: true },
+    });
     const blog = await prisma.blogPost.update({
       where: { id },
       data: updateData,
     });
+
+    // Push the author when their blog crosses pending → approved/rejected.
+    if (
+      before &&
+      before.authorId &&
+      updateData.approvalStatus &&
+      before.approvalStatus !== updateData.approvalStatus &&
+      (updateData.approvalStatus === "approved" || updateData.approvalStatus === "rejected")
+    ) {
+      const isApproved = updateData.approvalStatus === "approved";
+      const { notifyUser } = await import("@/lib/push/dispatch");
+      const { after } = await import("next/server");
+      const authorId = before.authorId;
+      const title = before.title;
+      after(() =>
+        notifyUser({
+          userId: authorId,
+          type: isApproved ? "success" : "warning",
+          title: isApproved ? "Blog approved" : "Blog needs changes",
+          message: isApproved
+            ? `Your post "${title}" is now live.`
+            : `Your post "${title}" wasn't approved. Tap to revise.`,
+          data: { kind: "blog", blogId: id },
+        }).catch((err) => console.warn("[T2W] blog push failed:", err)),
+      );
+    }
 
     return NextResponse.json({ blog });
   } catch (error) {

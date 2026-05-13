@@ -120,7 +120,23 @@ Response:
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/v1/notifications` | Top 50 notifications (per-user + global). |
+| `GET /api/v1/notifications` | Top 50 notifications (per-user + global). Each row includes `isRead`. |
+| `POST /api/v1/notifications/:id/read` | Mark a single notification as read. Owner-scoped. |
+| `POST /api/v1/notifications/read-all` | Mark all of the current user's unread notifications as read. |
+
+## Push dispatch (server side)
+
+`src/lib/push/dispatch.ts` exports `notifyUser({ userId, title, message, type, data })` and `notifyMany(userIds, args)`. Both insert a Notification row **and** push to every registered `DeviceToken` via the Expo Push API (https://exp.host/--/api/v2/push/send). Tokens that come back as `DeviceNotRegistered` are pruned in the same call.
+
+Push triggers wired so far:
+
+- `PUT /api/users/:id/approve` and `POST /api/users/bulk-approve` — "You're in!"
+- `PATCH /api/rides/:id/registrations/:regId` — registration confirmed / rejected / dropout
+- `POST /api/rides/:id/notify-reminder` — fan-out to the same audience as the email reminder
+- `PUT /api/blogs/:id` — author notified on approve / reject transitions
+- `PUT /api/ride-posts/:id` — author notified on approve / reject transitions
+
+Payloads carry a `data` field with a `kind` discriminator (`ride` | `blog` | `account_approved`) so the mobile tap handler can deep-link.
 
 ## Riders / Garage / Achievements / Guidelines / Blogs
 

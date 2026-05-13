@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import { fetchMe, login as loginApi, logout as logoutApi, register as registerApi, RegisterPayload } from "@/api/auth";
 import { setOnUnauthenticated } from "@/api/client";
 import { tokenStorage } from "@/api/storage";
-import { registerForPushAsync, unregisterDevice } from "@/push";
+import { installNotificationHandlers, registerForPushAsync, unregisterDevice } from "@/push";
+import { setSentryUser } from "@/sentry";
 import type { AuthUser } from "@/api/types";
 
 type AuthState =
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setOnUnauthenticated(() => setState({ status: "anon" }));
+    const detachPush = installNotificationHandlers();
     (async () => {
       const refreshToken = await tokenStorage.getRefreshToken();
       if (!refreshToken) {
@@ -41,15 +43,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       await refreshMe();
     })();
+    return () => {
+      detachPush();
+    };
   }, [refreshMe]);
 
-  // Whenever we transition to authed, register this device for push.
-  // Fire-and-forget — failures are logged but don't block the user.
+  // Whenever we transition to authed, register this device for push and
+  // attach the user identity to Sentry. Fire-and-forget — failures are
+  // logged but don't block the user.
   useEffect(() => {
     if (state.status === "authed") {
       void registerForPushAsync();
+      setSentryUser({ id: state.user.id, email: state.user.email });
     }
-  }, [state.status]);
+    if (state.status === "anon") {
+      setSentryUser(null);
+    }
+  }, [state]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
