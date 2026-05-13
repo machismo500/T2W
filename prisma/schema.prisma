@@ -35,10 +35,48 @@ model User {
   blogPosts         BlogPost[]
   notifications     Notification[]
   riderProfile      RiderProfile? @relation(fields: [linkedRiderId], references: [id])
+  refreshTokens     RefreshToken[]
+  deviceTokens      DeviceToken[]
 
   @@index([linkedRiderId])
   @@index([role])
   @@index([isApproved])
+}
+
+// Mobile auth — rotating refresh tokens with reuse detection.
+// The opaque token sent to the client is never stored; we store SHA-256.
+model RefreshToken {
+  id          String    @id @default(cuid())
+  userId      String
+  tokenHash   String    @unique
+  deviceId    String?
+  platform    String?   // ios | android
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  rotatedToId String?   // chained refresh — detect reuse
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// FCM / APNs push token per device, per user.
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String   // ios | android
+  deviceId  String
+  appBuild  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
 }
 
 // Rider profile data - the primary record for all riders (imported from Excel/admin)

@@ -103,7 +103,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   // Lambda instances). General + api routes stay on the per-instance
   // in-memory check — they're best-effort abuse protection, not security-
   // critical, and we don't want the extra ~30 ms KV round-trip on every page.
-  const isAuthRoute = /^\/api\/auth\/(login|register|send-otp|verify-otp|reset-password)/.test(pathname);
+  const isAuthRoute = /^\/api\/(?:v1\/)?auth\/(login|register|send-otp|verify-otp|send-reset-otp|verify-reset-otp|reset-password|refresh)/.test(pathname);
   const isApiRoute  = pathname.startsWith("/api/");
 
   if (isAuthRoute) {
@@ -115,6 +115,30 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     if (checkRateSync(ip, limitType)) {
       return block("Too many requests — please slow down", 429);
     }
+  }
+
+  // ── 5. CORS for mobile clients (/api/v1/* only) ──────────────────────────
+  // Native iOS/Android apps don't enforce CORS, but Expo Go and web previews
+  // do. We allow any origin for /api/v1 — the bearer-token requirement is
+  // what protects access; the cookie-based /api/* tree stays cookie-locked.
+  if (pathname.startsWith("/api/v1/")) {
+    const origin = headers.get("origin") ?? "*";
+    if (request.method === "OPTIONS") {
+      return new NextResponse(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+          "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+          "Access-Control-Allow-Headers": "authorization,content-type,x-device-id,x-app-build",
+          "Access-Control-Max-Age": "86400",
+          "Vary": "Origin",
+        },
+      });
+    }
+    const res = NextResponse.next();
+    res.headers.set("Access-Control-Allow-Origin", origin);
+    res.headers.set("Vary", "Origin");
+    return res;
   }
 
   return NextResponse.next();
