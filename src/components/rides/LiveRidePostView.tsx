@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { LiveRideMetrics as Metrics, LiveRideSession, LiveRiderLocation, TrackPoint } from "@/types";
+import type {
+  LiveRideMetrics as Metrics,
+  LiveRideSession,
+  LiveRiderLocation,
+  RideAnalytics,
+  TrackPoint,
+} from "@/types";
 import { LiveRideMap } from "./LiveRideMap";
 import { LiveRideMapEditor } from "./LiveRideMapEditor";
 import { ElevationProfile } from "./ElevationProfile";
@@ -9,6 +15,11 @@ import { TrackScrubber } from "./TrackScrubber";
 import { ShareableRideCard, type ShareStatKey } from "./ShareableRideCard";
 import { PersonalRideCard } from "./PersonalRideCard";
 import { ReliveCard } from "./ReliveCard";
+import { PaceSplitsCard } from "./PaceSplitsCard";
+import { ClimbStatsCard } from "./ClimbStatsCard";
+import { GroupCohesionCard } from "./GroupCohesionCard";
+import { RiderLeaderboardCard } from "./RiderLeaderboardCard";
+import { HighlightReel } from "./HighlightReel";
 import { api } from "@/lib/api-client";
 import { flushLocationQueue, getPendingCount } from "@/lib/location-queue";
 import {
@@ -20,6 +31,7 @@ import {
   Coffee,
   AlertTriangle,
   Mountain,
+  ArrowDownToLine,
   Sunrise,
   Sunset,
   Timer,
@@ -75,6 +87,26 @@ export function LiveRidePostView({
   const [gpxMenuOpen, setGpxMenuOpen] = useState(false);
   const [pendingPings, setPendingPings] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [analytics, setAnalytics] = useState<RideAnalytics | null>(null);
+
+  // Pull derived analytics (splits, climb, cohesion, leaderboard) once the
+  // post-ride view mounts. Failure is non-fatal — the cards simply don't
+  // render. We don't poll: nothing in the underlying data changes after a
+  // ride has ended unless an admin runs an editor action, and the editor's
+  // onMapDataChanged callback already triggers a parent re-render that
+  // re-instantiates this component.
+  useEffect(() => {
+    let cancelled = false;
+    api.liveAnalytics
+      .get(rideId)
+      .then((data) => {
+        if (!cancelled) setAnalytics(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [rideId]);
 
   // Surface queued offline pings from any device-local session so the rider
   // can manually retry the upload from the post-ride view.
@@ -360,6 +392,21 @@ export function LiveRidePostView({
 
       <ReliveCard rideId={rideId} />
 
+      <HighlightReel
+        rideTitle={rideTitle}
+        riderName={riderName}
+        path={
+          pathView === "lead" && smoothedPath.length > 1
+            ? smoothedPath
+            : pathView === "lead"
+              ? leadPath
+              : myPath
+        }
+        distanceKm={metrics?.distanceKm ?? 0}
+        movingMinutes={metrics?.movingMinutes ?? 0}
+        maxSpeedKmh={metrics?.maxSpeedKmh ?? 0}
+      />
+
       {metrics && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4">
           <div className="flex items-center justify-between mb-3">
@@ -390,11 +437,28 @@ export function LiveRidePostView({
         </div>
       )}
 
+      {analytics && (
+        <ClimbStatsCard climb={analytics.climb} elevation={analytics.elevation} />
+      )}
+
+      {analytics && analytics.splits.length > 0 && (
+        <PaceSplitsCard splits={analytics.splits} />
+      )}
+
+      {analytics?.cohesion && (
+        <GroupCohesionCard cohesion={analytics.cohesion} />
+      )}
+
+      {analytics && analytics.leaderboard.length > 1 && (
+        <RiderLeaderboardCard leaderboard={analytics.leaderboard} />
+      )}
+
       {shareOpen && metrics && (
         <ShareableRideCard
           rideTitle={rideTitle}
           riderName={riderName}
           metrics={metrics}
+          analytics={analytics}
           onClose={() => setShareOpen(false)}
         />
       )}
@@ -472,6 +536,26 @@ function buildStats(metrics: Metrics | null): StatItem[] {
       label: "Elevation Gain",
       value: `${metrics.elevationGainM} m`,
       color: "bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400",
+    });
+  }
+
+  if (metrics.elevationLossM != null) {
+    out.push({
+      key: "elevationLoss",
+      icon: ArrowDownToLine,
+      label: "Elevation Loss",
+      value: `${metrics.elevationLossM} m`,
+      color: "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400",
+    });
+  }
+
+  if (metrics.elevation?.maxM != null) {
+    out.push({
+      key: "highestPoint",
+      icon: TrendingUp,
+      label: "Highest Point",
+      value: `${metrics.elevation.maxM} m`,
+      color: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
     });
   }
 

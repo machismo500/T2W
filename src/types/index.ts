@@ -247,6 +247,18 @@ export interface LiveRideMetrics {
   endedAt: string | null;
   elevationGainM: number | null;
   elevationLossM: number | null;
+  // Min/max/net + gain/loss roll-up derived from the cached elevation
+  // profile. null when no profile has been computed yet (no track or pre-
+  // backfill window). minM/maxM/netM are null when only the legacy
+  // gain/loss columns are populated (rare — old sessions backfilled before
+  // the profile cache existed).
+  elevation?: {
+    minM: number | null;
+    maxM: number | null;
+    netM: number | null;
+    gainM: number | null;
+    lossM: number | null;
+  } | null;
   // Per-rider stats for the requesting user, server-side computed using the
   // same methodology as the lead-rider stats above. null when the user has no
   // tracked points on this session.
@@ -258,6 +270,52 @@ export interface LiveRideMetrics {
     maxSpeedKmh: number;
     pointsCount: number;
   } | null;
+}
+
+// Post-ride analytics fetched on demand from /api/rides/[id]/live/analytics.
+// Computed lazily; can return null sections when the underlying data isn't
+// available (no profile, single rider, etc.).
+export interface RideAnalytics {
+  splits: {
+    index: number;
+    distanceKm: number;
+    durationSec: number;
+    avgSpeedKmh: number;
+    elevGainM: number | null;
+    elevLossM: number | null;
+  }[];
+  climb: {
+    longest: { distanceKm: number; gainM: number; startKm: number; endKm: number } | null;
+    steepest: { gradePct: number; gainM: number; startKm: number; endKm: number } | null;
+  };
+  elevation: {
+    minM: number;
+    maxM: number;
+    netM: number;
+    gainM: number;
+    lossM: number;
+  } | null;
+  cohesion: {
+    maxGapKm: number;
+    medianGapKm: number;
+    togetherPct: number;
+    deviationEvents: number;
+    riderCount: number;
+    togetherThresholdKm: number;
+  } | null;
+  leaderboard: {
+    userId: string;
+    name: string;
+    avatar?: string | null;
+    distanceKm: number;
+    movingMinutes: number;
+    avgSpeedKmh: number;
+    maxSpeedKmh: number;
+    pointCount: number;
+    deviationCount: number;
+    isLead: boolean;
+    isSweep: boolean;
+  }[];
 }
 
 export interface RideRegistration {

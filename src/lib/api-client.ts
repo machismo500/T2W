@@ -1272,6 +1272,17 @@ export const api = {
     },
   },
 
+  liveAnalytics: {
+    get: async (rideId: string) => {
+      const res = await fetch(`/api/rides/${rideId}/live/analytics`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to load analytics");
+      }
+      return res.json() as Promise<import("@/types").RideAnalytics>;
+    },
+  },
+
   seed: async () => {
     await delay(100);
     return { success: true, message: "Using database-backed data" };

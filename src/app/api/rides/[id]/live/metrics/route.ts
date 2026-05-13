@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { pathDistanceKm } from "@/lib/geo-utils";
+import { safeJsonParse } from "@/lib/json-utils";
+import { summarizeElevation, type ElevationProfileSample } from "@/lib/ride-analytics";
 
 // GET /api/rides/[id]/live/metrics - calculate ride metrics
 export async function GET(
@@ -189,6 +191,24 @@ export async function GET(
       endedAt: session.endedAt?.toISOString() ?? null,
       elevationGainM: session.elevationGainM,
       elevationLossM: session.elevationLossM,
+      // Derive min/max/net from the cached lead-rider profile when present.
+      // Falls back to gain/loss-only when no profile has been cached yet.
+      elevation: (() => {
+        const profile = session.elevationProfile
+          ? safeJsonParse<ElevationProfileSample[]>(session.elevationProfile, [])
+          : [];
+        if (profile.length < 2) {
+          if (session.elevationGainM == null && session.elevationLossM == null) return null;
+          return {
+            minM: null,
+            maxM: null,
+            netM: null,
+            gainM: session.elevationGainM,
+            lossM: session.elevationLossM,
+          };
+        }
+        return summarizeElevation(profile);
+      })(),
       // Diagnostics — let the UI badge an override or fall back to computed.
       // `computed*` are the underlying values so admins can sanity-check
       // their overrides without leaving the page.

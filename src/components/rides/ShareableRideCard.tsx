@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Share2, Upload, X, Check, ImagePlus } from "lucide-react";
-import type { LiveRideMetrics } from "@/types";
+import type { LiveRideMetrics, RideAnalytics } from "@/types";
 
 // 9:16 Story format — works on Instagram Stories, WhatsApp Status, FB Stories,
 // and renders fine when shared into a 1:1 chat as well.
@@ -18,68 +18,104 @@ export type ShareStatKey =
   | "avgSpeed"
   | "maxSpeed"
   | "elevation"
+  | "elevationLoss"
+  | "highestPoint"
+  | "longestClimb"
+  | "steepestGrade"
   | "stops"
   | "startTime"
   | "endTime"
   | "riders";
 
+interface ResolveCtx {
+  metrics: LiveRideMetrics;
+  analytics: RideAnalytics | null;
+}
+
 interface StatOption {
   key: ShareStatKey;
   label: string;
   /** Returns the formatted value string, or null if the metric isn't available */
-  resolve: (m: LiveRideMetrics) => string | null;
+  resolve: (ctx: ResolveCtx) => string | null;
 }
 
 const STAT_OPTIONS: StatOption[] = [
   {
     key: "distance",
     label: "Distance",
-    resolve: (m) => (m.distanceKm > 0 ? `${m.distanceKm} km` : null),
+    resolve: ({ metrics: m }) => (m.distanceKm > 0 ? `${m.distanceKm} km` : null),
   },
   {
     key: "movingTime",
     label: "Moving Time",
-    resolve: (m) => (m.movingMinutes > 0 ? formatDuration(m.movingMinutes) : null),
+    resolve: ({ metrics: m }) => (m.movingMinutes > 0 ? formatDuration(m.movingMinutes) : null),
   },
   {
     key: "duration",
     label: "Duration",
-    resolve: (m) => (m.elapsedMinutes > 0 ? formatDuration(m.elapsedMinutes) : null),
+    resolve: ({ metrics: m }) => (m.elapsedMinutes > 0 ? formatDuration(m.elapsedMinutes) : null),
   },
   {
     key: "avgSpeed",
     label: "Avg Speed",
-    resolve: (m) => (m.avgSpeedKmh > 0 ? `${m.avgSpeedKmh} km/h` : null),
+    resolve: ({ metrics: m }) => (m.avgSpeedKmh > 0 ? `${m.avgSpeedKmh} km/h` : null),
   },
   {
     key: "maxSpeed",
     label: "Max Speed",
-    resolve: (m) => (m.maxSpeedKmh > 0 ? `${m.maxSpeedKmh} km/h` : null),
+    resolve: ({ metrics: m }) => (m.maxSpeedKmh > 0 ? `${m.maxSpeedKmh} km/h` : null),
   },
   {
     key: "elevation",
     label: "Elevation Gain",
-    resolve: (m) => (m.elevationGainM != null ? `${m.elevationGainM} m` : null),
+    resolve: ({ metrics: m }) => (m.elevationGainM != null ? `${m.elevationGainM} m` : null),
+  },
+  {
+    key: "elevationLoss",
+    label: "Elevation Loss",
+    resolve: ({ metrics: m }) => (m.elevationLossM != null ? `${m.elevationLossM} m` : null),
+  },
+  {
+    key: "highestPoint",
+    label: "Highest Point",
+    resolve: ({ metrics: m }) =>
+      m.elevation?.maxM != null ? `${m.elevation.maxM} m` : null,
+  },
+  {
+    key: "longestClimb",
+    label: "Longest Climb",
+    resolve: ({ analytics }) =>
+      analytics?.climb.longest
+        ? `${analytics.climb.longest.distanceKm.toFixed(1)} km`
+        : null,
+  },
+  {
+    key: "steepestGrade",
+    label: "Steepest Grade",
+    resolve: ({ analytics }) =>
+      analytics?.climb.steepest
+        ? `${analytics.climb.steepest.gradePct.toFixed(1)}%`
+        : null,
   },
   {
     key: "stops",
     label: "Stops",
-    resolve: (m) => (m.breakCount > 0 ? `${m.breakCount}` : null),
+    resolve: ({ metrics: m }) => (m.breakCount > 0 ? `${m.breakCount}` : null),
   },
   {
     key: "startTime",
     label: "Start",
-    resolve: (m) => (m.startedAt ? formatTime(m.startedAt) : null),
+    resolve: ({ metrics: m }) => (m.startedAt ? formatTime(m.startedAt) : null),
   },
   {
     key: "endTime",
     label: "End",
-    resolve: (m) => (m.endedAt ? formatTime(m.endedAt) : null),
+    resolve: ({ metrics: m }) => (m.endedAt ? formatTime(m.endedAt) : null),
   },
   {
     key: "riders",
     label: "Riders",
-    resolve: (m) => (m.riderCount > 0 ? `${m.riderCount}` : null),
+    resolve: ({ metrics: m }) => (m.riderCount > 0 ? `${m.riderCount}` : null),
   },
 ];
 
@@ -87,6 +123,7 @@ interface ShareableRideCardProps {
   rideTitle: string;
   riderName: string;
   metrics: LiveRideMetrics;
+  analytics?: RideAnalytics | null;
   onClose: () => void;
 }
 
@@ -94,6 +131,7 @@ export function ShareableRideCard({
   rideTitle,
   riderName,
   metrics,
+  analytics = null,
   onClose,
 }: ShareableRideCardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -104,11 +142,23 @@ export function ShareableRideCard({
   const [downloadedAt, setDownloadedAt] = useState<number | null>(null);
 
   // Available stat options (filtered to those that have data)
-  const availableStats = useMemo(
-    () =>
-      STAT_OPTIONS.filter((o) => o.resolve(metrics) != null),
-    [metrics]
+  const resolveCtx = useMemo<ResolveCtx>(
+    () => ({ metrics, analytics }),
+    [metrics, analytics]
   );
+  const availableStats = useMemo(
+    () => STAT_OPTIONS.filter((o) => o.resolve(resolveCtx) != null),
+    [resolveCtx]
+  );
+
+  // One-line "headline" stat the card draws above the rider name — picked
+  // automatically from the strongest signal in the ride. Riders can opt in
+  // by leaving the headline default, or hide it with the toggle below.
+  const headline = useMemo(
+    () => pickHeadline(metrics, analytics),
+    [metrics, analytics]
+  );
+  const [showHeadline, setShowHeadline] = useState(true);
 
   // Selected stat keys — restored from localStorage, capped + filtered to
   // currently-available options.
@@ -124,7 +174,7 @@ export function ShareableRideCard({
       // ignore
     }
     return ["distance", "movingTime", "avgSpeed", "maxSpeed"].filter((k) =>
-      STAT_OPTIONS.find((o) => o.key === k && o.resolve(metrics) != null)
+      STAT_OPTIONS.find((o) => o.key === k && o.resolve(resolveCtx) != null)
     ) as ShareStatKey[];
   });
 
@@ -188,12 +238,21 @@ export function ShareableRideCard({
       logo: logoRef.current,
       rideTitle,
       riderName,
+      headline: showHeadline ? headline : null,
       stats: selected.map((k) => {
         const opt = STAT_OPTIONS.find((o) => o.key === k)!;
-        return { label: opt.label, value: opt.resolve(metrics) ?? "—" };
+        return { label: opt.label, value: opt.resolve(resolveCtx) ?? "—" };
       }),
     });
-  }, [rideTitle, riderName, selected, metrics, photoLoaded]);
+  }, [
+    rideTitle,
+    riderName,
+    selected,
+    resolveCtx,
+    photoLoaded,
+    headline,
+    showHeadline,
+  ]);
 
   // Photo upload handler
   function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -314,6 +373,22 @@ export function ShareableRideCard({
             </p>
           </div>
 
+          {headline && (
+            <label className="flex items-start gap-2 rounded-lg border border-t2w-accent/40 bg-t2w-accent/5 p-2.5 text-xs text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                checked={showHeadline}
+                onChange={(e) => setShowHeadline(e.target.checked)}
+                data-testid="share-card-headline-toggle"
+                className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-t2w-accent focus:ring-t2w-accent"
+              />
+              <span>
+                <span className="font-semibold text-t2w-accent">Auto headline:</span>{" "}
+                {headline}
+              </span>
+            </label>
+          )}
+
           <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
             <Upload className="h-4 w-4" />
             <span>{photoLoaded ? "Replace photo" : "Choose photo"}</span>
@@ -395,6 +470,7 @@ interface RenderArgs {
   logo: HTMLImageElement | null;
   rideTitle: string;
   riderName: string;
+  headline: string | null;
   stats: { label: string; value: string }[];
 }
 
@@ -404,6 +480,7 @@ function renderCard({
   logo,
   rideTitle,
   riderName,
+  headline,
   stats,
 }: RenderArgs) {
   const ctx = canvas.getContext("2d");
@@ -451,6 +528,28 @@ function renderCard({
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillText("Tales on 2 Wheels", logo ? 160 : 60, 100);
+
+  // ── Headline banner — automatic "best stat" call-out above the title ────
+  if (headline) {
+    ctx.font = '600 28px "Inter", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    const padding = 40;
+    const text = headline;
+    const metricsBox = ctx.measureText(text);
+    const boxW = Math.min(CANVAS_W - 120, metricsBox.width + padding * 2);
+    const boxH = 60;
+    const boxX = (CANVAS_W - boxW) / 2;
+    const boxY = 1030;
+    ctx.fillStyle = "rgba(34, 197, 94, 0.85)";
+    roundRect(ctx, boxX, boxY, boxW, boxH, 30);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '600 26px "Inter", sans-serif';
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, CANVAS_W / 2, boxY + boxH / 2 + 1);
+    ctx.textBaseline = "alphabetic";
+  }
 
   // ── Ride title (Courgette, centered) ────────────────────────────────────
   ctx.fillStyle = "#ffffff";
@@ -604,4 +703,43 @@ function slug(s: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 50) || "ride";
+}
+
+/**
+ * Pick the most impressive single stat from the ride and phrase it as a
+ * one-liner. The order is intentional — distance + max speed land first
+ * because they're universally legible; climb / cohesion only beat them
+ * when they're genuinely interesting (long climb, tight group).
+ *
+ * Returns null when nothing crosses the "worth bragging about" thresholds.
+ */
+function pickHeadline(
+  metrics: LiveRideMetrics,
+  analytics: RideAnalytics | null
+): string | null {
+  if (metrics.distanceKm >= 500) {
+    return `Epic ride — ${metrics.distanceKm} km in the saddle`;
+  }
+  if (metrics.maxSpeedKmh >= 120) {
+    return `Topped ${Math.round(metrics.maxSpeedKmh)} km/h`;
+  }
+  if (analytics?.climb.longest && analytics.climb.longest.gainM >= 500) {
+    return `Climbed ${analytics.climb.longest.gainM} m in one go`;
+  }
+  if (analytics?.climb.steepest && analytics.climb.steepest.gradePct >= 8) {
+    return `Tackled a ${analytics.climb.steepest.gradePct.toFixed(1)}% gradient`;
+  }
+  if (metrics.elevationGainM != null && metrics.elevationGainM >= 1500) {
+    return `${metrics.elevationGainM} m of total ascent`;
+  }
+  if (analytics?.cohesion && analytics.cohesion.togetherPct >= 80 && analytics.cohesion.riderCount >= 4) {
+    return `Group stayed tight — ${analytics.cohesion.togetherPct}% together`;
+  }
+  if (metrics.distanceKm >= 200) {
+    return `${metrics.distanceKm} km on two wheels`;
+  }
+  if (metrics.distanceKm >= 100) {
+    return `Crossed the century mark — ${metrics.distanceKm} km`;
+  }
+  return null;
 }
