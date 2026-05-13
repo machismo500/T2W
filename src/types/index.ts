@@ -247,6 +247,17 @@ export interface LiveRideMetrics {
   endedAt: string | null;
   elevationGainM: number | null;
   elevationLossM: number | null;
+  // Per-rider stats for the requesting user, server-side computed using the
+  // same methodology as the lead-rider stats above. null when the user has no
+  // tracked points on this session.
+  me?: {
+    distanceKm: number;
+    distanceSource: "smoothed" | "raw";
+    movingMinutes: number;
+    avgSpeedKmh: number;
+    maxSpeedKmh: number;
+    pointsCount: number;
+  } | null;
 }
 
 export interface RideRegistration {

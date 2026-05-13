@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
-import { personalRideStats } from "@/lib/personal-stats";
-import type { TrackPoint } from "@/types";
+import { pathDistanceKm } from "@/lib/geo-utils";
 
 /**
  * Per-ride badge tier names (mirrors the seed in scripts/seed-badges.ts).
@@ -64,25 +63,37 @@ export async function awardPerRideBadgesForSession(sessionId: string): Promise<v
 
   for (const rider of riders) {
     try {
-      const points = await prisma.liveRideLocation.findMany({
-        where: { sessionId, userId: rider.userId },
-        orderBy: { recordedAt: "asc" },
-        select: { lat: true, lng: true, recordedAt: true, speed: true, accuracy: true },
-      });
-      if (points.length < 2) continue;
+      // Prefer the smoothed/gap-filled series — same source of truth the
+      // metrics endpoint uses for the visible distance number. Falls back to
+      // raw points for older sessions that never got smoothed.
+      const [smoothed, raw, speedAgg] = await Promise.all([
+        prisma.liveRideLocationSmoothed.findMany({
+          where: { sessionId, userId: rider.userId },
+          orderBy: { sourceOrder: "asc" },
+          select: { lat: true, lng: true },
+        }),
+        prisma.liveRideLocation.findMany({
+          where: { sessionId, userId: rider.userId },
+          orderBy: { recordedAt: "asc" },
+          select: { lat: true, lng: true },
+        }),
+        // Match the metrics endpoint's 220 km/h clamp so a single jittery
+        // GPS fix can't earn a rider the Speed Demon badge.
+        prisma.liveRideLocation.aggregate({
+          where: {
+            sessionId,
+            userId: rider.userId,
+            speed: { not: null, gt: 0, lte: 220 },
+          },
+          _avg: { speed: true },
+        }),
+      ]);
+      const distancePoints = smoothed.length > 1 ? smoothed : raw;
+      if (distancePoints.length < 2) continue;
 
-      const path: TrackPoint[] = points.map((p) => ({
-        lat: p.lat,
-        lng: p.lng,
-        recordedAt: p.recordedAt.toISOString(),
-        speed: p.speed,
-        accuracy: p.accuracy,
-      }));
-      const stats = personalRideStats(path);
-      if (!stats) continue;
       const riderStats: RiderRideStats = {
-        distanceKm: stats.distanceKm,
-        avgSpeedKmh: stats.avgSpeedKmh,
+        distanceKm: pathDistanceKm(distancePoints),
+        avgSpeedKmh: speedAgg._avg.speed ?? 0,
         elevationGainM: session.elevationGainM ?? 0,
       };
 

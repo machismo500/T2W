@@ -2,21 +2,38 @@
 
 import { useMemo } from "react";
 import { Bike, Clock, Gauge, Route, TrendingUp } from "lucide-react";
-import type { TrackPoint } from "@/types";
+import type { LiveRideMetrics, TrackPoint } from "@/types";
 import { personalRideStats } from "@/lib/personal-stats";
 
 interface Props {
+  // Server-side per-rider numbers. Preferred when present — computed using
+  // the same methodology as the lead-rider stats (smoothed series for
+  // distance, DB-aggregated GPS speed clamped to 220 km/h, break-aware
+  // moving time).
+  me: LiveRideMetrics["me"] | undefined;
+  // Raw path fallback for the brief window after a deploy where the metrics
+  // endpoint hasn't been re-hit yet, or for offline-cached views.
   path: TrackPoint[];
   riderName: string;
 }
 
-// Per-rider summary derived from the user's own GPS pings (myPath). Distinct
-// from the lead-rider stats already shown in "Ride Statistics" — this answers
-// "how did *I* do?" rather than "what was the convoy's path?".
-export function PersonalRideCard({ path, riderName }: Props) {
-  const stats = useMemo(() => personalRideStats(path), [path]);
+export function PersonalRideCard({ me, path, riderName }: Props) {
+  const fallback = useMemo(
+    () => (me ? null : personalRideStats(path)),
+    [me, path]
+  );
+  const source: "server" | "fallback" | null = me
+    ? "server"
+    : fallback
+      ? "fallback"
+      : null;
+  if (!source) return null;
 
-  if (!stats) return null;
+  const distanceKm = me ? me.distanceKm : fallback!.distanceKm;
+  const movingMinutes = me ? me.movingMinutes : fallback!.movingMinutes;
+  const avgSpeedKmh = me ? me.avgSpeedKmh : fallback!.avgSpeedKmh;
+  const maxSpeedKmh = me ? me.maxSpeedKmh : fallback!.maxSpeedKmh;
+  const pointsCount = me ? me.pointsCount : fallback!.pointsCount;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4">
@@ -27,29 +44,15 @@ export function PersonalRideCard({ path, riderName }: Props) {
         </h3>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Stat
-          icon={Route}
-          label="Distance"
-          value={`${stats.distanceKm.toFixed(1)} km`}
-        />
-        <Stat
-          icon={Clock}
-          label="Moving time"
-          value={formatMinutes(stats.movingMinutes)}
-        />
-        <Stat
-          icon={Gauge}
-          label="Avg speed"
-          value={`${stats.avgSpeedKmh.toFixed(1)} km/h`}
-        />
-        <Stat
-          icon={TrendingUp}
-          label="Max speed"
-          value={`${stats.maxSpeedKmh.toFixed(0)} km/h`}
-        />
+        <Stat icon={Route} label="Distance" value={`${distanceKm.toFixed(1)} km`} />
+        <Stat icon={Clock} label="Moving time" value={formatMinutes(movingMinutes)} />
+        <Stat icon={Gauge} label="Avg speed" value={`${avgSpeedKmh.toFixed(1)} km/h`} />
+        <Stat icon={TrendingUp} label="Max speed" value={`${maxSpeedKmh.toFixed(0)} km/h`} />
       </div>
       <p className="mt-3 text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500">
-        Computed from your own GPS pings · {stats.pointsCount} points
+        {source === "server"
+          ? `Server-computed from ${pointsCount} GPS points · ${me!.distanceSource === "smoothed" ? "smoothed track" : "raw track"}`
+          : `Estimated from ${pointsCount} GPS pings (server stats unavailable)`}
       </p>
     </div>
   );

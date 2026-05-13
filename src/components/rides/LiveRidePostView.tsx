@@ -350,8 +350,12 @@ export function LiveRidePostView({
         })()}
       </div>
 
-      {myPath.length >= 2 && (
-        <PersonalRideCard path={myPath} riderName={riderName} />
+      {(metrics?.me || myPath.length >= 2) && (
+        <PersonalRideCard
+          me={metrics?.me ?? null}
+          path={myPath}
+          riderName={riderName}
+        />
       )}
 
       <ReliveCard rideId={rideId} />

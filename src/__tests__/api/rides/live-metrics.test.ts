@@ -78,12 +78,20 @@ describe('GET /api/rides/[id]/live/metrics', () => {
       ] as any)
       .mockResolvedValueOnce([ // rider count
         { userId: 'u1' }, { userId: 'u2' }, { userId: 'u3' },
+      ] as any)
+      .mockResolvedValueOnce([ // mePoints — user has tracked points
+        { lat: 12.9, lng: 77.6 }, { lat: 13.0, lng: 77.7 },
       ] as any);
 
-    vi.mocked(prisma.liveRideLocation.aggregate).mockResolvedValue({
-      _avg: { speed: 42.5 },
-      _max: { speed: 85.0 },
-    } as any);
+    vi.mocked(prisma.liveRideLocation.aggregate)
+      .mockResolvedValueOnce({
+        _avg: { speed: 42.5 },
+        _max: { speed: 85.0 },
+      } as any)
+      .mockResolvedValueOnce({ // meSpeedStats
+        _avg: { speed: 40.0 },
+        _max: { speed: 80.0 },
+      } as any);
 
     const res = await GET(makeReq(), makeParams());
     const { status, data } = await parseResponse(res);
@@ -96,6 +104,11 @@ describe('GET /api/rides/[id]/live/metrics', () => {
     expect(data.maxSpeedKmh).toBe(85.0);
     expect(data.breakCount).toBe(1);
     expect(data.riderCount).toBe(3);
+    // Per-rider numbers now ride along on the same response.
+    expect(data.me).toBeTruthy();
+    expect(data.me.distanceKm).toBe(45.7);
+    expect(data.me.avgSpeedKmh).toBe(40.0);
+    expect(data.me.maxSpeedKmh).toBe(80.0);
   });
 
   it('returns admin-set overrides instead of computed values', async () => {
@@ -118,10 +131,11 @@ describe('GET /api/rides/[id]/live/metrics', () => {
 
     vi.mocked(prisma.liveRideLocation.findMany)
       .mockResolvedValueOnce([{ lat: 12.9, lng: 77.6 }, { lat: 13.0, lng: 77.7 }] as any)
-      .mockResolvedValueOnce([{ userId: 'u1' }] as any);
-    vi.mocked(prisma.liveRideLocation.aggregate).mockResolvedValue({
-      _avg: { speed: 50 }, _max: { speed: 90 },
-    } as any);
+      .mockResolvedValueOnce([{ userId: 'u1' }] as any)
+      .mockResolvedValueOnce([] as any); // mePoints — irrelevant for override test
+    vi.mocked(prisma.liveRideLocation.aggregate)
+      .mockResolvedValueOnce({ _avg: { speed: 50 }, _max: { speed: 90 } } as any)
+      .mockResolvedValueOnce({ _avg: { speed: 0 }, _max: { speed: 0 } } as any);
 
     const res = await GET(makeReq(), makeParams());
     const { status, data } = await parseResponse(res);
@@ -163,7 +177,8 @@ describe('GET /api/rides/[id]/live/metrics', () => {
         { lat: 12.9, lng: 77.6 },
         { lat: 13.5, lng: 78.2 },
       ] as any)
-      .mockResolvedValueOnce([{ userId: 'u1' }, { userId: 'u2' }] as any);
+      .mockResolvedValueOnce([{ userId: 'u1' }, { userId: 'u2' }] as any)
+      .mockResolvedValueOnce([] as any); // mePoints
     vi.mocked(prisma.liveRideLocationSmoothed.findMany).mockResolvedValue([
       { lat: 12.9, lng: 77.6 },
       { lat: 13.0, lng: 77.7 },
@@ -171,9 +186,9 @@ describe('GET /api/rides/[id]/live/metrics', () => {
       { lat: 13.4, lng: 78.1 },
       { lat: 13.5, lng: 78.2 },
     ] as any);
-    vi.mocked(prisma.liveRideLocation.aggregate).mockResolvedValue({
-      _avg: { speed: 50 }, _max: { speed: 90 },
-    } as any);
+    vi.mocked(prisma.liveRideLocation.aggregate)
+      .mockResolvedValueOnce({ _avg: { speed: 50 }, _max: { speed: 90 } } as any)
+      .mockResolvedValueOnce({ _avg: { speed: 0 }, _max: { speed: 0 } } as any);
 
     // Tag the smoothed path's distance differently so we can prove which
     // array the route hands to pathDistanceKm.
