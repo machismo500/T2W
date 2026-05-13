@@ -7,6 +7,8 @@ import { LiveRideMapEditor } from "./LiveRideMapEditor";
 import { ElevationProfile } from "./ElevationProfile";
 import { TrackScrubber } from "./TrackScrubber";
 import { ShareableRideCard, type ShareStatKey } from "./ShareableRideCard";
+import { PersonalRideCard } from "./PersonalRideCard";
+import { ReliveCard } from "./ReliveCard";
 import { api } from "@/lib/api-client";
 import { flushLocationQueue, getPendingCount } from "@/lib/location-queue";
 import {
@@ -347,6 +349,12 @@ export function LiveRidePostView({
           );
         })()}
       </div>
+
+      {myPath.length >= 2 && (
+        <PersonalRideCard path={myPath} riderName={riderName} />
+      )}
+
+      <ReliveCard rideId={rideId} />
 
       {metrics && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4">

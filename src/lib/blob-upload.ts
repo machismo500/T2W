@@ -115,3 +115,39 @@ export async function uploadImage(
     contentType: options.contentType ?? mime,
   };
 }
+
+export interface UploadBinaryOptions {
+  /** Full pathname inside the Blob store, e.g. `ride-video/abc123/clip.mp4` */
+  pathname: string;
+  contentType: string;
+}
+
+export interface UploadBinaryResult {
+  url: string;
+  pathname: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+/**
+ * Lower-level helper for non-image assets (MP4 video, JPG thumbnails written
+ * by the render worker). Bypasses the image MIME table since these come from
+ * a trusted server-side caller, not user-supplied data URLs.
+ */
+export async function uploadBinary(
+  bytes: Buffer | Uint8Array,
+  options: UploadBinaryOptions
+): Promise<UploadBinaryResult> {
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  const result = await put(options.pathname, buf, {
+    access: BLOB_ACCESS as "public",
+    contentType: options.contentType,
+    addRandomSuffix: true,
+  });
+  return {
+    url: result.url,
+    pathname: result.pathname,
+    contentType: options.contentType,
+    sizeBytes: buf.length,
+  };
+}

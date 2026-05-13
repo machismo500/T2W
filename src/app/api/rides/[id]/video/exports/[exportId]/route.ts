@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { isWorkerRequest } from "@/lib/worker-auth";
 
 // GET /api/rides/[id]/video/exports/[exportId] — poll status.
 export async function GET(
@@ -32,8 +33,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; exportId: string }> }
 ) {
-  const user = await getCurrentUser();
-  if (!user) {
+  const workerCall = isWorkerRequest(req);
+  const user = workerCall ? null : await getCurrentUser();
+  if (!workerCall && !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id: rideId, exportId } = await params;
@@ -43,9 +45,11 @@ export async function PATCH(
   if (!row || row.rideId !== rideId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const isAdmin = user.role === "superadmin" || user.role === "core_member";
-  if (!isAdmin && row.userId !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!workerCall && user) {
+    const isAdmin = user.role === "superadmin" || user.role === "core_member";
+    if (!isAdmin && row.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const body = (await req.json()) as {

@@ -1,42 +1,126 @@
 import Link from "next/link";
-import { ArrowLeft, Film } from "lucide-react";
+import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
+import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+import { ReliveRoot } from "@/components/relive/ReliveRoot";
 
 export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{
+    headless?: string;
+    duration?: string;
+    orientation?: string;
+    exportId?: string;
+  }>;
 }
 
-export default async function RelivePage({ params }: Props) {
-  const { id } = await params;
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
-      <Link
-        href={`/ride/${id}`}
-        className="mb-6 inline-flex items-center gap-2 text-sm text-t2w-muted hover:text-white"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to ride
-      </Link>
+export default async function RelivePage({ params, searchParams }: Props) {
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
+  const user = await getCurrentUser();
 
-      <div className="rounded-2xl border border-t2w-border bg-t2w-surface p-8 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-t2w-accent/15 text-t2w-accent">
-          <Film className="h-7 w-7" />
+  const ride = await prisma.ride.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      rideNumber: true,
+      startDate: true,
+      endDate: true,
+      startLocation: true,
+      endLocation: true,
+      registrations: user
+        ? {
+            where: { userId: user.id },
+            select: { approvalStatus: true },
+          }
+        : undefined,
+      liveSession: {
+        select: {
+          id: true,
+          status: true,
+          startedAt: true,
+          endedAt: true,
+          leadRiderId: true,
+          elevationGainM: true,
+        },
+      },
+    },
+  });
+
+  if (!ride) notFound();
+
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12">
+        <div className="rounded-2xl border border-t2w-border bg-t2w-surface p-8 text-center">
+          <h1 className="font-display text-2xl font-bold text-white">
+            Sign in to view the Relive
+          </h1>
+          <p className="mt-3 text-sm text-t2w-muted">
+            Only registered riders and the T2W team can play the ride flyover.
+          </p>
         </div>
-        <h1 className="font-display text-2xl font-bold text-white">
-          Animated ride video — coming soon
-        </h1>
-        <p className="mt-3 text-sm text-t2w-muted">
-          We&rsquo;re building a Relive-style flyover that turns this ride into a
-          1080p video (horizontal or vertical). The data model and APIs are in
-          place; the renderer ships in a follow-up release once the tile-licensing
-          and worker-infra decisions land.
-        </p>
-        <p className="mt-3 text-xs text-t2w-muted">
-          Until then, you can download the GPX from the ride summary and create a
-          video in Relive, GPX Studio, or Google Earth Studio.
-        </p>
       </div>
+    );
+  }
+
+  const isAdmin = user.role === "superadmin" || user.role === "core_member";
+  const isRegistrant = (ride.registrations || []).some(
+    (r) => r.approvalStatus !== "rejected"
+  );
+  if (!isAdmin && !isRegistrant) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12">
+        <div className="rounded-2xl border border-t2w-border bg-t2w-surface p-8 text-center">
+          <h1 className="font-display text-2xl font-bold text-white">
+            Relive is for ride participants
+          </h1>
+          <p className="mt-3 text-sm text-t2w-muted">
+            Register and join this ride to unlock the flyover video.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const headless = sp.headless === "1" || sp.headless === "true";
+  const orientation = sp.orientation === "portrait" ? "portrait" : "landscape";
+  const requestedDuration = Number(sp.duration);
+  const durationSec =
+    Number.isFinite(requestedDuration) && requestedDuration > 0
+      ? requestedDuration
+      : Number(process.env.RELIVE_DEFAULT_DURATION_SEC) || 60;
+
+  return (
+    <div className={headless ? "h-screen w-screen bg-black" : "min-h-screen bg-black"}>
+      {!headless && (
+        <div className="mx-auto max-w-6xl px-4 pt-6">
+          <Link
+            href={`/ride/${id}`}
+            className="inline-flex items-center gap-2 text-sm text-t2w-muted hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to ride
+          </Link>
+        </div>
+      )}
+      <ReliveRoot
+        rideId={ride.id}
+        rideTitle={ride.title}
+        rideNumber={ride.rideNumber}
+        startDate={ride.startDate.toISOString()}
+        startLocation={ride.startLocation}
+        endLocation={ride.endLocation}
+        sessionEnded={ride.liveSession?.status === "ended"}
+        elevationGainM={ride.liveSession?.elevationGainM ?? null}
+        headless={headless}
+        orientation={orientation}
+        durationSec={durationSec}
+        exportId={sp.exportId}
+      />
     </div>
   );
 }
