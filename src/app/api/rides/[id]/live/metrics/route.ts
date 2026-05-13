@@ -46,7 +46,7 @@ export async function GET(
     // For distance, prefer the smoothed/gap-filled series for the lead rider
     // when one exists — raw recorded points have straight-line shortcuts
     // across no-signal stretches and under-count switchback distance.
-    const [leadPoints, smoothedLeadPoints, speedStats, riderCountRows] = await Promise.all([
+    const [leadPoints, smoothedLeadPoints, speedStats, riderCountRows, mePoints, smoothedMePoints, meSpeedStats] = await Promise.all([
       // For distance we aggregate every point (decimation distorts totals),
       // but the projection is trivially indexed and only 2 floats each —
       // 100k points is ~1.5 MB. No pagination here; see /live for the UI cap.
@@ -76,6 +76,31 @@ export async function GET(
         where: { sessionId: session.id },
         distinct: ["userId"],
         select: { userId: true },
+      }),
+      // Per-rider raw points for the requesting user. Used to compute their
+      // personal distance with the same methodology as the lead — sanity-
+      // checked GPS, not naive haversine over jittery client state.
+      prisma.liveRideLocation.findMany({
+        where: { sessionId: session.id, userId: user.id },
+        orderBy: { recordedAt: "asc" },
+        select: { lat: true, lng: true },
+      }),
+      prisma.liveRideLocationSmoothed.findMany({
+        where: { sessionId: session.id, userId: user.id },
+        orderBy: { sourceOrder: "asc" },
+        select: { lat: true, lng: true },
+      }),
+      // Personal speed aggregates with the same speed > 0 filter as the lead.
+      // The DB also clamps to a sane ceiling so a single 250 km/h GPS glitch
+      // doesn't poison the rider's max-speed reading.
+      prisma.liveRideLocation.aggregate({
+        where: {
+          sessionId: session.id,
+          userId: user.id,
+          speed: { not: null, gt: 0, lte: 220 },
+        },
+        _avg: { speed: true },
+        _max: { speed: true },
       }),
     ]);
 
@@ -116,6 +141,25 @@ export async function GET(
         ? Math.round(session.maxSpeedKmhOverride * 10) / 10
         : computedMaxSpeedKmh;
 
+    // Per-rider numbers for the "Your ride" card. We mirror the lead logic
+    // (smoothed-when-available distance, DB-aggregated GPS speed, break-aware
+    // moving time) so the personal card and ride card use the same data
+    // shape — comparable, not visually different methodologies.
+    const meHasSmoothed = smoothedMePoints.length > 1;
+    const meDistancePoints = meHasSmoothed ? smoothedMePoints : mePoints;
+    const meDistanceKm =
+      mePoints.length > 1
+        ? Math.round(pathDistanceKm(meDistancePoints) * 10) / 10
+        : 0;
+    // Per-rider moving time is the session moving time — every rider in the
+    // convoy experiences the same breaks. If we ever record individual
+    // join/leave timestamps we can subtract pre-join / post-leave then.
+    const meMovingMinutes = mePoints.length > 1 ? computedMovingMinutes : 0;
+    const meAvgSpeedKmh =
+      Math.round((meSpeedStats._avg.speed || 0) * 10) / 10;
+    const meMaxSpeedKmh =
+      Math.round((meSpeedStats._max.speed || 0) * 10) / 10;
+
     return NextResponse.json({
       elapsedMinutes,
       movingMinutes,
@@ -126,6 +170,21 @@ export async function GET(
       breakCount: closedBreakCount,
       breakMinutes,
       riderCount: riderCountRows.length,
+      // Requesting user's personal numbers. null when the user never appeared
+      // on this session (e.g. an admin viewing a ride they didn't attend).
+      me:
+        mePoints.length > 1
+          ? {
+              distanceKm: meDistanceKm,
+              distanceSource: (meHasSmoothed ? "smoothed" : "raw") as
+                | "smoothed"
+                | "raw",
+              movingMinutes: meMovingMinutes,
+              avgSpeedKmh: meAvgSpeedKmh,
+              maxSpeedKmh: meMaxSpeedKmh,
+              pointsCount: mePoints.length,
+            }
+          : null,
       startedAt: session.startedAt?.toISOString() ?? null,
       endedAt: session.endedAt?.toISOString() ?? null,
       elevationGainM: session.elevationGainM,
