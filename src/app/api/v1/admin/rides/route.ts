@@ -1,8 +1,9 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getRolePermissions } from "@/lib/role-permissions";
 import { apiError, apiOk } from "@/lib/api/v1/errors";
 import { requireBearer, isAdminRole } from "@/lib/api/v1/auth-guard";
+import { recordActivity } from "@/lib/api/v1/audit";
 
 type CreateBody = {
   title?: string;
@@ -97,6 +98,15 @@ export async function POST(req: NextRequest) {
       regOpenRider: data.regOpenRider ? new Date(data.regOpenRider) : null,
     },
   });
+
+  after(() =>
+    recordActivity({
+      action: "ride_created",
+      performedBy: { id: auth.user.id, name: auth.user.name },
+      target: { id: ride.id, name: ride.title },
+      details: `Created ride "${ride.title}" (${ride.rideNumber})`,
+    }).catch(() => {}),
+  );
 
   return apiOk({ ride: { id: ride.id, rideNumber: ride.rideNumber } }, { status: 201 });
 }

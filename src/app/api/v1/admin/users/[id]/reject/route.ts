@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { apiError, apiOk } from "@/lib/api/v1/errors";
 import { requireBearer, isAdminRole } from "@/lib/api/v1/auth-guard";
+import { recordActivity } from "@/lib/api/v1/audit";
 
 export async function POST(
   req: NextRequest,
@@ -15,6 +16,26 @@ export async function POST(
   const existing = await prisma.user.findUnique({ where: { id } });
   if (!existing) return apiError("NOT_FOUND", "User not found");
 
+  // Snapshot the rollback payload before the delete cascades.
+  const rollbackData = {
+    name: existing.name,
+    email: existing.email,
+    role: existing.role,
+    isApproved: existing.isApproved,
+    phone: existing.phone,
+  };
+
   await prisma.user.delete({ where: { id } });
+
+  after(() =>
+    recordActivity({
+      action: "user_deleted",
+      performedBy: { id: auth.user.id, name: auth.user.name },
+      target: { id, name: existing.name },
+      details: `Deleted ${existing.name} (${existing.email})`,
+      rollbackData,
+    }).catch(() => {}),
+  );
+
   return apiOk({ success: true, id });
 }

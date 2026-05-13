@@ -35,6 +35,63 @@ function isExpiringSoon(): boolean {
   return tokens.expiresAt - Date.now() < 60_000;
 }
 
+/**
+ * A fetch failure (DNS, timeout, airplane mode) vs. an HTTP-level error
+ * (4xx/5xx with a parseable body) is the difference between "we should
+ * retry later from the outbox" and "this will never succeed, surface it
+ * to the user." We model both with the same Error class but tag the
+ * `kind` field so callers don't have to string-match on `message`.
+ */
+export type ApiClientErrorKind =
+  | "network" // fetch threw — DNS / offline / TLS / timeout
+  | "auth" // 401 / 403 / TOKEN_REUSED — re-login likely needed
+  | "validation" // 400 / 409 / 422 — user input is bad, don't retry
+  | "rate_limited" // 429
+  | "server" // 5xx — server problem, retry is fine
+  | "unknown";
+
+export class ApiClientError extends Error {
+  code: string;
+  status?: number;
+  details?: Record<string, unknown>;
+  kind: ApiClientErrorKind;
+  constructor(
+    code: string,
+    message: string,
+    status?: number,
+    details?: Record<string, unknown>,
+    kind: ApiClientErrorKind = "unknown",
+  ) {
+    super(message);
+    this.code = code;
+    this.status = status;
+    this.details = details;
+    this.kind = kind;
+  }
+
+  isRetryable(): boolean {
+    return this.kind === "network" || this.kind === "server" || this.kind === "rate_limited";
+  }
+}
+
+function isFetchNetworkError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  // React Native fetch throws TypeError('Network request failed') on hard
+  // network errors; web fetch throws on DNS / offline. We also treat
+  // AbortError as network-ish for outbox retry purposes — a request the
+  // caller cancelled isn't a permanent failure.
+  if (err.name === "AbortError") return true;
+  return /Network request failed|Failed to fetch|TypeError: Network/i.test(err.message);
+}
+
+function classifyStatus(status: number): ApiClientErrorKind {
+  if (status === 401 || status === 403) return "auth";
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "server";
+  if (status >= 400) return "validation";
+  return "unknown";
+}
+
 let inFlightRefresh: Promise<void> | null = null;
 
 async function refreshAccessToken(): Promise<void> {
@@ -44,16 +101,32 @@ async function refreshAccessToken(): Promise<void> {
     if (!refreshToken) {
       clearTokensInMemory();
       onUnauthenticated?.();
-      throw new ApiClientError("UNAUTHORIZED", "Not signed in");
+      throw new ApiClientError("UNAUTHORIZED", "Not signed in", undefined, undefined, "auth");
     }
 
-    const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch (err) {
+      // Network error during refresh — keep the cached identity (the auth
+      // provider will see this and stay authed) and let the caller retry
+      // later. We do NOT call onUnauthenticated here.
+      throw new ApiClientError(
+        "NETWORK",
+        "Couldn't reach the server to refresh your session",
+        undefined,
+        undefined,
+        isFetchNetworkError(err) ? "network" : "unknown",
+      );
+    }
 
     if (!res.ok) {
+      // Definitive auth rejection — token reused / expired / revoked.
+      // Wipe local state and flip the app back to anon.
       await tokenStorage.clear();
       clearTokensInMemory();
       onUnauthenticated?.();
@@ -61,6 +134,9 @@ async function refreshAccessToken(): Promise<void> {
       throw new ApiClientError(
         body?.error.code ?? "INVALID_TOKEN",
         body?.error.message ?? "Session expired",
+        res.status,
+        body?.error.details,
+        "auth",
       );
     }
 
@@ -71,18 +147,6 @@ async function refreshAccessToken(): Promise<void> {
     inFlightRefresh = null;
   });
   return inFlightRefresh;
-}
-
-export class ApiClientError extends Error {
-  code: string;
-  status?: number;
-  details?: Record<string, unknown>;
-  constructor(code: string, message: string, status?: number, details?: Record<string, unknown>) {
-    super(message);
-    this.code = code;
-    this.status = status;
-    this.details = details;
-  }
 }
 
 type RequestOptions = {
@@ -105,12 +169,7 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
 
   if (!opts.unauthenticated) {
     if (!tokens.accessToken || isExpiringSoon()) {
-      try {
-        await refreshAccessToken();
-      } catch (err) {
-        if (err instanceof ApiClientError) throw err;
-        throw new ApiClientError("UNAUTHORIZED", "Authentication required");
-      }
+      await refreshAccessToken();
     }
   }
 
@@ -122,25 +181,30 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
     headers.authorization = `Bearer ${tokens.accessToken}`;
   }
 
-  const doFetch = () =>
-    fetch(url.toString(), {
-      method: opts.method ?? "GET",
-      headers,
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      signal: opts.signal,
-    });
+  const doFetch = async () => {
+    try {
+      return await fetch(url.toString(), {
+        method: opts.method ?? "GET",
+        headers,
+        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+        signal: opts.signal,
+      });
+    } catch (err) {
+      throw new ApiClientError(
+        "NETWORK",
+        "No connection",
+        undefined,
+        undefined,
+        isFetchNetworkError(err) ? "network" : "unknown",
+      );
+    }
+  };
 
   let res = await doFetch();
 
   // One-shot retry on 401 — token may have expired mid-flight.
   if (res.status === 401 && !opts.unauthenticated) {
-    try {
-      await refreshAccessToken();
-    } catch (err) {
-      throw err instanceof ApiClientError
-        ? err
-        : new ApiClientError("UNAUTHORIZED", "Session expired");
-    }
+    await refreshAccessToken();
     headers.authorization = `Bearer ${tokens.accessToken}`;
     res = await doFetch();
   }
@@ -157,6 +221,7 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
       body?.error.message ?? `Request failed (${res.status})`,
       res.status,
       body?.error.details,
+      classifyStatus(res.status),
     );
   }
 

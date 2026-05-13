@@ -2,6 +2,7 @@ import { NextRequest, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { apiError, apiOk } from "@/lib/api/v1/errors";
 import { requireBearer, isAdminRole } from "@/lib/api/v1/auth-guard";
+import { recordActivity } from "@/lib/api/v1/audit";
 import { notifyUser } from "@/lib/push/dispatch";
 
 type PatchBody = {
@@ -151,6 +152,20 @@ export async function PATCH(
         }).catch((err) => console.warn("[T2W][v1] registration push failed:", err)),
       );
     }
+  }
+
+  if (data.approvalStatus && registration.approvalStatus !== data.approvalStatus) {
+    const targetApprovalStatus = data.approvalStatus;
+    const previousStatus = registration.approvalStatus;
+    const targetRiderName = registration.riderName;
+    after(() =>
+      recordActivity({
+        action: `registration_${targetApprovalStatus}`,
+        performedBy: { id: auth.user.id, name: auth.user.name },
+        target: { id: registration.id, name: targetRiderName },
+        details: `Changed ${targetRiderName}'s registration from ${previousStatus} to ${targetApprovalStatus}`,
+      }).catch(() => {}),
+    );
   }
 
   return apiOk({

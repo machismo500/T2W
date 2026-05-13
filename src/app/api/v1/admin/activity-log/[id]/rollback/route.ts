@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { apiError, apiOk } from "@/lib/api/v1/errors";
 import { requireBearer } from "@/lib/api/v1/auth-guard";
+import { recordActivity } from "@/lib/api/v1/audit";
 
 /**
  * POST /api/v1/admin/activity-log/:id/rollback
@@ -114,6 +115,15 @@ export async function POST(
       details: `[ROLLED BACK] ${entry.details ?? entry.action}`,
     },
   });
+
+  after(() =>
+    recordActivity({
+      action: "activity_rolled_back",
+      performedBy: { id: auth.user.id, name: auth.user.name },
+      target: { id, name: entry.targetName },
+      details: `Rolled back ${entry.action} on ${entry.targetName}`,
+    }).catch(() => {}),
+  );
 
   return apiOk({ success: true });
 }

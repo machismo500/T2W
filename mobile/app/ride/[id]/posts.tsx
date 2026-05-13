@@ -14,21 +14,24 @@ import {
   View,
 } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
-import { createRidePost, listRidePosts, type RidePost } from "@/api/posts";
+import { listRidePosts, type RidePost } from "@/api/posts";
 import { uploadImage } from "@/api/upload";
-import { ApiClientError } from "@/api/client";
 import { useAuth } from "@/auth/AuthProvider";
+import { useOutbox } from "@/outbox/useOutbox";
+import { useIsOffline } from "@/lib/network";
 import { colors, radius, spacing, text } from "@/theme";
 
 export default function RidePostsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const qc = useQueryClient();
   const auth = useAuth();
+  const outbox = useOutbox();
+  const offline = useIsOffline();
   const isPrivileged =
     auth.status === "authed" &&
     (auth.user.role === "superadmin" ||
@@ -43,21 +46,7 @@ export default function RidePostsScreen() {
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
-
-  const createMutation = useMutation({
-    mutationFn: () => createRidePost({ rideId: id, content: content.trim(), images }),
-    onSuccess: () => {
-      setContent("");
-      setImages([]);
-      qc.invalidateQueries({ queryKey: ["ride-posts", id] });
-      Alert.alert(
-        "Posted",
-        isPrivileged && auth.status === "authed" && auth.user.role !== "t2w_rider"
-          ? "Your post is live."
-          : "Your post is pending moderation — it'll be visible once approved.",
-      );
-    },
-  });
+  const [submitting, setSubmitting] = useState(false);
 
   async function addImage() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -129,22 +118,37 @@ export default function RidePostsScreen() {
                 </ScrollView>
                 <Button
                   label="Post"
-                  onPress={() => {
+                  onPress={async () => {
                     if (!content.trim()) {
                       Alert.alert("Add a few words about the ride.");
                       return;
                     }
-                    createMutation.mutate();
+                    setSubmitting(true);
+                    try {
+                      await outbox.enqueue({
+                        kind: "ride-post.create",
+                        rideId: id,
+                        body: { content: content.trim(), images },
+                      });
+                      setContent("");
+                      setImages([]);
+                      qc.invalidateQueries({ queryKey: ["ride-posts", id] });
+                      Alert.alert(
+                        offline ? "Saved" : "Posted",
+                        offline
+                          ? "You're offline — your post will publish when you're back online."
+                          : isPrivileged &&
+                              auth.status === "authed" &&
+                              auth.user.role !== "t2w_rider"
+                            ? "Your post is live."
+                            : "Your post is pending moderation — it'll be visible once approved.",
+                      );
+                    } finally {
+                      setSubmitting(false);
+                    }
                   }}
-                  loading={createMutation.isPending}
+                  loading={submitting}
                 />
-                {createMutation.isError ? (
-                  <Text style={{ color: colors.danger, marginTop: spacing.sm }}>
-                    {createMutation.error instanceof ApiClientError
-                      ? createMutation.error.message
-                      : "Failed to post."}
-                  </Text>
-                ) : null}
               </View>
             ) : null
           }

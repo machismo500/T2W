@@ -11,20 +11,21 @@ import {
   View,
 } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "@/components/Screen";
 import {
   listRideRegistrations,
-  moderateRegistration,
   type AdminRegistration,
 } from "@/api/admin";
+import { useOutbox } from "@/outbox/useOutbox";
 import { colors, radius, spacing, text } from "@/theme";
 
 type Status = "pending" | "confirmed" | "rejected";
 
 export default function RideRegistrationsScreen() {
   const { rideId } = useLocalSearchParams<{ rideId: string }>();
-  const qc = useQueryClient();
+  void useQueryClient(); // hook order parity if we add direct mutations later
+  const outbox = useOutbox();
   const [status, setStatus] = useState<Status>("pending");
 
   const q = useQuery({
@@ -32,11 +33,19 @@ export default function RideRegistrationsScreen() {
     queryFn: () => listRideRegistrations(rideId, status),
   });
 
-  const moderate = useMutation({
-    mutationFn: ({ regId, approvalStatus }: { regId: string; approvalStatus: AdminRegistration["approvalStatus"] }) =>
-      moderateRegistration(regId, { approvalStatus }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "registrations", rideId] }),
-  });
+  function moderateMutation(regId: string, approvalStatus: AdminRegistration["approvalStatus"]) {
+    return outbox.enqueue({
+      kind: "admin.registration.moderate",
+      regId,
+      body: { approvalStatus },
+    });
+  }
+
+  function isModerating(regId: string): boolean {
+    return outbox.pendingForTarget(
+      (op) => op.kind === "admin.registration.moderate" && op.regId === regId,
+    ).length > 0;
+  }
 
   return (
     <Screen>
@@ -65,18 +74,15 @@ export default function RideRegistrationsScreen() {
           renderItem={({ item }) => (
             <RegCard
               reg={item}
-              busy={moderate.isPending && moderate.variables?.regId === item.id}
-              onApprove={() =>
-                moderate.mutate({ regId: item.id, approvalStatus: "confirmed" })
-              }
+              busy={isModerating(item.id)}
+              onApprove={() => moderateMutation(item.id, "confirmed")}
               onReject={() =>
                 Alert.alert("Reject registration?", `${item.riderName}`, [
                   { text: "Cancel" },
                   {
                     text: "Reject",
                     style: "destructive",
-                    onPress: () =>
-                      moderate.mutate({ regId: item.id, approvalStatus: "rejected" }),
+                    onPress: () => moderateMutation(item.id, "rejected"),
                   },
                 ])
               }
@@ -86,8 +92,7 @@ export default function RideRegistrationsScreen() {
                   {
                     text: "Drop out",
                     style: "destructive",
-                    onPress: () =>
-                      moderate.mutate({ regId: item.id, approvalStatus: "dropout" }),
+                    onPress: () => moderateMutation(item.id, "dropout"),
                   },
                 ])
               }

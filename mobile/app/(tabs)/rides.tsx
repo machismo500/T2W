@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Screen } from "@/components/Screen";
 import { RideCard } from "@/components/RideCard";
+import { RideCardSkeleton } from "@/components/RideCardSkeleton";
 import { listRides } from "@/api/rides";
 import { colors, radius, spacing, text } from "@/theme";
 
@@ -46,8 +47,10 @@ export default function RidesScreen() {
       </View>
 
       {query.isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+        <View style={styles.list}>
+          <RideCardSkeleton />
+          <RideCardSkeleton />
+          <RideCardSkeleton />
         </View>
       ) : query.isError ? (
         <View style={styles.center}>

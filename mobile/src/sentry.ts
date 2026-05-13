@@ -38,4 +38,25 @@ export function setSentryUser(user: { id: string; email: string } | null) {
   }
 }
 
-export const captureException = Sentry.captureException;
+type CaptureExtras = { extra?: Record<string, unknown>; tags?: Record<string, string> };
+
+export function captureException(err: unknown, opts: CaptureExtras = {}) {
+  if (!initialized) {
+    // Surface to console so dev still sees the error even without Sentry.
+    console.error("[T2W]", err, opts);
+    return;
+  }
+  Sentry.withScope((scope) => {
+    if (opts.extra) {
+      for (const [k, v] of Object.entries(opts.extra)) {
+        scope.setExtra(k, v as unknown);
+      }
+    }
+    if (opts.tags) {
+      for (const [k, v] of Object.entries(opts.tags)) {
+        scope.setTag(k, v);
+      }
+    }
+    Sentry.captureException(err);
+  });
+}

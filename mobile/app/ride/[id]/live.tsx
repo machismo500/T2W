@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { MetricsBar } from "@/components/MetricsBar";
+import { useIsOffline } from "@/lib/network";
 import { getLive, getLiveMetrics, joinLive } from "@/api/rides";
 import {
   checkPermissions,
@@ -23,6 +24,7 @@ import {
   stopTracking,
   pendingCount,
   isTracking,
+  resumeFlusherIfActive,
 } from "@/live/tracker";
 import { useAuth } from "@/auth/AuthProvider";
 import { colors, radius, spacing, text } from "@/theme";
@@ -30,15 +32,26 @@ import { colors, radius, spacing, text } from "@/theme";
 export default function LiveRideScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const auth = useAuth();
+  const offline = useIsOffline();
   const [tracking, setTracking] = useState(false);
   const [pending, setPending] = useState(0);
   const [starting, setStarting] = useState(false);
   const sinceRef = useRef<string | null>(null);
 
-  // Discover whether we're already tracking when the screen mounts — survives
-  // app restart and lets the user resume controls without re-prompting.
+  // Discover whether we're already tracking when the screen mounts. Two
+  // cases to handle:
+  //   1. App killed mid-ride and relaunched — TaskManager is still alive
+  //      but our in-process flusher isn't. resumeFlusherIfActive() reattaches.
+  //   2. Tracking was running for a *different* ride — just reflect that in
+  //      the UI; the user can navigate to it from the prompt elsewhere.
   useEffect(() => {
-    void isTracking().then((s) => setTracking(s.active && s.rideId === id));
+    (async () => {
+      const status = await isTracking();
+      setTracking(status.active && status.rideId === id);
+      if (status.active && status.rideId === id) {
+        await resumeFlusherIfActive();
+      }
+    })();
   }, [id]);
 
   const live = useQuery({
@@ -259,6 +272,13 @@ export default function LiveRideScreen() {
             <Text style={text.bodySecondary}>Waiting for first GPS fix…</Text>
           </View>
         )}
+        {offline ? (
+          <View style={styles.mapOfflineHint}>
+            <Text style={styles.mapOfflineHintText}>
+              Offline — map tiles unavailable, polyline + markers only
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <ScrollView contentContainerStyle={styles.bottom}>
@@ -340,6 +360,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  mapOfflineHint: {
+    position: "absolute",
+    bottom: spacing.sm,
+    left: spacing.sm,
+    right: spacing.sm,
+    backgroundColor: "rgba(15, 15, 30, 0.85)",
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  mapOfflineHintText: { color: "#fff", fontSize: 12, textAlign: "center" },
   bottom: { padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.sm },
   statusRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   statusDot: { width: 10, height: 10, borderRadius: radius.pill },

@@ -61,14 +61,26 @@ export function installNotificationHandlers(): () => void {
   };
 }
 
+function buildVariant(): string {
+  const extra = (Constants.expoConfig?.extra as { buildVariant?: string } | undefined) ?? {};
+  return extra.buildVariant ?? "production";
+}
+
 /**
  * Ask for push permission, obtain an Expo push token, and register it with
  * the backend so server-side dispatch can find this device.
  *
- * Returns the Expo push token, or null if the user declined / we're on a
- * simulator that can't receive pushes.
+ * Returns the Expo push token, or null if the user declined, the build can't
+ * receive pushes, or we're on a simulator. Personal sideload builds (free
+ * Apple ID) skip push entirely — remote push needs the APNs entitlement,
+ * which requires paid Apple Developer enrollment.
  */
 export async function registerForPushAsync(): Promise<string | null> {
+  if (buildVariant() === "personal") {
+    // Free-Apple-ID sideload — APNs entitlement isn't available, skip
+    // silently so the rest of the auth flow isn't disturbed.
+    return null;
+  }
   if (!Device.isDevice) {
     // Push doesn't work on iOS simulator / Android emulator with most setups.
     return null;

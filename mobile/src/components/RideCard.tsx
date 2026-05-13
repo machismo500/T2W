@@ -1,5 +1,6 @@
 import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { colors, radius, spacing } from "@/theme";
 import type { RideListItem } from "@/api/types";
 
@@ -31,7 +32,12 @@ export function RideCard({ ride, onPress }: { ride: RideListItem; onPress: () =>
       style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
     >
       {ride.posterUrl ? (
-        <Image source={{ uri: ride.posterUrl }} style={styles.poster} />
+        <Image
+          source={{ uri: ride.posterUrl }}
+          style={styles.poster}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
       ) : (
         <View style={[styles.poster, styles.posterPlaceholder]}>
           <Text style={styles.posterPlaceholderText}>T2W</Text>

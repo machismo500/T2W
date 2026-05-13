@@ -20,10 +20,12 @@ import QRCode from "react-native-qrcode-svg";
 import { Screen } from "@/components/Screen";
 import { TextField } from "@/components/TextField";
 import { Button } from "@/components/Button";
-import { getRide, registerForRide } from "@/api/rides";
+import { getRide } from "@/api/rides";
 import { apiFetch, ApiClientError } from "@/api/client";
 import { uploadImage } from "@/api/upload";
 import { useAuth } from "@/auth/AuthProvider";
+import { useOutbox } from "@/outbox/useOutbox";
+import { useIsOffline } from "@/lib/network";
 import { colors, radius, spacing, text } from "@/theme";
 
 type UpiConfig = {
@@ -43,6 +45,8 @@ function useUpiConfig() {
 export default function RegisterScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const auth = useAuth();
+  const outbox = useOutbox();
+  const offline = useIsOffline();
   const ride = useQuery({
     queryKey: ["ride", id],
     queryFn: () => getRide(id),
@@ -103,26 +107,35 @@ export default function RegisterScreen() {
     }
     setSubmitting(true);
     try {
-      const res = await registerForRide(id, {
-        riderName: riderName.trim() || undefined,
-        phone: phone.trim() || undefined,
-        emergencyContactName: emergencyContactName.trim() || undefined,
-        emergencyContactPhone: emergencyContactPhone.trim() || undefined,
-        bloodGroup: bloodGroup.trim() || undefined,
-        vehicleModel: vehicleModel.trim() || undefined,
-        vehicleRegNumber: vehicleRegNumber.trim() || undefined,
-        upiTransactionId: upiTransactionId.trim() || undefined,
-        paymentScreenshot: paymentScreenshot ?? undefined,
-        agreedCancellationTerms: true,
-        agreedIndemnity: true,
+      // Always go through the outbox — if we're online the flusher fires
+      // immediately and the queue clears in milliseconds, but if we're
+      // offline the registration survives until we're back on signal.
+      await outbox.enqueue({
+        kind: "ride.register",
+        rideId: id,
+        body: {
+          riderName: riderName.trim() || undefined,
+          phone: phone.trim() || undefined,
+          emergencyContactName: emergencyContactName.trim() || undefined,
+          emergencyContactPhone: emergencyContactPhone.trim() || undefined,
+          bloodGroup: bloodGroup.trim() || undefined,
+          vehicleModel: vehicleModel.trim() || undefined,
+          vehicleRegNumber: vehicleRegNumber.trim() || undefined,
+          upiTransactionId: upiTransactionId.trim() || undefined,
+          paymentScreenshot: paymentScreenshot ?? undefined,
+          agreedCancellationTerms: true,
+          agreedIndemnity: true,
+        },
       });
       Alert.alert(
-        "Registered",
-        `Confirmation: ${res.registration.confirmationCode ?? res.registration.id}\nStatus: ${res.registration.approvalStatus}`,
+        offline ? "Saved" : "Submitted",
+        offline
+          ? "You're offline — your registration is queued and will submit automatically when you're back online."
+          : "Your registration is being submitted.",
         [{ text: "OK", onPress: () => router.replace(`/ride/${id}`) }],
       );
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Failed to register.");
+      setError(err instanceof ApiClientError ? err.message : "Failed to queue registration.");
     } finally {
       setSubmitting(false);
     }

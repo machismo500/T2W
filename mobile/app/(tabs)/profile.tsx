@@ -1,11 +1,17 @@
 import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import Constants from "expo-constants";
 import { ChevronRight } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Button } from "@/components/Button";
 import { useAuth } from "@/auth/AuthProvider";
 import { colors, radius, spacing, text } from "@/theme";
+
+function getBuildVariant(): string {
+  const extra = (Constants.expoConfig?.extra as { buildVariant?: string } | undefined) ?? {};
+  return extra.buildVariant ?? "production";
+}
 
 export default function ProfileScreen() {
   const auth = useAuth();
@@ -28,6 +34,11 @@ export default function ProfileScreen() {
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>{u.role.replace("_", " ")}</Text>
           </View>
+          {getBuildVariant() !== "production" ? (
+            <View style={styles.variantBadge}>
+              <Text style={styles.variantText}>{getBuildVariant()}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.statsRow}>
@@ -105,6 +116,14 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   roleText: { color: colors.primary, fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
+  variantBadge: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.warning,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  variantText: { color: "#1a1a2e", fontSize: 10, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 },
   statsRow: { flexDirection: "row", gap: spacing.md },
   stat: {
     flex: 1,

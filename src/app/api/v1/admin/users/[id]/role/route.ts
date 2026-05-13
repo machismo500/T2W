@@ -1,8 +1,9 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { getRolePermissions } from "@/lib/role-permissions";
 import { apiError, apiOk } from "@/lib/api/v1/errors";
 import { requireBearer } from "@/lib/api/v1/auth-guard";
+import { recordActivity } from "@/lib/api/v1/audit";
 
 const VALID_ROLES = ["superadmin", "core_member", "t2w_rider", "rider", "guest"] as const;
 
@@ -40,6 +41,7 @@ export async function PATCH(
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) return apiError("NOT_FOUND", "User not found");
 
+  const previousRole = user.role;
   await prisma.user.update({ where: { id }, data: { role: newRole } });
   if (user.linkedRiderId) {
     // Keep RiderProfile in sync the same way the web does.
@@ -48,6 +50,16 @@ export async function PATCH(
       data: { role: newRole },
     });
   }
+
+  after(() =>
+    recordActivity({
+      action: "user_role_changed",
+      performedBy: { id: auth.user.id, name: auth.user.name },
+      target: { id, name: user.name },
+      details: `Changed role from ${previousRole} to ${newRole}`,
+      rollbackData: { previousRole },
+    }).catch(() => {}),
+  );
 
   return apiOk({ success: true, id, newRole });
 }

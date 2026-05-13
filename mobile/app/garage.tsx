@@ -17,7 +17,8 @@ import { Stack } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { TextField } from "@/components/TextField";
 import { Button } from "@/components/Button";
-import { createMotorcycle, deleteMotorcycle, listMotorcycles } from "@/api/misc";
+import { deleteMotorcycle, listMotorcycles } from "@/api/misc";
+import { useOutbox } from "@/outbox/useOutbox";
 import { ApiClientError } from "@/api/client";
 import { colors, radius, spacing, text } from "@/theme";
 
@@ -117,6 +118,7 @@ function AddMotorcycleModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const outbox = useOutbox();
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState(String(new Date().getFullYear()));
@@ -134,13 +136,16 @@ function AddMotorcycleModal({
     }
     setBusy(true);
     try {
-      await createMotorcycle({
-        make: make.trim(),
-        model: model.trim(),
-        year: Number(year) || undefined,
-        cc: Number(cc) || undefined,
-        color: color.trim() || undefined,
-        nickname: nickname.trim() || undefined,
+      await outbox.enqueue({
+        kind: "motorcycle.create",
+        body: {
+          make: make.trim(),
+          model: model.trim(),
+          year: Number(year) || undefined,
+          cc: Number(cc) || undefined,
+          color: color.trim() || undefined,
+          nickname: nickname.trim() || undefined,
+        },
       });
       setMake(""); setModel(""); setCC(""); setColor(""); setNickname("");
       onCreated();

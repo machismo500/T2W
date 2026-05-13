@@ -1,5 +1,6 @@
 import * as Location from "expo-location";
 import { Platform } from "react-native";
+import { ApiClientError } from "@/api/client";
 import { LOCATION_TASK, setActiveRideId, getActiveRideId } from "./background-task";
 import { postLiveLocations, type LiveLocationPoint } from "@/api/rides";
 import { peek, dropFirst, size, clear } from "./queue";
@@ -128,22 +129,64 @@ export async function flushOnce(rideId: string): Promise<{ flushed: number; pend
 
     try {
       const res = await postLiveLocations(rideId, payload);
-      // Only drop the accepted-count from the front of the queue. The server
-      // may individually reject points (future timestamps, malformed). We
-      // currently treat any non-throwing response as "all flushed" because
-      // the rejection details map by index into our payload and re-queueing
-      // selected rejects would be over-engineering for the kind of garbage
-      // we'd actually see.
-      void res;
+      // Drop the entire batch — the server response tells us which points
+      // were rejected, but those rejections are deterministic (>24h old,
+      // future timestamp, malformed numbers). Re-queueing them would just
+      // make us loop forever. We log permanent-reject counts to Sentry so
+      // we can spot a systematic issue.
+      if (res.rejected.length > 0) {
+        console.warn(
+          `[T2W][live] server rejected ${res.rejected.length}/${batch.length} points for ride ${rideId}`,
+          res.rejected.slice(0, 3),
+        );
+      }
       await dropFirst(rideId, batch.length);
-      return { flushed: batch.length, pending: await size(rideId) };
+      return { flushed: res.accepted, pending: await size(rideId) };
     } catch (err) {
+      // Network errors retry; 4xx other than the per-point rejections
+      // above means the whole batch is invalid (e.g. no active session)
+      // — drop it so we don't loop forever. The user sees the ride status
+      // banner change to "Session ended" on the next poll.
+      if (err instanceof ApiClientError) {
+        if (err.kind === "validation" && err.code === "CONFLICT") {
+          console.warn(
+            `[T2W][live] session inactive for ride ${rideId}; dropping batch`,
+          );
+          await dropFirst(rideId, batch.length);
+          return { flushed: 0, pending: await size(rideId) };
+        }
+        if (err.kind === "auth") {
+          // The HTTP client will refresh on the next call. Don't drop the batch.
+          return { flushed: 0, pending: await size(rideId) };
+        }
+      }
       console.warn("[T2W][live] flush failed; will retry:", err);
       return { flushed: 0, pending: await size(rideId) };
     }
   } finally {
     flushing = false;
   }
+}
+
+/**
+ * Reattach the in-process flush timer to an already-running TaskManager
+ * background task. Call on app launch when `isTracking()` reports active
+ * for a known ride — the OS task survives app death but our JS-side
+ * flusher doesn't, so we need to relight it.
+ */
+export async function resumeFlusherIfActive(): Promise<{ resumed: boolean; rideId: string | null }> {
+  const status = await isTracking();
+  if (!status.active || !status.rideId) return { resumed: false, rideId: status.rideId };
+  if (flushTimer) {
+    // Already attached — nothing to do.
+    return { resumed: true, rideId: status.rideId };
+  }
+  const rideId = status.rideId;
+  flushTimer = setInterval(() => {
+    void flushOnce(rideId);
+  }, FLUSH_INTERVAL_MS);
+  void flushOnce(rideId);
+  return { resumed: true, rideId };
 }
 
 export async function pendingCount(rideId: string): Promise<number> {

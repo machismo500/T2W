@@ -12,13 +12,12 @@ import { Stack } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Screen } from "@/components/Screen";
 import {
-  approveUser,
   changeUserRole,
   listAdminUsers,
-  rejectUser,
   type AdminUser,
 } from "@/api/admin";
 import { useAuth } from "@/auth/AuthProvider";
+import { useOutbox } from "@/outbox/useOutbox";
 import { colors, radius, spacing, text } from "@/theme";
 
 type Status = "pending" | "active";
@@ -28,19 +27,16 @@ export default function AdminUsersScreen() {
   const auth = useAuth();
   const [status, setStatus] = useState<Status>("pending");
 
+  const outbox = useOutbox();
+
   const q = useQuery({
     queryKey: ["admin", "users", status],
     queryFn: () => listAdminUsers({ status }),
   });
 
-  const approveMutation = useMutation({
-    mutationFn: approveUser,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
-  });
-  const rejectMutation = useMutation({
-    mutationFn: rejectUser,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "users"] }),
-  });
+  // Role change is online-only — chained role updates have ordering effects
+  // (e.g. promote then demote) that don't survive a flusher retry cleanly.
+  // Approve / reject are queued via outbox so they survive offline.
   const roleMutation = useMutation({
     mutationFn: ({ id, newRole }: { id: string; newRole: string }) =>
       changeUserRole(id, newRole),
@@ -75,31 +71,40 @@ export default function AdminUsersScreen() {
           data={q.data?.items ?? []}
           keyExtractor={(u) => u.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <UserCard
-              user={item}
-              approving={approveMutation.isPending && approveMutation.variables === item.id}
-              rejecting={rejectMutation.isPending && rejectMutation.variables === item.id}
-              onApprove={() => approveMutation.mutate(item.id)}
-              onReject={() =>
-                Alert.alert(
-                  "Reject user?",
-                  `${item.name} (${item.email}) will be deleted.`,
-                  [
-                    { text: "Cancel" },
-                    {
-                      text: "Reject",
-                      style: "destructive",
-                      onPress: () => rejectMutation.mutate(item.id),
-                    },
-                  ],
-                )
-              }
-              onChangeRole={(newRole) => roleMutation.mutate({ id: item.id, newRole })}
-              isSuper={isSuper}
-              roleBusy={roleMutation.isPending && roleMutation.variables?.id === item.id}
-            />
-          )}
+          renderItem={({ item }) => {
+            const pendingApprove = outbox.pendingForTarget(
+              (op) => op.kind === "admin.user.approve" && op.userId === item.id,
+            ).length > 0;
+            const pendingReject = outbox.pendingForTarget(
+              (op) => op.kind === "admin.user.reject" && op.userId === item.id,
+            ).length > 0;
+            return (
+              <UserCard
+                user={item}
+                approving={pendingApprove}
+                rejecting={pendingReject}
+                onApprove={() => outbox.enqueue({ kind: "admin.user.approve", userId: item.id })}
+                onReject={() =>
+                  Alert.alert(
+                    "Reject user?",
+                    `${item.name} (${item.email}) will be deleted.`,
+                    [
+                      { text: "Cancel" },
+                      {
+                        text: "Reject",
+                        style: "destructive",
+                        onPress: () =>
+                          outbox.enqueue({ kind: "admin.user.reject", userId: item.id }),
+                      },
+                    ],
+                  )
+                }
+                onChangeRole={(newRole) => roleMutation.mutate({ id: item.id, newRole })}
+                isSuper={isSuper}
+                roleBusy={roleMutation.isPending && roleMutation.variables?.id === item.id}
+              />
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.center}>
               <Text style={text.bodySecondary}>
