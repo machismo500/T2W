@@ -103,7 +103,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   // Lambda instances). General + api routes stay on the per-instance
   // in-memory check — they're best-effort abuse protection, not security-
   // critical, and we don't want the extra ~30 ms KV round-trip on every page.
-  const isAuthRoute = /^\/api\/auth\/(login|register|send-otp|verify-otp|reset-password)/.test(pathname);
+  const isAuthRoute = /^\/api\/(v1\/)?auth\/(login|refresh|register|send-otp|verify-otp|send-reset-otp|verify-reset-otp|reset-password)/.test(pathname);
   const isApiRoute  = pathname.startsWith("/api/");
 
   if (isAuthRoute) {

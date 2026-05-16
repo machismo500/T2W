@@ -12,7 +12,9 @@ function getJwtSecret(): Uint8Array {
   if (!secret && process.env.NODE_ENV === "production") {
     throw new Error("JWT_SECRET environment variable is required in production");
   }
-  return new TextEncoder().encode(secret || DEV_JWT_FALLBACK);
+  // Buffer.from is realm-stable; TextEncoder under jsdom (vitest) produces
+  // a Uint8Array from a different realm than jose's webapi entry expects.
+  return Buffer.from(secret || DEV_JWT_FALLBACK, "utf8");
 }
 
 const TOKEN_NAME = "t2w-token";

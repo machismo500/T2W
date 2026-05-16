@@ -22,6 +22,33 @@ export async function parseResponse(response: Response) {
   return { status: response.status, data };
 }
 
+/**
+ * Build a NextRequest authenticated via one of the dual-mode auth
+ * adapters used by `/api/v1/*`:
+ *  - `bearer`: sets `Authorization: Bearer <token>`
+ *  - `cookie`: sets the `t2w-token` cookie
+ */
+export function createAuthedRequest(
+  url: string,
+  auth: { mode: 'bearer'; token: string } | { mode: 'cookie'; token: string },
+  options?: {
+    method?: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }
+): NextRequest {
+  const headers: Record<string, string> = { ...(options?.headers ?? {}) };
+  if (auth.mode === 'bearer') {
+    headers.Authorization = `Bearer ${auth.token}`;
+  } else {
+    const existing = headers.Cookie ?? headers.cookie;
+    headers.Cookie = existing
+      ? `${existing}; t2w-token=${auth.token}`
+      : `t2w-token=${auth.token}`;
+  }
+  return createNextRequest(url, { ...options, headers });
+}
+
 // Common mock user objects for tests
 export const mockSuperAdmin = {
   id: 'user-1',

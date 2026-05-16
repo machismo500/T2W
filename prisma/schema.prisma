@@ -34,11 +34,53 @@ model User {
   rideRegistrations RideRegistration[]
   blogPosts         BlogPost[]
   notifications     Notification[]
+  refreshTokens     RefreshToken[]
+  deviceTokens      DeviceToken[]
   riderProfile      RiderProfile? @relation(fields: [linkedRiderId], references: [id])
 
   @@index([linkedRiderId])
   @@index([role])
   @@index([isApproved])
+}
+
+// Mobile / cross-client refresh tokens. Opaque random tokens are stored as
+// SHA-256 hashes; reuse detection revokes the entire familyId chain.
+model RefreshToken {
+  id              String    @id @default(cuid())
+  userId          String
+  tokenHash       String    @unique          // sha256 of the opaque token presented by the client
+  familyId        String                     // self-rooted on first issue, propagated through rotations
+  replacedById    String?
+  deviceId        String?
+  userAgent       String?
+  ip              String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  reuseDetectedAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+// Per-device push notification tokens. Created when a mobile (or web) client
+// registers via POST /api/v1/devices.
+model DeviceToken {
+  id         String   @id @default(cuid())
+  userId     String
+  platform   String                          // ios | android | web
+  pushToken  String?
+  deviceName String?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pushToken])
+  @@index([userId])
 }
 
 // Rider profile data - the primary record for all riders (imported from Excel/admin)

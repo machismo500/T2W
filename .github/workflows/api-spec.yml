@@ -1,0 +1,43 @@
+name: API spec
+
+on:
+  pull_request:
+    branches: ["main", "master"]
+    paths:
+      - "src/lib/api/**"
+      - "src/app/api/v1/**"
+      - "scripts/generate-openapi.ts"
+      - "openapi/openapi.json"
+      - "package.json"
+      - ".github/workflows/api-spec.yml"
+  push:
+    branches: ["main", "master"]
+    paths:
+      - "src/lib/api/**"
+      - "src/app/api/v1/**"
+      - "scripts/generate-openapi.ts"
+      - "openapi/openapi.json"
+
+concurrency:
+  group: api-spec-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spec:
+    name: OpenAPI gate
+    runs-on: ubuntu-latest
+    env:
+      # Vitest mocks Prisma at the module level — no real DB needed — but
+      # @prisma/client refuses to load without a URL set, so plumb a dummy.
+      DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+      DATABASE_URL_UNPOOLED: postgresql://dummy:dummy@localhost:5432/dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - name: Regenerate OpenAPI spec and assert it matches the committed copy
+        run: npm run openapi:check
