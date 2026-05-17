@@ -121,8 +121,8 @@ export function HeroSection() {
             style={{ animationDelay: "200ms", animationFillMode: "both" }}
           >
             India&apos;s premier motorcycle riding community, based in Bangalore.
-            Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa & across India.
-            We ride every third weekend, join us and write your own tale on two wheels.
+            Group rides to Ladakh, Nepal, Thailand, Dhanushkodi, Munnar, Goa & across India.amp;
+            We ride every third weekend, join us and write your own tales on two wheels.
           </p>
 
           {/* CTAs */}
